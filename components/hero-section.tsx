@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ScrollIndicator } from '@/components/motion'
-import { LaunchLogo } from '@/components/launch-logo'
+import { LaunchWordmark } from '@/components/launch-wordmark'
 
 interface HeroSectionProps {
   onStudentClick: () => void
@@ -81,9 +81,9 @@ export function HeroSection({ onStudentClick, onPartnerClick }: HeroSectionProps
             transitionDelay: '120ms',
           }}
         >
-          <LaunchLogo
+          <LaunchWordmark
             height={logoH}
-            color="var(--lq-cream)"
+            tone="light"
             ariaLabel="LAUNCH"
           />
         </div>

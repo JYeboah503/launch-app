@@ -24,10 +24,15 @@ export interface QuestionVerdict {
   questionId: string
   prompt: string
   answer: string
-  /** Mean of the ticked criterion scores (0 if no criteria). */
+  /** Question kind — drives how the rest of the verdict is rendered. */
+  kind: 'open-text' | 'hard-filter'
+  /** Open-text: mean of criterion scores (0–10). Hard-filter: 10 if qualified, 0 if not. */
   overall: number
   oneLiner: string
+  /** Only populated for open-text. */
   criteria: CriterionVerdict[]
+  /** Only populated for hard-filter. */
+  qualified?: boolean
 }
 
 /* ---------------------------------------------------------------- */
@@ -144,6 +149,30 @@ export function evaluateAnswer(
   question: GenericIntakeQuestion,
   answer: string,
 ): QuestionVerdict {
+  const kind = question.kind || 'open-text'
+
+  // Hard-filter: did they pick one of the allowed answers? Deterministic.
+  if (kind === 'hard-filter') {
+    const allowed = (question.allowedAnswers || []).map((a) => a.trim().toLowerCase())
+    const picked = (answer || '').trim().toLowerCase()
+    const qualified = picked.length > 0 && allowed.includes(picked)
+    return {
+      questionId: question.id,
+      prompt: question.prompt,
+      answer,
+      kind: 'hard-filter',
+      overall: qualified ? 10 : 0,
+      oneLiner: qualified
+        ? 'Meets requirement.'
+        : (picked
+          ? `Doesn’t meet requirement (answered: ${answer}).`
+          : 'Candidate skipped this filter.'),
+      criteria: [],
+      qualified,
+    }
+  }
+
+  // Open-text: AI evaluates against the ticked templated criteria.
   const criteria: CriterionVerdict[] = question.criterionIds
     .map((cid) => CRITERION_TEMPLATES.find((c) => c.id === cid))
     .filter((c): c is CriterionTemplate => Boolean(c))
@@ -163,6 +192,7 @@ export function evaluateAnswer(
     questionId: question.id,
     prompt: question.prompt,
     answer,
+    kind: 'open-text',
     overall,
     oneLiner,
     criteria,

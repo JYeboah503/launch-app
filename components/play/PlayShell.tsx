@@ -15,6 +15,7 @@ import {
 import type { ScenarioVariant } from '@/lib/roles'
 import './styles/play.css'
 import { IntakeQuestionsScreen } from '@/components/play/IntakeQuestionsScreen'
+import { OptionFollowUpScreen } from '@/components/play/OptionFollowUpScreen'
 import {
   DecisionScreen,
   IntakeScreen,
@@ -39,6 +40,7 @@ type Phase =
   | 'generic-intake'
   | 'opening'
   | { type: 'step'; stepIdx: number }
+  | { type: 'option-followup'; entry: HistoryEntry; stepIdx: number; lastLabel?: string; followUp: { prompt: string; choices: { id: string; text: string; leaning: 'support' | 'neutral' | 'challenge'; reasoning?: string }[] } }
   | { type: 'beat'; entry: HistoryEntry; stepIdx: number; lastLabel?: string }
   | { type: 'reflect'; basedOn: number; lastLabel?: string }
   | 'outcome'
@@ -395,7 +397,34 @@ export function ScenarioPlay({
       stepIdx: phase.stepIdx,
     }
     applyScore(entry.score)
+
+    // If the chosen option carries a follow-up tree, take the candidate
+    // through the branch before proceeding. Otherwise: straight to the
+    // existing afterPick flow.
+    const followUp = (opt && opt.followUp) || null
+    if (followUp && Array.isArray(followUp.choices) && followUp.choices.length > 0) {
+      transitionTo({
+        type: 'option-followup',
+        entry,
+        stepIdx: phase.stepIdx,
+        lastLabel: opt.label,
+        followUp,
+      })
+      return
+    }
     afterPick(entry, phase.stepIdx, opt.label)
+  }
+
+  /** Candidate's follow-up choice inside an option's branch — capture it on
+   *  the parent decision entry and then proceed as if we'd taken the normal
+   *  afterPick path. */
+  const handleFollowUpPick = (choice: { id: string; text: string; leaning: 'support' | 'neutral' | 'challenge' }) => {
+    if (typeof phase !== 'object' || phase.type !== 'option-followup') return
+    const enrichedEntry: HistoryEntry = {
+      ...phase.entry,
+      followUp: { choiceId: choice.id, text: choice.text, leaning: choice.leaning },
+    } as HistoryEntry
+    afterPick(enrichedEntry, phase.stepIdx, phase.lastLabel || '')
   }
 
   const handleDecisionCustom = (val: string | { label: string; skill?: string }) => {
@@ -463,6 +492,7 @@ export function ScenarioPlay({
   let screenKey: string = 'opening'
   if (phase === 'intake') screenKey = 'intake'
   else if (phase === 'generic-intake') screenKey = 'generic-intake'
+  else if (typeof phase === 'object' && phase.type === 'option-followup') screenKey = `fu-${phase.stepIdx}-${phase.entry.id}`
   else if (phase === 'outcome') screenKey = 'outcome'
   else if (phase === 'report') screenKey = 'report'
   else if (typeof phase === 'object' && phase.type === 'step') screenKey = `step-${phase.stepIdx}`
@@ -490,6 +520,15 @@ export function ScenarioPlay({
             questions={genericQuestions!}
             candidateName={profile.name}
             onComplete={handleGenericIntakeDone}
+          />
+        )}
+        {typeof phase === 'object' && phase.type === 'option-followup' && (
+          <OptionFollowUpScreen
+            entry={phase.entry}
+            followUp={phase.followUp}
+            theme={tweaks.theme}
+            isProfessional={isProfessional}
+            onPick={handleFollowUpPick}
           />
         )}
         {phase === 'opening' && (

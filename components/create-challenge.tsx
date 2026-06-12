@@ -77,24 +77,28 @@ export function CreateChallenge({ curatedList, onBack, onChallengeCreated }: Cre
   return (
     <div className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
       <div className="relative z-10">
-        {/* Header */}
-      <div className="border-b border-[var(--lq-line)] sticky top-0 z-40" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(12px)' }}>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <button
-            onClick={onBack}
-            className="editorial-mono mb-6 inline-flex items-center gap-2"
-            style={{ color: 'var(--lq-ink-2)' }}
-          >
-            <ChevronLeft className="w-3 h-3" />
-              Back
-            </button>
-            <div className="flex items-baseline justify-between flex-wrap gap-2 mb-6">
+        {/* Page header — non-sticky (CorporateTopBar already sticks) */}
+      <div className="border-b border-[var(--lq-line)]">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-12 pb-6">
+            <div className="flex items-baseline justify-between flex-wrap gap-2 mb-4">
               <div>
                 <div className="editorial-eyebrow mb-2">Challenge · new</div>
-                <h1 className="editorial-display-sm">Create a challenge.</h1>
+                <h1
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontWeight: 400,
+                    fontSize: 'clamp(28px, 3.4vw, 40px)',
+                    letterSpacing: '-0.022em',
+                    lineHeight: 1.08,
+                    color: 'var(--lq-ink)',
+                  }}
+                >
+                  Create a challenge.
+                </h1>
               </div>
-              <span className="editorial-mono">Step {step} / 3</span>
+              <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>Step {step} / 3</span>
             </div>
+          {/* Step progress bar */}
           <div className="flex gap-2">
             {[1, 2, 3].map(s => (
               <div

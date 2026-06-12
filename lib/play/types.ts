@@ -1,17 +1,25 @@
 import type { ScenarioVariant } from '@/lib/roles'
 
 /**
- * Generic intake question — open-text free-response question the org asks
- * BEFORE the scenario starts (never blocking). The org picks templated
- * criteria; an AI evaluates the candidate's typed answer against the ticked
- * criteria and returns a 0-10 score with a one-line rationale per question.
+ * Generic intake question — runs BEFORE the scenario. Two kinds:
+ *
+ * - 'open-text'   : free-response answer; AI evaluates against the ticked
+ *                   templated criteria; returns a 0–10 score per question.
+ * - 'hard-filter' : multiple choice answer; pass/fail check against the
+ *                   org's allowed answers. Candidate still plays the scenario
+ *                   either way — failed filters just badge the submission
+ *                   as 'Not qualified' so the org can sort/filter quickly.
  *
  * Lives on the scenario alongside the decision steps.
  */
 export interface GenericIntakeQuestion {
   id: string
+  kind?: 'open-text' | 'hard-filter'  // defaults to 'open-text' for back-compat
   prompt: string
-  criterionIds: string[]  // refs into CRITERION_TEMPLATES in lib/builderData.ts
+  /** Only used when kind === 'open-text' — refs into CRITERION_TEMPLATES. */
+  criterionIds: string[]
+  /** Only used when kind === 'hard-filter' — strings the candidate must pick from. */
+  allowedAnswers?: string[]
 }
 
 export type FactorKind = 'time' | 'live' | 'meter' | 'signal' | 'metric' | 'quote'
@@ -128,6 +136,14 @@ export interface HistoryEntry {
   reactionColor?: string
   stepIdx?: number
   custom?: boolean
+  /** Candidate's follow-up choice if the picked option carried a branch.
+   *  Captured during the option-followup phase and rolled up into the
+   *  scenario history for analytics + the partner's review surface. */
+  followUp?: {
+    choiceId: string
+    text: string
+    leaning: 'support' | 'neutral' | 'challenge'
+  }
 }
 
 export type CompletionResult =

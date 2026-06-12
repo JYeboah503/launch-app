@@ -64,21 +64,28 @@ export function ApplicantCurator({ students, onBack, onCuratedListCreated }: App
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
-      {/* Header */}
-      <div className="sticky top-0 z-40 border-b border-[var(--lq-line)]" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(12px)' }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <button
-            onClick={onBack}
-            className="editorial-mono mb-6 inline-flex items-center gap-2"
-            style={{ color: 'var(--lq-ink-2)' }}
-          >
-            <ChevronLeft className="w-3 h-3" />
-            Back
-          </button>
+      {/* Page header — sits below the CorporateTopBar (no double stick) */}
+      <div className="border-b border-[var(--lq-line)]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-12 pb-6">
           <div className="flex items-baseline justify-between flex-wrap gap-2 mb-6">
             <div>
               <div className="editorial-eyebrow mb-2" style={{ color: 'var(--lq-ink-3)' }}>Talent · curate</div>
-              <h1 className="editorial-display-sm" style={{ color: 'var(--lq-ink)' }}>Curate applicants.</h1>
+              <h1
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 400,
+                  fontSize: 'clamp(28px, 3.4vw, 40px)',
+                  letterSpacing: '-0.022em',
+                  lineHeight: 1.08,
+                  color: 'var(--lq-ink)',
+                }}
+              >
+                Curate applicants.
+              </h1>
+              <p className="max-w-[56ch] text-base mt-2" style={{ color: 'var(--lq-ink-2)', lineHeight: 1.55 }}>
+                Build a short-list. Filter by score, interests, or search by
+                name — then name your list and create a challenge for them.
+              </p>
             </div>
             <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>{filteredStudents.length} candidates</span>
           </div>

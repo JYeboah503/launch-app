@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { LaunchLogo } from '@/components/launch-logo'
+import { LaunchWordmark } from '@/components/launch-wordmark'
 import { ClassroomDetail } from '@/components/classroom-detail'
 import { ScenarioBuilderV2 } from '@/components/scenario-builder-v2'
 import { type Classroom, generateClassCode } from '@/lib/roles'
@@ -122,7 +122,7 @@ export function TeacherDashboard({ onBack }: TeacherDashboardProps) {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <LaunchLogo height={22} color="var(--launch-navy)" ariaLabel="LAUNCH" />
+            <LaunchWordmark height={26} tone="dark" ariaLabel="LAUNCH" />
             <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>
               · teacher
             </span>

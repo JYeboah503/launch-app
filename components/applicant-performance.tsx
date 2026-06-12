@@ -217,17 +217,9 @@ export function ApplicantPerformance({ students, onBack, roleSkills, roleName, r
   }
 
   // Role Selection View
+  // (CorporateTopBar already provides "← Dashboard" — no duplicate back button here)
   return (
     <div className="min-h-screen pt-12 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto" style={{ background: 'var(--corp-canvas)' }}>
-      <button
-        onClick={onBack}
-        className="editorial-mono mb-6 inline-flex items-center gap-2"
-        style={{ color: 'var(--lq-ink-2)' }}
-      >
-        <ChevronLeft className="w-3 h-3" />
-        Back
-      </button>
-
       <div className="max-w-4xl mb-10">
         <div className="editorial-eyebrow mb-2">Performance · roles</div>
         <h1 className="editorial-display-sm mb-3">Active roles.</h1>

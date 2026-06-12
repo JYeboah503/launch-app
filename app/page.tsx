@@ -1,15 +1,17 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { HeroSection } from '@/components/hero-section'
 import { StudentAuthView } from '@/components/student-auth-view'
 import { StudentDashboard } from '@/components/student-dashboard'
 import { PartnerAuthView } from '@/components/partner-auth-view'
 import { TeacherDashboard } from '@/components/teacher-dashboard'
-import { LaunchLogo } from '@/components/launch-logo'
+import { LaunchWordmark } from '@/components/launch-wordmark'
+import { CorporateTopBar } from '@/components/corporate-top-bar'
 import type { AppMode } from '@/lib/roles'
 import { addCustomScenarioStub } from '@/lib/scenarioStore'
+import { listSubmissions, type Submission } from '@/lib/submissionStore'
 import { Header } from '@/components/header'
 import { CapabilitiesSection } from '@/components/capabilities-section'
 import { ResultsSection } from '@/components/results-section'
@@ -60,6 +62,49 @@ export default function Page() {
   const [roleSkillFilters, setRoleSkillFilters] = useState<Record<string, boolean>>({})
   const [selectedRoleSkill, setSelectedRoleSkill] = useState<string | null>(null)
   const [selectedRoleSkillTop, setSelectedRoleSkillTop] = useState<number>(10)
+  /** ID of the scenario the partner just created — used to flash a
+   *  "just created" highlight on its card in the Scenarios section so
+   *  they see exactly where their work landed. Cleared on a timer. */
+  const [justCreatedRoleId, setJustCreatedRoleId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!justCreatedRoleId) return
+    const t = setTimeout(() => setJustCreatedRoleId(null), 6000)
+    return () => clearTimeout(t)
+  }, [justCreatedRoleId])
+
+  // Submissions from localStorage — hydrate after mount to avoid SSR mismatch.
+  const [submissions, setSubmissions] = useState<Submission[]>([])
+  useEffect(() => {
+    setSubmissions(listSubmissions())
+  }, [corporateNav])
+  /** Derived stats for the corporate overview funnel — actionable numbers,
+   *  not marketing metrics. Recomputes when submissions or roles change. */
+  const corpStats = useMemo(() => {
+    const now = Date.now()
+    const weekAgo = now - 7 * 24 * 60 * 60 * 1000
+    const thisWeek = submissions.filter(s => new Date(s.submittedAt).getTime() >= weekAgo)
+    const qualified = submissions.filter(s => !s.notQualified)
+    const awaitingReview = submissions  // every submission needs a partner pass; for now they're all "awaiting"
+    return {
+      activeScenarios: activeRoles.length,
+      submissionsTotal: submissions.length,
+      thisWeek: thisWeek.length,
+      qualifiedPct: submissions.length === 0 ? 0 : Math.round((qualified.length / submissions.length) * 100),
+      awaitingReview: awaitingReview.length,
+    }
+  }, [submissions, activeRoles])
+  /** Latest 3 submissions for the "Recent activity" panel on overview. */
+  const recentSubmissions = useMemo(() => {
+    return [...submissions]
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())
+      .slice(0, 3)
+  }, [submissions])
+  /** Top 3 candidates by overall score — for "Standouts to look at" on overview. */
+  const topStandouts = useMemo(() => {
+    return [...MOCK_STUDENTS]
+      .sort((a, b) => (b.overallScore || 0) - (a.overallScore || 0))
+      .slice(0, 3)
+  }, [])
 
   // Filter students based on selections
   const filteredStudents: Student[] = useMemo(() => {
@@ -171,15 +216,19 @@ export default function Page() {
   // If capability selected, show capability detail view
   if (selectedCapability) {
     return (
-      <main className="min-h-screen bg-background">
+      <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
+        <CorporateTopBar
+          eyebrow={`· corporate · capability`}
+          actions={
+            <button
+              onClick={() => setSelectedCapability(null)}
+              className="corp-btn corp-btn-ghost"
+            >
+              ← Back to dashboard
+            </button>
+          }
+        />
         <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-8">
-          <button
-            onClick={() => setSelectedCapability(null)}
-            className="editorial-mono inline-flex items-center gap-2 mb-8 transition-colors hover:text-[var(--lq-ink)]" style={{ color: "var(--lq-ink-2)" }}
-          >
-            ← Back to dashboard
-          </button>
-
           <CapabilityDetailView
             capabilityName={selectedCapability.name}
             capabilityKey={selectedCapability.key}
@@ -197,14 +246,19 @@ export default function Page() {
   // If showing challenges, display challenges view
   if (showChallenges && selectedStudent) {
     return (
-      <main className="min-h-screen bg-background">
+      <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
+        <CorporateTopBar
+          eyebrow={`· corporate · ${selectedStudent.name} · challenges`}
+          actions={
+            <button
+              onClick={() => setShowChallenges(false)}
+              className="corp-btn corp-btn-ghost"
+            >
+              ← Back to profile
+            </button>
+          }
+        />
         <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-8">
-          <button
-            onClick={() => setShowChallenges(false)}
-            className="editorial-mono inline-flex items-center gap-2 mb-8 transition-colors hover:text-[var(--lq-ink)]" style={{ color: "var(--lq-ink-2)" }}
-          >
-            ← Back to profile
-          </button>
           <ChallengesView
             challenges={studentChallenges}
             onBack={() => setShowChallenges(false)}
@@ -217,14 +271,19 @@ export default function Page() {
   // If student selected, show profile view
   if (selectedStudent) {
     return (
-      <main className="min-h-screen bg-background">
+      <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
+        <CorporateTopBar
+          eyebrow={`· corporate · candidate`}
+          actions={
+            <button
+              onClick={() => setSelectedStudentId(null)}
+              className="corp-btn corp-btn-ghost"
+            >
+              ← Back to dashboard
+            </button>
+          }
+        />
         <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-8">
-          <button
-            onClick={() => setSelectedStudentId(null)}
-            className="editorial-mono inline-flex items-center gap-2 mb-8 transition-colors hover:text-[var(--lq-ink)]" style={{ color: "var(--lq-ink-2)" }}
-          >
-            ← Back to dashboard
-          </button>
 
           <StudentProfileView
             student={selectedStudent}
@@ -262,27 +321,64 @@ export default function Page() {
       
       return (
         <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
-          <div className="w-full max-w-6xl mx-auto">
-            {/* Back button */}
-            <div className="px-3 sm:px-4 pt-6 pb-2">
+          <CorporateTopBar
+            eyebrow="· corporate · role"
+            actions={
               <button
                 onClick={() => {
                   setSelectedRoleView(null)
                   setRoleSkillFilters({})
                 }}
-                className="editorial-mono inline-flex items-center gap-2 transition-colors hover:text-[var(--lq-ink)]" style={{ color: "var(--lq-ink-2)" }}
+                className="corp-btn corp-btn-ghost"
               >
                 ← Back to roles
               </button>
-            </div>
+            }
+          />
+          <div className="w-full max-w-6xl mx-auto">
 
-            {/* Role Info Header */}
-            <div className="px-3 sm:px-4 py-8 border-b border-[var(--lq-line)]">
-              <h1 className="text-4xl mb-2" style={{ fontFamily: 'var(--font-display)', fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--lq-ink)' }}>{selectedRole?.name}</h1>
-              <p style={{ color: 'var(--lq-ink-2)' }}>
-                {selectedRole?.questionsCount} questions × 3 levels | {selectedRole?.skills?.length} skills assessed
+            {/* Role Info Header — matches Overview / Scenarios pattern */}
+            <div className="px-3 sm:px-4 pt-10 sm:pt-12 pb-8 border-b border-[var(--lq-line)]">
+              <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>
+                Scenario · live
+              </div>
+              <div className="flex items-start justify-between flex-wrap gap-4">
+                <div>
+                  <h1
+                    className="mb-2"
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontWeight: 500,
+                      fontSize: 'clamp(28px, 3.4vw, 40px)',
+                      letterSpacing: '-0.022em',
+                      lineHeight: 1.08,
+                      color: 'var(--lq-ink)',
+                    }}
+                  >
+                    {selectedRole?.name}
+                  </h1>
+                  <p className="text-base" style={{ color: 'var(--lq-ink-2)' }}>
+                    {selectedRole?.questionsCount} questions · {selectedRole?.skills?.length} skills assessed
+                  </p>
+                </div>
+                {/* Access code — prominent so partner can copy-paste quickly */}
+                <div
+                  className="rounded-md px-4 py-3 flex flex-col"
+                  style={{
+                    background: 'rgba(10, 42, 107, 0.06)',
+                    border: '1px solid rgba(10, 42, 107, 0.18)',
+                  }}
+                >
+                  <span className="editorial-mono mb-1" style={{ color: 'var(--lq-ink-3)', fontSize: 10 }}>Access code</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--launch-navy)', fontSize: 18, letterSpacing: '0.06em' }}>
+                    {selectedRole?.accessCode}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm mt-4 max-w-[60ch]" style={{ color: 'var(--lq-ink-2)' }}>
+                Pick a capability below to see who&rsquo;s scoring highest on it
+                in this scenario.
               </p>
-              <p className="text-xs font-mono mt-2" style={{ color: 'var(--launch-navy)' }}>Access Code: {selectedRole?.accessCode}</p>
             </div>
 
             {/* Role Standouts Section with Skill Filters */}
@@ -360,42 +456,78 @@ export default function Page() {
     // Show applicant performance view
     if (partnerView === 'performance') {
       return (
-        <ApplicantPerformance
-          students={MOCK_STUDENTS}
-          onBack={() => setPartnerView('dashboard')}
-        />
+        <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
+          <CorporateTopBar
+            eyebrow="· corporate · applicants"
+            actions={
+              <button onClick={() => setPartnerView('dashboard')} className="corp-btn corp-btn-ghost">
+                ← Dashboard
+              </button>
+            }
+          />
+          <ApplicantPerformance
+            students={MOCK_STUDENTS}
+            onBack={() => setPartnerView('dashboard')}
+          />
+        </main>
       )
     }
 
     // Show applicant curator
     if (partnerView === 'curator') {
       return (
-        <ApplicantCurator
-          students={MOCK_STUDENTS}
-          onBack={() => setPartnerView('dashboard')}
-          onCuratedListCreated={(students, name) => {
-            setCuratedList({ students, name })
-            setPartnerView('createChallenge')
-          }}
-        />
+        <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
+          <CorporateTopBar
+            eyebrow="· corporate · curate"
+            actions={
+              <button onClick={() => setPartnerView('dashboard')} className="corp-btn corp-btn-ghost">
+                ← Dashboard
+              </button>
+            }
+          />
+          <ApplicantCurator
+            students={MOCK_STUDENTS}
+            onBack={() => setPartnerView('dashboard')}
+            onCuratedListCreated={(students, name) => {
+              setCuratedList({ students, name })
+              setPartnerView('createChallenge')
+            }}
+          />
+        </main>
       )
     }
 
     // Show create challenge wizard
     if (partnerView === 'createChallenge' && curatedList) {
       return (
-        <CreateChallenge
-          curatedList={curatedList}
-          onBack={() => {
-            setPartnerView('dashboard')
-            setCuratedList(null)
-          }}
-          onChallengeCreated={(challenge) => {
-            setCreatedChallenges([...createdChallenges, challenge])
-            setPartnerView('dashboard')
-            setCuratedList(null)
-          }}
-        />
+        <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
+          <CorporateTopBar
+            eyebrow="· corporate · new challenge"
+            actions={
+              <button
+                onClick={() => {
+                  setPartnerView('dashboard')
+                  setCuratedList(null)
+                }}
+                className="corp-btn corp-btn-ghost"
+              >
+                ← Dashboard
+              </button>
+            }
+          />
+          <CreateChallenge
+            curatedList={curatedList}
+            onBack={() => {
+              setPartnerView('dashboard')
+              setCuratedList(null)
+            }}
+            onChallengeCreated={(challenge) => {
+              setCreatedChallenges([...createdChallenges, challenge])
+              setPartnerView('dashboard')
+              setCuratedList(null)
+            }}
+          />
+        </main>
       )
     }
 
@@ -403,24 +535,10 @@ export default function Page() {
     return (
       <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
         <div className="w-full">
-          {/* Corporate top bar — light, hairline border, navy brand */}
-          <header
-            className="sticky top-0 z-40"
-            style={{
-              background: 'rgba(255,255,255,0.82)',
-              borderBottom: '1px solid var(--lq-line)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-            }}
-          >
-            <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <LaunchLogo height={22} color="var(--launch-navy)" ariaLabel="LAUNCH" />
-                <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>
-                  · corporate
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
+          {/* Corporate top bar — shared component, used across every corporate sub-view */}
+          <CorporateTopBar
+            actions={
+              <>
                 <button
                   onClick={() => { document.getElementById('scenario-builder-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
                   className="corp-btn corp-btn-primary"
@@ -440,9 +558,9 @@ export default function Page() {
                 >
                   ← Back
                 </button>
-              </div>
-            </div>
-          </header>
+              </>
+            }
+          />
 
           {/* Sidebar shell — left rail + centre work area */}
           <div className="corp-body">
@@ -485,88 +603,358 @@ export default function Page() {
             </aside>
             <div className="corp-work">
 
-          {/* Overview — clean light header */}
+          {/* ────────────────────────────────────────────────────────────
+              OVERVIEW — partner command centre.
+              Three stacked bands:
+                1. Page header  (eyebrow + title + helper line + primary CTA)
+                2. Funnel KPIs  (real actionable numbers, not marketing metrics)
+                3. "Right now"  (Recent submissions + Standouts to review)
+                4. Active scenarios mini-grid (cross-link to roles section)
+              ──────────────────────────────────────────────────────────── */}
           {corporateNav === 'overview' && (<>
-          <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-12 sm:pt-16 pb-2">
-            <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>
-              Overview
-            </div>
-            <h1
-              className="mb-4 max-w-[18ch]"
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: 400,
-                fontSize: 'clamp(32px, 4.6vw, 56px)',
-                letterSpacing: '-0.026em',
-                lineHeight: 1.04,
-                color: 'var(--lq-ink)',
-              }}
-            >
-              The shape of how people <em style={{ fontStyle: 'italic', color: 'var(--launch-navy)' }}>actually</em> decide.
-            </h1>
-            <p
-              className="max-w-[60ch] text-base sm:text-lg mb-8"
-              style={{ color: 'var(--lq-ink-2)', lineHeight: 1.55 }}
-            >
-              Build scenarios, measure capability under pressure, and surface the
-              candidates whose decision-making fits your team.
-            </p>
-
-            {/* Secondary actions — quiet, navy/neutral */}
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              {[
-                { label: 'Curate applicants', onClick: () => setPartnerView('curator') },
-                { label: 'Performance', onClick: () => setPartnerView('performance') },
-                { label: 'View standouts', onClick: () => { document.getElementById('standouts-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) } },
-              ].map((a) => (
-                <button key={a.label} onClick={a.onClick} className="corp-btn corp-btn-ghost">
-                  {a.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* KPI overview — light cards, navy numbers, neutral deltas */}
-          <div className="max-w-7xl mx-auto px-4 sm:px-8 py-10 grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { label: 'Capability score', value: 74, suffix: '', delta: '+10', spark: [62, 64, 66, 68, 71, 73, 74] },
-                { label: 'Decision quality lift', value: 1.0, decimals: 1, suffix: 'σ', delta: '+0.2', spark: [0.4, 0.55, 0.6, 0.72, 0.84, 0.92, 1.0] },
-                { label: 'Top capability · trending', value: 92, suffix: '', delta: 'Empathy', spark: [70, 74, 76, 80, 85, 89, 92], stringDelta: true },
-                { label: 'Active roles', value: activeRoles.length || 0, suffix: '', delta: 'today', spark: [1, 2, 2, 3, 3, 4, activeRoles.length || 0], stringDelta: true },
-              ].map((s) => (
-                <div key={s.label} className="corp-card p-5">
-                  <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>{s.label}</div>
-                  <div className="flex items-end justify-between">
-                    <div
-                      className="editorial-stat"
-                      style={{ fontSize: 'clamp(28px, 3vw, 44px)', color: 'var(--launch-navy)', lineHeight: 1 }}
-                    >
-                      <AnimatedCounter value={s.value} decimals={s.decimals || 0} suffix={s.suffix} duration={1400} />
-                    </div>
-                    <Sparkline data={s.spark} width={86} height={28} stroke="var(--launch-navy)" fill="rgba(10, 42, 107, 0.10)" />
-                  </div>
-                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--lq-line)]">
-                    <span
-                      className="editorial-mono px-2 py-0.5 rounded-full"
-                      style={{ background: 'rgba(10, 42, 107, 0.06)', color: 'var(--launch-navy)' }}
-                    >
-                      {s.delta}
-                    </span>
-                    <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>7d</span>
-                  </div>
+          {/* 1. Page header — workspace tone, not marketing */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-10 sm:pt-12 pb-2">
+            <div className="flex items-start justify-between gap-6 flex-wrap">
+              <div>
+                <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>
+                  Overview
                 </div>
-              ))}
+                <h1
+                  className="mb-3"
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontWeight: 400,
+                    fontSize: 'clamp(28px, 3.4vw, 40px)',
+                    letterSpacing: '-0.022em',
+                    lineHeight: 1.08,
+                    color: 'var(--lq-ink)',
+                  }}
+                >
+                  Your hiring, at a glance.
+                </h1>
+                <p
+                  className="max-w-[56ch] text-base"
+                  style={{ color: 'var(--lq-ink-2)', lineHeight: 1.55 }}
+                >
+                  Who&rsquo;s applied, who&rsquo;s qualified, who&rsquo;s
+                  standing out — and what to act on next.
+                </p>
+              </div>
+              {/* Primary CTA — anchored to header, not floating */}
+              <button
+                type="button"
+                onClick={() => { setCorporateNav('builder'); setShowBuilderV2(true) }}
+                className="corp-btn corp-btn-primary"
+                style={{ flexShrink: 0 }}
+              >
+                + Build a scenario
+              </button>
+            </div>
           </div>
+
+          {/* 2. Funnel KPIs — four cards, actionable counts */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                label: 'Active scenarios',
+                value: corpStats.activeScenarios,
+                helper: corpStats.activeScenarios === 0 ? 'None yet — build one' : 'live',
+                onClick: () => setCorporateNav('roles'),
+              },
+              {
+                label: 'Submissions',
+                value: corpStats.submissionsTotal,
+                helper: corpStats.thisWeek > 0 ? `+${corpStats.thisWeek} this week` : 'this week',
+                onClick: () => setCorporateNav('submissions'),
+              },
+              {
+                label: 'Qualified',
+                value: corpStats.qualifiedPct,
+                suffix: '%',
+                helper: corpStats.submissionsTotal === 0 ? '—' : 'pass hard filters',
+                onClick: () => setCorporateNav('submissions'),
+              },
+              {
+                label: 'Awaiting review',
+                value: corpStats.awaitingReview,
+                helper: corpStats.awaitingReview === 0 ? 'all caught up' : 'open',
+                onClick: () => setCorporateNav('submissions'),
+              },
+            ].map((s) => (
+              <button
+                key={s.label}
+                type="button"
+                onClick={s.onClick}
+                className="corp-card p-5 text-left transition-colors hover:border-[var(--launch-navy)]"
+              >
+                <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>{s.label}</div>
+                <div
+                  className="editorial-stat"
+                  style={{ fontSize: 'clamp(28px, 3vw, 44px)', color: 'var(--launch-navy)', lineHeight: 1 }}
+                >
+                  <AnimatedCounter value={s.value} duration={1100} suffix={s.suffix || ''} />
+                </div>
+                <div className="mt-3 pt-3 border-t border-[var(--lq-line)] editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>
+                  {s.helper}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* 3. "Right now" — two panels side-by-side: recent submissions + standouts */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Recent submissions — empty-state aware */}
+            <section className="corp-card p-5">
+              <div className="flex items-baseline justify-between mb-4">
+                <h2 className="editorial-display-sm" style={{ fontSize: 18, color: 'var(--lq-ink)' }}>
+                  Recent submissions
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setCorporateNav('submissions')}
+                  className="editorial-mono transition-colors"
+                  style={{ color: 'var(--launch-navy)' }}
+                >
+                  See all →
+                </button>
+              </div>
+              {recentSubmissions.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm mb-3" style={{ color: 'var(--lq-ink-3)' }}>
+                    {corpStats.activeScenarios === 0
+                      ? 'No submissions yet. Build a scenario first.'
+                      : 'No submissions yet. Share your access code with candidates.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (corpStats.activeScenarios === 0) {
+                        setCorporateNav('builder'); setShowBuilderV2(true)
+                      } else {
+                        setCorporateNav('roles')
+                      }
+                    }}
+                    className="corp-btn corp-btn-ghost"
+                  >
+                    {corpStats.activeScenarios === 0 ? 'Build a scenario →' : 'View access codes →'}
+                  </button>
+                </div>
+              ) : (
+                <ul className="divide-y divide-[var(--lq-line)]">
+                  {recentSubmissions.map((sub) => (
+                    <li key={sub.id} className="py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, color: 'var(--lq-ink)' }}>
+                            {sub.candidateName}
+                          </span>
+                          {sub.notQualified && (
+                            <span
+                              className="editorial-mono px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'rgba(122, 14, 42, 0.10)', color: '#7a0e2a', fontSize: 10 }}
+                            >
+                              Not qualified
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs truncate" style={{ color: 'var(--lq-ink-3)' }}>
+                          {sub.scenarioTitle} · {new Date(sub.submittedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCorporateNav('submissions')}
+                        className="editorial-mono text-xs"
+                        style={{ color: 'var(--launch-navy)', flexShrink: 0 }}
+                      >
+                        Review →
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {/* Standouts to look at */}
+            <section className="corp-card p-5">
+              <div className="flex items-baseline justify-between mb-4">
+                <h2 className="editorial-display-sm" style={{ fontSize: 18, color: 'var(--lq-ink)' }}>
+                  Standouts to look at
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setCorporateNav('standouts')}
+                  className="editorial-mono transition-colors"
+                  style={{ color: 'var(--launch-navy)' }}
+                >
+                  See all →
+                </button>
+              </div>
+              <ul className="divide-y divide-[var(--lq-line)]">
+                {topStandouts.map((s) => (
+                  <li key={s.id} className="py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="mb-1" style={{ fontFamily: 'var(--font-display)', fontWeight: 500, color: 'var(--lq-ink)' }}>
+                        {s.name}
+                      </div>
+                      <div className="text-xs truncate" style={{ color: 'var(--lq-ink-3)' }}>
+                        {s.topCapabilities.slice(0, 2).map(c => c.name).join(' · ')}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span
+                        className="editorial-mono"
+                        style={{ color: 'var(--launch-navy)', fontSize: 18, fontWeight: 600 }}
+                      >
+                        {s.overallScore}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStudentId(s.id)}
+                        className="editorial-mono text-xs"
+                        style={{ color: 'var(--launch-navy)' }}
+                      >
+                        Open →
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+
+          {/* 4. Active scenarios — mini grid so partner sees their pipeline.
+                Only renders if they actually have scenarios. */}
+          {activeRoles.length > 0 && (
+            <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
+              <div className="flex items-baseline justify-between mb-4">
+                <h2 className="editorial-display-sm" style={{ fontSize: 20, color: 'var(--lq-ink)' }}>
+                  Active scenarios
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setCorporateNav('roles')}
+                  className="editorial-mono"
+                  style={{ color: 'var(--launch-navy)' }}
+                >
+                  Open library →
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {activeRoles.slice(0, 3).map((role) => (
+                  <article
+                    key={role.id}
+                    onClick={() => setSelectedRoleView(role.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter') setSelectedRoleView(role.id) }}
+                    className="corp-card p-4 cursor-pointer transition-colors hover:border-[var(--launch-navy)]"
+                  >
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 16, color: 'var(--lq-ink)' }}>
+                      {role.name}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span style={{ color: 'var(--lq-ink-3)' }}>
+                        {role.questionsCount} questions
+                      </span>
+                      <span
+                        className="editorial-mono px-2 py-0.5 rounded-full"
+                        style={{ background: 'rgba(10, 42, 107, 0.06)', color: 'var(--launch-navy)' }}
+                      >
+                        {role.accessCode}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
           </>)}
 
-          {/* Active Roles */}
-          {corporateNav === 'roles' && activeRoles.length > 0 && (
-            <div className="border-b border-[var(--lq-line)]">
-              <div className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
-                <div className="flex items-baseline justify-between mb-6">
-                  <h2 className="editorial-display-sm" style={{ fontSize: 'clamp(22px, 2.6vw, 32px)', color: 'var(--lq-ink)' }}>
-                    Active roles
-                  </h2>
+          {/* Active Roles — empty state + grid */}
+          {corporateNav === 'roles' && (
+            <div>
+              <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-10 sm:pt-12 pb-2">
+                <div className="flex items-start justify-between gap-6 flex-wrap mb-2">
+                  <div>
+                    <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>Scenarios</div>
+                    <h1
+                      className="mb-3"
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        fontWeight: 400,
+                        fontSize: 'clamp(28px, 3.4vw, 40px)',
+                        letterSpacing: '-0.022em',
+                        lineHeight: 1.08,
+                        color: 'var(--lq-ink)',
+                      }}
+                    >
+                      Active scenarios
+                    </h1>
+                    <p className="max-w-[56ch] text-base" style={{ color: 'var(--lq-ink-2)', lineHeight: 1.55 }}>
+                      Each scenario has an access code candidates use to play.
+                      Click a card to see who&rsquo;s applied and their performance.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setCorporateNav('builder'); setShowBuilderV2(true) }}
+                    className="corp-btn corp-btn-primary"
+                    style={{ flexShrink: 0 }}
+                  >
+                    + Build a scenario
+                  </button>
+                </div>
+              </div>
+              {activeRoles.length === 0 ? (
+                <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
+                  <div className="corp-card p-10 text-center">
+                    <p className="mb-3" style={{ color: 'var(--lq-ink-2)' }}>
+                      No scenarios yet — your first one takes about a minute.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setCorporateNav('builder'); setShowBuilderV2(true) }}
+                      className="corp-btn corp-btn-primary"
+                    >
+                      Start the builder
+                    </button>
+                  </div>
+                </div>
+              ) : (
+              <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
+                {/* Success banner when a partner just shipped a new scenario.
+                    Auto-clears via the justCreatedRoleId timer. */}
+                {justCreatedRoleId && (() => {
+                  const justRole = activeRoles.find(r => r.id === justCreatedRoleId)
+                  if (!justRole) return null
+                  return (
+                    <div
+                      className="rounded-md px-4 py-3 mb-6 flex items-center justify-between flex-wrap gap-3"
+                      style={{
+                        background: 'rgba(27, 158, 143, 0.10)',
+                        border: '1px solid rgba(27, 158, 143, 0.30)',
+                      }}
+                    >
+                      <div>
+                        <div className="editorial-mono mb-0.5" style={{ color: 'var(--launch-teal-3)' }}>
+                          Scenario shipped
+                        </div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, color: 'var(--lq-ink)' }}>
+                          {justRole.name} is live · candidates can use code <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--launch-navy)', fontWeight: 600 }}>{justRole.accessCode}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard?.writeText(justRole.accessCode); }}
+                        className="corp-btn corp-btn-ghost"
+                      >
+                        Copy access code
+                      </button>
+                    </div>
+                  )
+                })()}
+                <div className="flex items-baseline justify-between mb-4">
                   <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>{activeRoles.length} live</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -578,6 +966,10 @@ export default function Page() {
                       tabIndex={0}
                       onKeyDown={(e) => { if (e.key === 'Enter') setSelectedRoleView(role.id) }}
                       className="corp-card p-6 cursor-pointer group"
+                      style={role.id === justCreatedRoleId ? {
+                        borderColor: 'var(--launch-teal)',
+                        boxShadow: '0 0 0 3px rgba(27, 158, 143, 0.18)',
+                      } : undefined}
                     >
                       <div className="flex items-center justify-between mb-3">
                         <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>Role</span>
@@ -603,48 +995,65 @@ export default function Page() {
                   ))}
                 </div>
               </div>
+              )}
             </div>
           )}
 
           {/* Anchor for "View standouts" action button */}
           <span id="standouts-anchor" aria-hidden />
 
-          {/* Partner Tools Section - Top Candidates Discovery */}
+          {/* Partner Tools — Discovery. Component owns its own header. */}
           {corporateNav === 'tools' && (
-          <PartnerTools
-            selectedTool={selectedTool}
-            students={filteredStudents}
-            onSelectStudent={setSelectedStudentId}
-            onToolSelect={(tool, option) => {
-              setSelectedTool({ tool, option })
-              console.log(`[v0] Filtering by ${tool}: ${option}`)
-            }}
-          />
+            <PartnerTools
+              selectedTool={selectedTool}
+              students={filteredStudents}
+              onSelectStudent={setSelectedStudentId}
+              onToolSelect={(tool, option) => {
+                setSelectedTool({ tool, option })
+              }}
+            />
           )}
 
-          {/* Filter Summary */}
-          {selectedTool && (
-            <div className="px-3 sm:px-6 py-4 bg-[var(--launch-lime-soft)] border-b border-[var(--launch-lime-2)]">
-              <p className="text-sm" style={{ color: 'var(--lq-ink)' }}>
-                <span className="editorial-mono mr-3">Showing</span>
-                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 16 }}>
-                  {filteredStudents.length} candidates
-                </span>
-                <span className="ml-2" style={{ color: 'var(--lq-ink-2)' }}>
-                  {selectedTool.tool === 'topCandidates' && ` matching top ${selectedTool.option.match(/\d+/)?.[0]}`}
-                  {selectedTool.tool === 'topByCapability' && ` with ${selectedTool.option}`}
-                  {selectedTool.tool === 'topByIndustry' && ` in ${selectedTool.option}`}
-                </span>
-              </p>
+          {/* Filter Summary — only when Discovery tools has a filter active.
+              Navy-toned, on-brand. */}
+          {selectedTool && (corporateNav === 'tools' || corporateNav === 'standouts') && (
+            <div className="max-w-7xl mx-auto px-4 sm:px-8">
+              <div
+                className="rounded-md px-4 py-3 mb-4 flex items-center justify-between flex-wrap gap-2"
+                style={{
+                  background: 'rgba(10, 42, 107, 0.06)',
+                  border: '1px solid rgba(10, 42, 107, 0.18)',
+                }}
+              >
+                <p className="text-sm" style={{ color: 'var(--lq-ink)' }}>
+                  <span className="editorial-mono mr-2" style={{ color: 'var(--lq-ink-3)' }}>Showing</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 15 }}>
+                    {filteredStudents.length} candidates
+                  </span>
+                  <span className="ml-2" style={{ color: 'var(--lq-ink-2)' }}>
+                    {selectedTool.tool === 'topCandidates' && ` matching top ${selectedTool.option.match(/\d+/)?.[0]}`}
+                    {selectedTool.tool === 'topByCapability' && ` with ${selectedTool.option}`}
+                    {selectedTool.tool === 'topByIndustry' && ` in ${selectedTool.option}`}
+                  </span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTool(null)}
+                  className="editorial-mono"
+                  style={{ color: 'var(--launch-navy)' }}
+                >
+                  Clear ×
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Standouts Section */}
+          {/* Standouts — component owns its own header. */}
           {corporateNav === 'standouts' && (
-          <LaunchStandouts
-            students={filteredStudents}
-            onSelectStudent={setSelectedStudentId}
-          />
+            <LaunchStandouts
+              students={filteredStudents}
+              onSelectStudent={setSelectedStudentId}
+            />
           )}
 
           {/* Anchor for "Build a scenario" action button */}
@@ -653,28 +1062,54 @@ export default function Page() {
           {corporateNav === 'builder' && (<>
 
           {/* Scenario Builder v2 — simplified 3-step, light + teal */}
-          <div className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
-            <h2 className="editorial-display-sm mb-3" style={{ fontSize: 'clamp(22px, 2.6vw, 32px)', color: 'var(--lq-ink)' }}>
-              Build a scenario.
-            </h2>
-            <p style={{ color: 'var(--lq-ink-2)', maxWidth: '60ch', lineHeight: 1.55, marginBottom: 18 }}>
-              Author a role-specific scenario with generic intake questions and
-              live decisions. Each question shows what it&rsquo;s testing so you
-              know exactly what you&rsquo;re measuring.
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowBuilderV2(true)}
-              className="corp-btn corp-btn-primary"
-            >
-              Open builder
-            </button>
+          <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-10 sm:pt-12 pb-2">
+            <div className="flex items-start justify-between gap-6 flex-wrap mb-6">
+              <div>
+                <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>Builder</div>
+                <h1
+                  className="mb-3"
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontWeight: 400,
+                    fontSize: 'clamp(28px, 3.4vw, 40px)',
+                    letterSpacing: '-0.022em',
+                    lineHeight: 1.08,
+                    color: 'var(--lq-ink)',
+                  }}
+                >
+                  Build a scenario.
+                </h1>
+                <p className="max-w-[56ch] text-base" style={{ color: 'var(--lq-ink-2)', lineHeight: 1.55 }}>
+                  Author a role-specific scenario with intake questions and
+                  live decisions. Each question shows what it&rsquo;s testing
+                  so you know exactly what you&rsquo;re measuring.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBuilderV2(true)}
+                className="corp-btn corp-btn-primary"
+                style={{ flexShrink: 0 }}
+              >
+                + New scenario
+              </button>
+            </div>
+            {/* Workspace hint card — clear next step when nothing exists */}
+            {activeRoles.length === 0 && createdChallenges.length === 0 && (
+              <div className="corp-card p-6">
+                <div className="editorial-mono mb-2" style={{ color: 'var(--lq-ink-3)' }}>3-step flow</div>
+                <ol className="space-y-2 text-sm" style={{ color: 'var(--lq-ink-2)', lineHeight: 1.6 }}>
+                  <li><span style={{ color: 'var(--launch-navy)', fontWeight: 600 }}>1.</span> Setup — name the role, set the register (early or advanced career), how many questions.</li>
+                  <li><span style={{ color: 'var(--launch-navy)', fontWeight: 600 }}>2.</span> Author — describe the role, pick capabilities to test. AI drafts the questions; you edit, pin, regenerate.</li>
+                  <li><span style={{ color: 'var(--launch-navy)', fontWeight: 600 }}>3.</span> Ship — review the access code, copy the link, send to candidates.</li>
+                </ol>
+              </div>
+            )}
           </div>
           <ScenarioBuilderV2
             externalOpen={showBuilderV2}
             onClose={() => setShowBuilderV2(false)}
             creatorType="corporate"
-            showGenericQuestions={false}
             onRoleCreated={(roleData) => {
               setActiveRoles([...activeRoles, roleData])
               addCustomScenarioStub({
@@ -688,17 +1123,22 @@ export default function Page() {
                 createdAt: new Date(roleData.createdAt).toISOString(),
                 genericQuestions: roleData.genericQuestions,
               })
+              // Flag the new role for the highlight strip; also pre-route to
+              // Scenarios so the moment the partner closes the builder modal
+              // they land on their work — not back on an empty Builder shell.
+              setJustCreatedRoleId(roleData.id)
+              setCorporateNav('roles')
             }}
           />
           </>)}
 
           {corporateNav === 'submissions' && <SubmissionsView />}
 
-          {/* Hero Section - Human Capability Measurement */}
+          {/* Capability chart — component owns its own header. */}
           {corporateNav === 'chart' && (
-          <DashboardHero
-            onCapabilityClick={(key, name) => setSelectedCapability({ key, name })}
-          />
+            <DashboardHero
+              onCapabilityClick={(key, name) => setSelectedCapability({ key, name })}
+            />
           )}
 
           {/* Created Challenges */}
@@ -816,8 +1256,13 @@ function ManageSelect({
       style={{
         background: 'linear-gradient(180deg, #07091c 0%, #0e1737 50%, #182046 100%)',
         color: 'var(--lq-cream)',
+        position: 'relative',
       }}
     >
+      {/* LAUNCH wordmark — cream on cinema navy, top-left like the rest of the dark surfaces */}
+      <div className="absolute top-6 left-6 sm:top-8 sm:left-10">
+        <LaunchWordmark height={26} tone="light" ariaLabel="LAUNCH" />
+      </div>
       <div className="w-full max-w-3xl text-center">
         <div className="editorial-mono mb-4" style={{ color: 'rgba(146, 184, 255, 0.7)' }}>
           Manage

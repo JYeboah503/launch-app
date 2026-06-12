@@ -19,7 +19,7 @@ import { BrandSelector } from '@/components/brand-selector'
 import { ProjectsGallery } from '@/components/projects-gallery'
 import { TrendingUp, Award, Zap, Clock } from 'lucide-react'
 import { Mission } from '@/components/mission-structure'
-import { LaunchLogo } from '@/components/launch-logo'
+import { LaunchWordmark } from '@/components/launch-wordmark'
 
 interface Project {
   id: string
@@ -409,6 +409,11 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
             // the scenario afterwards.
             if (currentGenericQuestions && currentScenarioCode) {
               const verdicts = evaluateAll(currentGenericQuestions, answers)
+              // Any hard-filter that came back unqualified flags the whole
+              // submission so the partner can sort/filter quickly.
+              const notQualified = verdicts.some(
+                (v) => v.kind === 'hard-filter' && v.qualified === false,
+              )
               addSubmission({
                 id: `sub-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
                 scenarioCode: currentScenarioCode,
@@ -417,6 +422,7 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
                 variant: currentScenarioVariant,
                 submittedAt: new Date().toISOString(),
                 intake: verdicts,
+                notQualified,
                 decisions: [],
               })
             }
@@ -451,7 +457,7 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
       <div className="fixed top-0 left-0 right-0 z-40 border-b" style={{ borderColor: 'rgba(146, 184, 255, 0.12)', background: 'rgba(7, 9, 28, 0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <LaunchLogo height={26} color="var(--lq-cream)" ariaLabel="LAUNCH" />
+            <LaunchWordmark height={26} tone="light" ariaLabel="LAUNCH" />
             <span className="hidden sm:inline editorial-mono" style={{ color: 'rgba(246, 242, 234, 0.5)' }}>
               · student
             </span>

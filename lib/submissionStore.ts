@@ -18,6 +18,10 @@ export interface Submission {
   submittedAt: string  // ISO
   /** AI verdicts on each intake question (open text answers + 0–10 scores). */
   intake: QuestionVerdict[]
+  /** True if any hard-filter intake question came back as not qualified —
+   *  surfaces a top-level red badge on the Submissions surface so the org
+   *  can sort/filter quickly. */
+  notQualified?: boolean
   /** Decisions the candidate made in the scenario, plus skill credited. */
   decisions: Array<{
     stepIdx: number

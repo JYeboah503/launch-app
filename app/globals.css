@@ -484,7 +484,9 @@ img {
     text-align: left;
     background: transparent;
     border: none;
-    padding: 9px 12px;
+    /* left-pad reserves room for the active-state edge stripe so the label
+       doesn't shift between states */
+    padding: 9px 12px 9px 14px;
     border-radius: 8px;
     font-family: var(--font-body);
     font-weight: 500;
@@ -492,6 +494,7 @@ img {
     letter-spacing: -0.005em;
     color: var(--lq-ink-2);
     cursor: pointer;
+    position: relative;
     transition: background 160ms ease, color 160ms ease;
   }
   .corp-rail-item:hover {
@@ -499,9 +502,20 @@ img {
     color: var(--lq-ink);
   }
   .corp-rail-item-active {
-    background: rgba(10, 42, 107, 0.08);
+    background: rgba(10, 42, 107, 0.10);
     color: var(--launch-navy);
     font-weight: 600;
+  }
+  /* Left-edge stripe — makes the current section unmistakable */
+  .corp-rail-item-active::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--launch-navy);
   }
   .corp-rail-item-jump {
     color: var(--lq-ink-3);

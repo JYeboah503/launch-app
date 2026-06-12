@@ -221,3 +221,41 @@ export const GENERIC_QUESTION_SUGGESTIONS = [
   'What would you want to be doing in three years?',
   'What would you bring to our team that we don’t already have?',
 ]
+
+/* ---------------------------------------------------------------- */
+/* Attribute library — softer "trait" axes (e.g. Savills' 14) that  */
+/* map onto the underlying 10 capabilities. Orgs pick attributes;   */
+/* the AI generator uses them as input + the scoring continues to   */
+/* roll up via the capability key.                                  */
+/* ---------------------------------------------------------------- */
+
+export interface AttributeMeta {
+  key: string
+  name: string
+  /** Underlying capability this attribute scores against. */
+  capabilityKey: string
+  /** One-line description shown in the picker. */
+  description: string
+}
+
+export const ATTRIBUTES: AttributeMeta[] = [
+  // Softer "trait" attributes from Savills' email
+  { key: 'positive-attitude',  name: 'Positive attitude',        capabilityKey: 'emotionalIntelligence', description: 'Brings constructive energy even when things go sideways.' },
+  { key: 'willingness-learn',  name: 'Willingness to learn',     capabilityKey: 'adaptability',          description: 'Open to feedback; treats every situation as a chance to grow.' },
+  { key: 'inquisitive',        name: 'Inquisitive nature',       capabilityKey: 'reasoning',             description: 'Asks the second question, not just the first.' },
+  { key: 'communication',      name: 'Strong communication',     capabilityKey: 'collaboration',         description: 'Writes and speaks clearly under pressure; reads the room.' },
+  { key: 'teamwork',           name: 'Teamwork & collaboration', capabilityKey: 'collaboration',         description: 'Raises the team around them; credits-shares; resolves friction.' },
+  { key: 'problem-solving',    name: 'Problem-solving ability',  capabilityKey: 'problemSolving',        description: 'Decomposes mess into something they can act on.' },
+  { key: 'time-management',    name: 'Time management',          capabilityKey: 'execution',             description: 'Prioritises ruthlessly; finishes what they start.' },
+  { key: 'adaptability',       name: 'Adaptability',             capabilityKey: 'adaptability',          description: 'Updates fast when new information changes the picture.' },
+  { key: 'initiative',         name: 'Initiative & ownership',   capabilityKey: 'execution',             description: 'Takes the first step before being asked; owns the outcome.' },
+  { key: 'professionalism',    name: 'Professionalism',          capabilityKey: 'integrity',             description: 'Conducts themselves credibly with clients, peers, leadership.' },
+  { key: 'digital-skills',     name: 'Basic technical / digital', capabilityKey: 'execution',            description: 'Comfortable with the tooling the work needs (spreadsheets, CRMs, etc).' },
+  { key: 'resilience',         name: 'Resilience under pressure', capabilityKey: 'judgement',            description: 'Holds judgement together when the stakes are high.' },
+  { key: 'motivation',         name: 'Motivation & drive',       capabilityKey: 'execution',             description: 'Self-starts; sustains effort over the long arc.' },
+  { key: 'diligence',          name: 'Diligence',                capabilityKey: 'integrity',             description: 'Quietly thorough; checks the detail no one is asking about.' },
+]
+
+export function getAttribute(key: string): AttributeMeta | undefined {
+  return ATTRIBUTES.find((a) => a.key === key)
+}

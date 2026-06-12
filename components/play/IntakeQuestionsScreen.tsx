@@ -40,6 +40,9 @@ export function IntakeQuestionsScreen({
     return null
   }
 
+  const isHardFilter = q.kind === 'hard-filter'
+  const choices = isHardFilter ? (q.allowedAnswers || []) : []
+
   return (
     <div className="iq-root">
       <div className="iq-card">
@@ -49,20 +52,46 @@ export function IntakeQuestionsScreen({
         </div>
         <div className="iq-progress">
           Question {idx + 1} of {questions.length}
+          {isHardFilter ? ' · pick the closest answer' : ''}
         </div>
         <h2 className="iq-prompt">{q.prompt || 'Tell us about yourself.'}</h2>
         <p className="iq-hint">
-          Open text answer. Take your time. You can leave it blank if
-          you&rsquo;d rather move on.
+          {isHardFilter
+            ? 'Pick the option that best applies to you. If none fit exactly, leave it and continue.'
+            : 'Open text answer. Take your time. You can leave it blank if you’d rather move on.'}
         </p>
-        <textarea
-          className="iq-textarea"
-          value={answers[q.id] || ''}
-          onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-          placeholder="Type your answer here…"
-          autoFocus
-          rows={7}
-        />
+
+        {isHardFilter ? (
+          <div className="iq-choices">
+            {choices.length === 0 ? (
+              <p className="iq-empty">No options were configured for this filter.</p>
+            ) : (
+              choices.map((opt) => {
+                const selected = (answers[q.id] || '') === opt
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setAnswers({ ...answers, [q.id]: opt })}
+                    className={`iq-choice${selected ? ' is-selected' : ''}`}
+                    aria-pressed={selected}
+                  >
+                    {opt}
+                  </button>
+                )
+              })
+            )}
+          </div>
+        ) : (
+          <textarea
+            className="iq-textarea"
+            value={answers[q.id] || ''}
+            onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+            placeholder="Type your answer here…"
+            autoFocus
+            rows={7}
+          />
+        )}
 
         <div className="iq-actions">
           <button
@@ -190,6 +219,37 @@ export function IntakeQuestionsScreen({
           border-color: transparent;
         }
         .iq-btn-skip:hover { color: var(--ink-2); }
+
+        /* Hard-filter multiple-choice tiles */
+        .iq-choices {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+        .iq-choice {
+          appearance: none;
+          background: var(--bg);
+          border: 1px solid var(--line-2);
+          border-radius: 10px;
+          padding: 14px 16px;
+          text-align: left;
+          font-family: var(--f-body);
+          font-size: 15px;
+          color: var(--ink);
+          cursor: pointer;
+          transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+        }
+        .iq-choice:hover { border-color: var(--accent); }
+        .iq-choice.is-selected {
+          background: var(--accent);
+          color: var(--bg);
+          border-color: var(--accent);
+        }
+        .iq-empty {
+          color: var(--ink-3);
+          font-style: italic;
+          padding: 8px 0;
+        }
       `}</style>
     </div>
   )
