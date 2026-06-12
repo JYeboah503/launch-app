@@ -9,9 +9,12 @@ import { PartnerAuthView } from '@/components/partner-auth-view'
 import { TeacherDashboard } from '@/components/teacher-dashboard'
 import { LaunchWordmark } from '@/components/launch-wordmark'
 import { CorporateTopBar } from '@/components/corporate-top-bar'
+import { RoleApplicantFilters, applyApplicantFilters, DEFAULT_FILTERS, type ApplicantFilters } from '@/components/role-applicant-filters'
 import type { AppMode } from '@/lib/roles'
 import { addCustomScenarioStub } from '@/lib/scenarioStore'
 import { listSubmissions, type Submission } from '@/lib/submissionStore'
+import { seedIfNeeded, loadActiveRoles, submissionsToStudents } from '@/lib/seedData'
+import { listSubmissionsForCode } from '@/lib/submissionStore'
 import { Header } from '@/components/header'
 import { CapabilitiesSection } from '@/components/capabilities-section'
 import { ResultsSection } from '@/components/results-section'
@@ -62,6 +65,13 @@ export default function Page() {
   const [roleSkillFilters, setRoleSkillFilters] = useState<Record<string, boolean>>({})
   const [selectedRoleSkill, setSelectedRoleSkill] = useState<string | null>(null)
   const [selectedRoleSkillTop, setSelectedRoleSkillTop] = useState<number>(10)
+  /** Filter state for the role-detail applicant pipeline. Reset to defaults
+   *  whenever the partner enters a different role. */
+  const [applicantFilters, setApplicantFilters] = useState<ApplicantFilters>(DEFAULT_FILTERS)
+  // Reset on role switch so each role starts with a clean filter state.
+  useEffect(() => {
+    if (selectedRoleView) setApplicantFilters(DEFAULT_FILTERS)
+  }, [selectedRoleView])
   /** ID of the scenario the partner just created — used to flash a
    *  "just created" highlight on its card in the Scenarios section so
    *  they see exactly where their work landed. Cleared on a timer. */
@@ -72,11 +82,20 @@ export default function Page() {
     return () => clearTimeout(t)
   }, [justCreatedRoleId])
 
+  // Seed + load corporate state on partner login. seedIfNeeded() is idempotent
+  // (writes a flag), so reloads don't re-seed. activeRoles hydrates from the
+  // scenarioStore so the partner's earlier builds survive a refresh.
+  useEffect(() => {
+    if (!isPartnerLoggedIn) return
+    seedIfNeeded()
+    setActiveRoles(loadActiveRoles())
+  }, [isPartnerLoggedIn])
+
   // Submissions from localStorage — hydrate after mount to avoid SSR mismatch.
   const [submissions, setSubmissions] = useState<Submission[]>([])
   useEffect(() => {
     setSubmissions(listSubmissions())
-  }, [corporateNav])
+  }, [corporateNav, isPartnerLoggedIn])
   /** Derived stats for the corporate overview funnel — actionable numbers,
    *  not marketing metrics. Recomputes when submissions or roles change. */
   const corpStats = useMemo(() => {
@@ -84,13 +103,14 @@ export default function Page() {
     const weekAgo = now - 7 * 24 * 60 * 60 * 1000
     const thisWeek = submissions.filter(s => new Date(s.submittedAt).getTime() >= weekAgo)
     const qualified = submissions.filter(s => !s.notQualified)
-    const awaitingReview = submissions  // every submission needs a partner pass; for now they're all "awaiting"
+    const flagged = submissions.filter(s => s.notQualified)
     return {
       activeScenarios: activeRoles.length,
       submissionsTotal: submissions.length,
       thisWeek: thisWeek.length,
+      qualifiedCount: qualified.length,
       qualifiedPct: submissions.length === 0 ? 0 : Math.round((qualified.length / submissions.length) * 100),
-      awaitingReview: awaitingReview.length,
+      flaggedCount: flagged.length,
     }
   }, [submissions, activeRoles])
   /** Latest 3 submissions for the "Recent activity" panel on overview. */
@@ -138,10 +158,47 @@ export default function Page() {
     return students
   }, [selectedTool])
 
-  // Get selected student profile
-  const selectedStudent = selectedStudentId
-    ? STUDENT_PROFILES[selectedStudentId]
-    : null
+  // Get selected student profile.
+  //   1) Static catalogue (MOCK_STUDENTS top-3 — Sarah / James / Maya)
+  //   2) If miss, try the submissionStore: seeded + real submissions both
+  //      carry the full CandidateProfile, which we adapt into the same
+  //      StudentProfileView shape so partner can drill in to ANY applicant.
+  const selectedStudent = useMemo(() => {
+    if (!selectedStudentId) return null
+    const fromStatic = STUDENT_PROFILES[selectedStudentId]
+    if (fromStatic) return fromStatic
+    const subs = listSubmissions()
+    const sub = subs.find((s) => s.id === selectedStudentId)
+    if (!sub) return null
+    const p = sub.profile
+    if (!p) return null
+    // Mock per-capability levels deterministically from the submission id.
+    const allCaps = [
+      'Judgement & Decision-Making', 'Reasoning & Critical Thinking',
+      'Problem Solving', 'Leadership & Influence',
+      'Adaptability & Cognitive Flexibility', 'Emotional Intelligence',
+      'Execution & Ownership', 'Integrity & Ethics',
+      'Collaboration', 'Situational Awareness & Systems Thinking',
+    ]
+    let h = 0
+    for (let i = 0; i < sub.id.length; i++) h = ((h << 5) - h) + sub.id.charCodeAt(i) | 0
+    const capabilities = allCaps.map((name, i) => ({
+      name,
+      level: 60 + (Math.abs(h + i * 7) % 36),
+    }))
+    return {
+      id: sub.id,
+      name: p.name,
+      interests: p.industries || [],
+      capabilities,
+      bio: p.whyLooking
+        ? `${p.name} — ${p.whyLooking}`
+        : `${p.name} applied for ${sub.scenarioTitle}. Profile collected at intake.`,
+      degree: p.degree,
+      atar: p.atar,
+      school: p.university || '—',
+    } as any
+  }, [selectedStudentId])
 
   const studentChallenges = selectedStudentId ? CHALLENGES[selectedStudentId] || [] : []
 
@@ -308,8 +365,15 @@ export default function Page() {
     // Show role candidates view
     if (selectedRoleView) {
       const selectedRole = activeRoles.find(r => r.id === selectedRoleView)
-      // Filter students who would match this role (for demo, showing all students)
-      const roleApplicants = MOCK_STUDENTS
+      // Role's actual applicant pool — read from submissionStore so the
+      // filter UI operates on candidates who ACTUALLY applied to this
+      // scenario (not the global mock pool).
+      const roleSubmissions = selectedRole
+        ? listSubmissionsForCode(selectedRole.accessCode)
+        : []
+      const roleApplicants = roleSubmissions.length > 0
+        ? submissionsToStudents(roleSubmissions, selectedRole?.skills)
+        : MOCK_STUDENTS  // fallback for sample data / quick-play scenarios
       
       // Initialize role skill filters on first load
       if (selectedRole?.skills && Object.keys(roleSkillFilters).length === 0) {
@@ -376,13 +440,98 @@ export default function Page() {
                 </div>
               </div>
               <p className="text-sm mt-4 max-w-[60ch]" style={{ color: 'var(--lq-ink-2)' }}>
-                Pick a capability below to see who&rsquo;s scoring highest on it
-                in this scenario.
+                Use the filters below to narrow your applicant pool. Capability
+                scoring sits underneath — both stack live.
               </p>
             </div>
 
+            {/* Applicant filter pipeline — profile + eligibility + looking-for
+                filters at the top of the role detail page. */}
+            <section className="px-3 sm:px-4 py-8">
+              <RoleApplicantFilters
+                students={roleApplicants}
+                filters={applicantFilters}
+                setFilters={setApplicantFilters}
+              />
+            </section>
+
+            {/* Filtered applicant cards — the main candidate list under the
+                filter strip. Partner clicks through to the student profile. */}
+            <section className="px-3 sm:px-4 pb-8">
+              {(() => {
+                const filtered = applyApplicantFilters(roleApplicants, applicantFilters)
+                if (filtered.length === 0) {
+                  return (
+                    <div className="corp-card p-10 text-center">
+                      <p style={{ color: 'var(--lq-ink-2)' }}>
+                        No candidates match these filters. Loosen a benchmark or
+                        clear filters to see the full pool.
+                      </p>
+                    </div>
+                  )
+                }
+                return (
+                  <div>
+                    <div className="flex items-baseline justify-between mb-4">
+                      <h3 className="editorial-display-sm" style={{ fontSize: 18, color: 'var(--lq-ink)' }}>
+                        Applicants
+                      </h3>
+                      <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>
+                        Showing {Math.min(24, filtered.length)} of {filtered.length}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {filtered.slice(0, 24).map((a) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => setSelectedStudentId(a.id)}
+                          className="corp-card p-4 text-left transition-colors hover:border-[var(--launch-navy)]"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="min-w-0">
+                              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 15, color: 'var(--lq-ink)' }}>
+                                {a.name}
+                              </div>
+                              <div className="text-xs truncate" style={{ color: 'var(--lq-ink-3)' }}>
+                                {a.degree || '—'} · {a.university || '—'}
+                              </div>
+                            </div>
+                            {a.prequalStatus === 'flagged' && (
+                              <span
+                                className="editorial-mono px-1.5 py-0.5 rounded-full"
+                                style={{ background: 'rgba(122, 14, 42, 0.10)', color: '#7a0e2a', fontSize: 9, letterSpacing: '0.12em' }}
+                              >
+                                Flagged
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-3 pt-3 border-t border-[var(--lq-line)] flex items-center justify-between">
+                            <div className="flex items-baseline gap-1">
+                              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 16, color: 'var(--launch-navy)' }}>{a.overallScore}</span>
+                              <span style={{ fontSize: 10, color: 'var(--lq-ink-3)' }}>overall</span>
+                            </div>
+                            <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)', fontSize: 10 }}>
+                              {a.atar !== undefined ? `ATAR ${a.atar}` : '—'}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    {filtered.length > 24 && (
+                      <div className="text-center mt-6">
+                        <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>
+                          + {filtered.length - 24} more · narrow with capability picker below
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+            </section>
+
             {/* Role Standouts Section with Skill Filters */}
-            <section className="py-12 px-4">
+            <section className="py-4 px-4">
               <div className="w-full max-w-6xl mx-auto">
                 {/* Skill Filters with Top N Dropdowns */}
                 {selectedRole?.skills && selectedRole.skills.length > 0 && (
@@ -437,7 +586,7 @@ export default function Page() {
                       </button>
                     </div>
                     <LaunchStandouts
-                      students={MOCK_STUDENTS.slice(0, selectedRoleSkillTop)}
+                      students={applyApplicantFilters(roleApplicants, applicantFilters).slice(0, selectedRoleSkillTop)}
                       onSelectStudent={setSelectedStudentId}
                     />
                   </div>
@@ -669,15 +818,14 @@ export default function Page() {
               },
               {
                 label: 'Qualified',
-                value: corpStats.qualifiedPct,
-                suffix: '%',
-                helper: corpStats.submissionsTotal === 0 ? '—' : 'pass hard filters',
+                value: corpStats.qualifiedCount,
+                helper: corpStats.submissionsTotal === 0 ? '—' : `${corpStats.qualifiedPct}% pass rate`,
                 onClick: () => setCorporateNav('submissions'),
               },
               {
-                label: 'Awaiting review',
-                value: corpStats.awaitingReview,
-                helper: corpStats.awaitingReview === 0 ? 'all caught up' : 'open',
+                label: 'Flagged',
+                value: corpStats.flaggedCount,
+                helper: corpStats.submissionsTotal === 0 ? '—' : 'below benchmark',
                 onClick: () => setCorporateNav('submissions'),
               },
             ].map((s) => (
@@ -841,7 +989,12 @@ export default function Page() {
                 </button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {activeRoles.slice(0, 3).map((role) => (
+                {activeRoles.slice(0, 3).map((role) => {
+                  // Glanceable per-role funnel — partner sees applicant count
+                  // + flagged count + qualified % at a glance without drilling in.
+                  const roleSubs = submissions.filter(s => s.scenarioCode === role.accessCode)
+                  const roleFlagged = roleSubs.filter(s => s.notQualified).length
+                  return (
                   <article
                     key={role.id}
                     onClick={() => setSelectedRoleView(role.id)}
@@ -853,19 +1006,35 @@ export default function Page() {
                     <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 16, color: 'var(--lq-ink)' }}>
                       {role.name}
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-xs">
-                      <span style={{ color: 'var(--lq-ink-3)' }}>
-                        {role.questionsCount} questions
-                      </span>
-                      <span
-                        className="editorial-mono px-2 py-0.5 rounded-full"
-                        style={{ background: 'rgba(10, 42, 107, 0.06)', color: 'var(--launch-navy)' }}
-                      >
+                    <div className="mt-2 text-xs" style={{ color: 'var(--lq-ink-3)' }}>
+                      {role.questionsCount} questions · {role.skills?.length || 0} capabilities
+                    </div>
+                    {/* Funnel bar — qualified vs flagged split */}
+                    <div className="mt-3 flex items-baseline gap-3">
+                      <div>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 22, color: 'var(--launch-navy)', lineHeight: 1 }}>
+                          {roleSubs.length}
+                        </span>
+                        <span className="editorial-mono ml-1" style={{ color: 'var(--lq-ink-3)', fontSize: 10 }}>
+                          {roleSubs.length === 1 ? 'applicant' : 'applicants'}
+                        </span>
+                      </div>
+                      {roleFlagged > 0 && (
+                        <span className="editorial-mono" style={{ color: '#7a0e2a', fontSize: 10, letterSpacing: '0.14em' }}>
+                          {roleFlagged} flagged
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-[var(--lq-line)] flex items-center justify-between">
+                      <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)', fontSize: 10 }}>
                         {role.accessCode}
+                      </span>
+                      <span className="editorial-mono" style={{ color: 'var(--launch-navy)', fontSize: 10 }}>
+                        Open →
                       </span>
                     </div>
                   </article>
-                ))}
+                )})}
               </div>
             </div>
           )}
@@ -976,19 +1145,49 @@ export default function Page() {
                         <span aria-hidden className="inline-block rounded-full opacity-40 group-hover:opacity-100 transition-opacity" style={{ width: 8, height: 8, background: 'var(--launch-navy)' }} />
                       </div>
                       <h3
-                        className="text-xl mb-3"
+                        className="text-xl mb-2"
                         style={{ fontFamily: 'var(--font-display)', fontWeight: 500, letterSpacing: '-0.015em' }}
                       >
                         {role.name}
                       </h3>
-                      <div className="space-y-1 text-sm" style={{ color: 'var(--lq-ink-2)' }}>
-                        <p>{role.questionsCount} questions × 3 levels</p>
-                        <p>{role.skills?.length || (role as any).skillsCount} skills assessed</p>
+                      <div className="text-xs mb-3" style={{ color: 'var(--lq-ink-3)' }}>
+                        {role.questionsCount} questions · {role.skills?.length || (role as any).skillsCount} capabilities
                       </div>
-                      <div className="mt-4 pt-3 border-t border-[var(--lq-line)] flex items-center justify-between">
-                        <span className="editorial-mono">{role.accessCode}</span>
-                        <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>
-                          {new Date(role.createdAt).toLocaleDateString()}
+                      {/* Funnel summary — applicants + flagged at a glance */}
+                      {(() => {
+                        const roleSubs = submissions.filter(s => s.scenarioCode === role.accessCode)
+                        const roleFlagged = roleSubs.filter(s => s.notQualified).length
+                        const passRate = roleSubs.length === 0 ? 0 : Math.round(((roleSubs.length - roleFlagged) / roleSubs.length) * 100)
+                        return (
+                          <div className="py-3 my-3 border-y border-[var(--lq-line)]">
+                            <div className="flex items-baseline justify-between mb-2">
+                              <div>
+                                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 28, color: 'var(--launch-navy)', lineHeight: 1 }}>
+                                  {roleSubs.length}
+                                </span>
+                                <span className="editorial-mono ml-1.5" style={{ color: 'var(--lq-ink-3)', fontSize: 10 }}>
+                                  {roleSubs.length === 1 ? 'applicant' : 'applicants'}
+                                </span>
+                              </div>
+                              {roleSubs.length > 0 && (
+                                <span className="editorial-mono" style={{ color: 'var(--launch-teal-3)', fontSize: 10 }}>
+                                  {passRate}% pass
+                                </span>
+                              )}
+                            </div>
+                            {/* Pass/flag bar */}
+                            {roleSubs.length > 0 && (
+                              <div className="flex h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(122, 14, 42, 0.10)' }}>
+                                <div style={{ width: `${passRate}%`, background: 'var(--launch-teal)' }} />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
+                      <div className="flex items-center justify-between">
+                        <span className="editorial-mono" style={{ color: 'var(--launch-navy)', fontSize: 11, letterSpacing: '0.06em', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{role.accessCode}</span>
+                        <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)', fontSize: 10 }}>
+                          shipped {new Date(role.createdAt).toLocaleDateString()}
                         </span>
                       </div>
                     </article>
@@ -1111,7 +1310,9 @@ export default function Page() {
             onClose={() => setShowBuilderV2(false)}
             creatorType="corporate"
             onRoleCreated={(roleData) => {
-              setActiveRoles([...activeRoles, roleData])
+              // Newest scenario first so the partner sees their fresh work
+              // at the top of Active Scenarios (above the seeded ones).
+              setActiveRoles([roleData, ...activeRoles])
               addCustomScenarioStub({
                 id: roleData.id,
                 code: roleData.accessCode,

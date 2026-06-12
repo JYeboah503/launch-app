@@ -15,6 +15,7 @@ import {
 import type { ScenarioVariant } from '@/lib/roles'
 import './styles/play.css'
 import { IntakeQuestionsScreen } from '@/components/play/IntakeQuestionsScreen'
+import { CandidateProfileScreen } from '@/components/play/CandidateProfileScreen'
 import { OptionFollowUpScreen } from '@/components/play/OptionFollowUpScreen'
 import {
   DecisionScreen,
@@ -37,6 +38,7 @@ const TRANSITIONS = ['zoom-punch', 'whip-right', 'iris-in', 'page-turn', 'drop-s
 
 type Phase =
   | 'intake'
+  | 'profile'           // full candidate profile capture (basic + comprehensive)
   | 'generic-intake'
   | 'opening'
   | { type: 'step'; stepIdx: number }
@@ -220,8 +222,13 @@ export interface ScenarioPlayProps {
   variant?: ScenarioVariant
   /** Generic intake questions to run BEFORE the scenario (open text). */
   genericQuestions?: import('@/lib/play/types').GenericIntakeQuestion[]
-  /** Called when the candidate finishes the generic intake portion. */
-  onIntakeComplete?: (answers: Record<string, string>) => void
+  /** Called when the candidate finishes the generic intake portion.
+   *  Now also passes the captured CandidateProfile so the host can persist
+   *  it onto the Submission for partner-side filtering. */
+  onIntakeComplete?: (
+    answers: Record<string, string>,
+    profile?: import('@/lib/candidateProfile').CandidateProfile,
+  ) => void
 }
 
 export function ScenarioPlay({
@@ -250,17 +257,19 @@ export function ScenarioPlay({
     showSkills: isProfessional ? false : TWEAK_DEFAULTS.showSkills,
   })
   const hasGeneric = !!genericQuestions && genericQuestions.length > 0
-  // Phase routing:
-  //   no-name + generic     → intake → generic-intake → (opening | step-0)
-  //   no-name + no-generic  → intake → (opening | step-0)
-  //   name + generic        → generic-intake → (opening | step-0)
-  //   name + no-generic     → (opening | step-0)
+  // Phase routing now opens with the comprehensive candidate profile screen
+  // (replaces the old "just your name" intake) so the partner gets the full
+  // filter-fuel for every play submission:
+  //   no-name              → profile → generic-intake? → (opening | step-0)
+  //   name (Quick-Play)    → generic-intake? → (opening | step-0)
   const initialPhase: Phase = profile.name
     ? hasGeneric
       ? 'generic-intake'
       : isProfessional ? { type: 'step', stepIdx: 0 } : 'opening'
-    : 'intake'
+    : 'profile'
   const [phase, setPhase] = useState<Phase>(initialPhase)
+  /** Full candidate profile captured on the profile-phase screen. */
+  const [candidateProfile, setCandidateProfile] = useState<import('@/lib/candidateProfile').CandidateProfile | null>(null)
   const [genericAnswers, setGenericAnswers] = useState<Record<string, string>>({})
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [lastSkill, setLastSkill] = useState<string | null>(null)
@@ -319,7 +328,7 @@ export function ScenarioPlay({
 
   const handleGenericIntakeDone = (answers: Record<string, string>) => {
     setGenericAnswers(answers)
-    if (onIntakeComplete) onIntakeComplete(answers)
+    if (onIntakeComplete) onIntakeComplete(answers, candidateProfile || undefined)
     if (isProfessional) transitionTo({ type: 'step', stepIdx: 0 })
     else transitionTo('opening')
   }
@@ -491,6 +500,7 @@ export function ScenarioPlay({
 
   let screenKey: string = 'opening'
   if (phase === 'intake') screenKey = 'intake'
+  else if (phase === 'profile') screenKey = 'profile'
   else if (phase === 'generic-intake') screenKey = 'generic-intake'
   else if (typeof phase === 'object' && phase.type === 'option-followup') screenKey = `fu-${phase.stepIdx}-${phase.entry.id}`
   else if (phase === 'outcome') screenKey = 'outcome'
@@ -515,6 +525,26 @@ export function ScenarioPlay({
     >
       <TransitionStack keyName={screenKey}>
         {phase === 'intake' && <IntakeScreen onContinue={handleIntakeDone} />}
+        {phase === 'profile' && (
+          <CandidateProfileScreen
+            isProfessional={isProfessional}
+            onContinue={(p) => {
+              setCandidateProfile(p)
+              setProfile({ name: p.name })
+              // Persist name like the legacy IntakeScreen did
+              try { if (p.name) localStorage.setItem('launch.name', p.name) } catch {}
+              if (!hasGeneric && onIntakeComplete) {
+                // No pre-qualifier intake — host needs the profile NOW so it
+                // can land on the Submission when the scenario completes.
+                onIntakeComplete({}, p)
+              }
+              const next: Phase = hasGeneric
+                ? 'generic-intake'
+                : isProfessional ? { type: 'step', stepIdx: 0 } : 'opening'
+              transitionTo(next)
+            }}
+          />
+        )}
         {phase === 'generic-intake' && hasGeneric && (
           <IntakeQuestionsScreen
             questions={genericQuestions!}

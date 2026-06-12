@@ -223,6 +223,119 @@ export const GENERIC_QUESTION_SUGGESTIONS = [
 ]
 
 /* ---------------------------------------------------------------- */
+/* Pre-qualifier seed library.                                       */
+/*                                                                   */
+/* Real-world seed examples grouped by recruiter-pattern. Inspired   */
+/* by the Savills Graduate Program intake (graduation window, degree */
+/* type, communication and collaboration probes) but the shapes are  */
+/* re-usable for any corporate graduate / early-career hire.         */
+/*                                                                   */
+/* Each seed carries a sensible default benchmark:                    */
+/*  - hard-filter: which answer(s) pass the gate                      */
+/*  - open-text:   minimum AI score on the ticked criteria (0–10)    */
+/* ---------------------------------------------------------------- */
+
+export interface PrequalSeed {
+  /** Unique seed key — also used to dedupe when partner picks the same seed twice. */
+  key: string
+  kind: 'hard-filter' | 'open-text'
+  prompt: string
+  /** Hard-filter only: every possible answer the candidate picks from. */
+  allowedAnswers?: string[]
+  /** Hard-filter only: which of the above ARE the passing answers.
+   *  The candidate fails the gate if their pick is not in this list. */
+  passingAnswers?: string[]
+  /** Open-text only: AI criterion ids that judge the answer. */
+  criterionIds?: string[]
+  /** Open-text only: minimum AI score on the averaged criteria to pass (0–10). */
+  minScore?: number
+  /** Short one-line description shown next to the seed in the picker. */
+  hint: string
+  /** UI grouping. */
+  category: 'eligibility' | 'background' | 'communication' | 'fit'
+}
+
+export const PREQUAL_SEEDS: PrequalSeed[] = [
+  // ─── Eligibility — hard gates ────────────────────────────────────
+  {
+    key: 'recent-graduate',
+    kind: 'hard-filter',
+    prompt: 'Have you graduated within the last 2 years (or are graduating this year)?',
+    allowedAnswers: ['Yes', 'No'],
+    passingAnswers: ['Yes'],
+    category: 'eligibility',
+    hint: 'Filters in candidates inside the graduate-window.',
+  },
+  {
+    key: 'work-rights',
+    kind: 'hard-filter',
+    prompt: 'Do you have unrestricted work rights for the country this role is based in?',
+    allowedAnswers: ['Yes', 'No, but I have a visa', 'No'],
+    passingAnswers: ['Yes', 'No, but I have a visa'],
+    category: 'eligibility',
+    hint: 'Standard work-rights gate.',
+  },
+  {
+    key: 'degree-type',
+    kind: 'hard-filter',
+    prompt: 'Which area best describes your degree?',
+    allowedAnswers: [
+      'Property / Real Estate',
+      'Finance / Commerce',
+      'Engineering',
+      'Law',
+      'Business / Marketing',
+      'Other',
+    ],
+    passingAnswers: ['Property / Real Estate', 'Finance / Commerce'],
+    category: 'background',
+    hint: 'Savills-style: prefer property + finance; partner can widen the gate.',
+  },
+
+  // ─── Communication & fit — open-text with min-score benchmarks ────
+  {
+    key: 'communication-collab',
+    kind: 'open-text',
+    prompt: 'Tell us about a time you collaborated with a difficult stakeholder. What did you do?',
+    criterionIds: ['clear-concise', 'specific-examples', 'team-collaborative'],
+    minScore: 6,
+    category: 'communication',
+    hint: 'Probes communication + collaboration. Min 6/10 by default.',
+  },
+  {
+    key: 'initiative-story',
+    kind: 'open-text',
+    prompt: 'Describe a time you took initiative — what made you act, and what happened?',
+    criterionIds: ['ownership-instinct', 'specific-examples', 'tone-confidence'],
+    minScore: 6,
+    category: 'communication',
+    hint: 'Probes ownership + initiative. Min 6/10 by default.',
+  },
+  {
+    key: 'extracurricular',
+    kind: 'open-text',
+    prompt: 'Tell us about an extracurricular role or interest you’ve held outside study or work.',
+    criterionIds: ['specific-examples', 'team-collaborative', 'self-aware-growth'],
+    minScore: 5,
+    category: 'fit',
+    hint: 'Probes engagement beyond study — partner can lower bar for early-career.',
+  },
+  {
+    key: 'industry-motivation',
+    kind: 'open-text',
+    prompt: 'What draws you specifically to our industry, and why us?',
+    criterionIds: ['strong-interest', 'genuine-curiosity', 'mission-fit'],
+    minScore: 5,
+    category: 'fit',
+    hint: 'Probes genuine motivation. Filters generic / sprayed applications.',
+  },
+]
+
+export function getPrequalSeed(key: string): PrequalSeed | undefined {
+  return PREQUAL_SEEDS.find((s) => s.key === key)
+}
+
+/* ---------------------------------------------------------------- */
 /* Attribute library — softer "trait" axes (e.g. Savills' 14) that  */
 /* map onto the underlying 10 capabilities. Orgs pick attributes;   */
 /* the AI generator uses them as input + the scoring continues to   */

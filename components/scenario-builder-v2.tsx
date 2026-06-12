@@ -31,6 +31,8 @@ import {
   GENERIC_QUESTION_SUGGESTIONS,
   ATTRIBUTES,
   getCapability,
+  PREQUAL_SEEDS,
+  type PrequalSeed,
 } from '@/lib/builderData'
 import type { GenericIntakeQuestion } from '@/lib/play/types'
 import {
@@ -123,30 +125,37 @@ const DEFAULT_GENERIC = (
   prompt,
   criterionIds: [],
   allowedAnswers: kind === 'hard-filter' ? (allowedAnswers || ['', '', '']) : undefined,
+  passingAnswers: kind === 'hard-filter' ? [] : undefined,
+  minScore: kind === 'open-text' ? undefined : undefined,
 })
 
+/** Build a GenericIntakeQuestion from a PrequalSeed in builderData.ts —
+ *  the seed already carries the benchmark + criteria. */
+function genericFromSeed(seed: PrequalSeed): GenericIntakeQuestion {
+  return {
+    id: `g-${Math.random().toString(36).slice(2, 8)}`,
+    kind: seed.kind,
+    prompt: seed.prompt,
+    criterionIds: seed.criterionIds || [],
+    allowedAnswers: seed.allowedAnswers,
+    passingAnswers: seed.passingAnswers,
+    minScore: seed.minScore,
+  }
+}
+
 /**
- * AI-style pre-qualifier seed suggestions. For the demo this is a static list
- * (matches what Savills said in their email — graduation timing, degree
- * background, why-this-org). Devs swap this for a real LLM call that reads
- * the JD + criteria the partner provided.
+ * Default seeded pre-qualifier set. Picks Savills-flavoured seeds from the
+ * library so partners land with a sensible starting point on opt-in (recent
+ * graduate gate + degree gate + a communication / collaboration probe).
+ * Real LLM swaps this for a JD-grounded selection.
  */
-const SEEDED_PREQUALIFIERS = (): GenericIntakeQuestion[] => [
-  DEFAULT_GENERIC(
-    'When did you (or will you) graduate?',
-    'hard-filter',
-    ['Currently studying', 'Final year', 'Graduated in the last 2 years', 'Graduated more than 2 years ago'],
-  ),
-  DEFAULT_GENERIC(
-    'Which best describes your degree?',
-    'hard-filter',
-    ['Property / Real Estate', 'Finance / Economics / Business', 'Other discipline', 'No tertiary study'],
-  ),
-  DEFAULT_GENERIC(
-    'Why are you interested in building a career with us?',
-    'open-text',
-  ),
-]
+const SEEDED_PREQUALIFIERS = (): GenericIntakeQuestion[] => {
+  const keys = ['recent-graduate', 'degree-type', 'communication-collab']
+  return keys
+    .map((k) => PREQUAL_SEEDS.find((s) => s.key === k))
+    .filter((s): s is PrequalSeed => Boolean(s))
+    .map(genericFromSeed)
+}
 
 /* -------------------------------------------------------- */
 /* Component                                                */
@@ -175,20 +184,36 @@ export function ScenarioBuilderV2({
   const [companyValues, setCompanyValues] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
 
-  // step 2 — pre-qualifier intake questions. Corporates get AI-seeded
-  // suggestions (hard filters + an open-text "why us"); teachers + students
-  // get a single open-text starter. The section is collapsed by default for
-  // corporate so it doesn't clutter when they don't need pre-qualifiers.
+  /** Partner's explicit opt-in to include pre-qualifier questions in this
+   *  scenario. Required for corporate (defaults OFF — they choose), always
+   *  ON for teachers/students who use a single open-text intake by default.
+   *  When toggled on, the section auto-seeds with Savills-style starter
+   *  questions; when toggled off, the section is hidden from Step 2 entirely. */
+  const [usePrequal, setUsePrequal] = useState<boolean>(
+    creatorType !== 'corporate' && showGenericQuestions,
+  )
+
+  // step 2 — pre-qualifier intake questions. Seeded only when the partner
+  // has opted in via usePrequal.
   const [genericQs, setGenericQs] = useState<GenericIntakeQuestion[]>(
-    !showGenericQuestions
+    !showGenericQuestions || (creatorType === 'corporate' && !usePrequal)
       ? []
       : creatorType === 'corporate'
         ? SEEDED_PREQUALIFIERS()
         : [DEFAULT_GENERIC(GENERIC_QUESTION_SUGGESTIONS[0])],
   )
-  const [genericCollapsed, setGenericCollapsed] = useState<boolean>(
-    creatorType === 'corporate',
-  )
+  // When partner flips opt-in on after the fact, seed with starter examples.
+  // When they flip it off, clear the list so it doesn't ship hidden.
+  useEffect(() => {
+    if (creatorType !== 'corporate') return
+    if (usePrequal && genericQs.length === 0) {
+      setGenericQs(SEEDED_PREQUALIFIERS())
+    } else if (!usePrequal && genericQs.length > 0) {
+      setGenericQs([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usePrequal])
+  const [genericCollapsed, setGenericCollapsed] = useState<boolean>(false)
   const [decisions, setDecisions] = useState<ScenarioDecision[]>([
     DEFAULT_DECISION('judgement'),
     DEFAULT_DECISION('integrity'),
@@ -419,6 +444,8 @@ export function ScenarioBuilderV2({
             setSelectedAttributes={setSelectedAttributes}
             companyValues={companyValues}
             setCompanyValues={setCompanyValues}
+            usePrequal={usePrequal}
+            setUsePrequal={setUsePrequal}
             isCorp={creatorType === 'corporate'}
             isGenerating={isGenerating}
             onGenerate={handleGenerate}
@@ -431,7 +458,8 @@ export function ScenarioBuilderV2({
           <Step2Author
             genericQs={genericQs}
             setGenericQs={setGenericQs}
-            showGenericQuestions={showGenericQuestions}
+            /* Section 1 only renders if the partner opted in via Step 1. */
+            showGenericQuestions={showGenericQuestions && (creatorType !== 'corporate' || usePrequal)}
             genericCollapsed={genericCollapsed}
             setGenericCollapsed={setGenericCollapsed}
             creatorType={creatorType}
@@ -451,7 +479,7 @@ export function ScenarioBuilderV2({
             roleTitle={roleTitle}
             level={level}
             genericQs={genericQs}
-            showGenericQuestions={showGenericQuestions}
+            showGenericQuestions={showGenericQuestions && (creatorType !== 'corporate' || usePrequal)}
             decisions={decisions}
             capabilityTally={capabilityTally}
             accessCode={accessCode}
@@ -863,6 +891,290 @@ export function ScenarioBuilderV2({
           to   { opacity: 1; transform: translateY(0); }
         }
 
+        /* Pre-qualifier opt-in preview — inline list shown when partner picks
+           "Yes" on Step 1, so they see exactly what they're agreeing to before
+           they get to Step 2. */
+        .b2-prequal-preview {
+          background: rgba(27, 158, 143, 0.06);
+          border: 1px solid rgba(27, 158, 143, 0.22);
+          border-radius: 10px;
+          padding: 12px 14px;
+        }
+        .b2-prequal-preview-eyebrow {
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--launch-teal-3);
+          margin-bottom: 10px;
+        }
+        .b2-prequal-preview-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .b2-prequal-preview-list li {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 13px;
+          color: var(--lq-ink);
+        }
+        .b2-prequal-preview-tag {
+          flex-shrink: 0;
+          font-family: var(--font-mono);
+          font-size: 9px;
+          letter-spacing: 0.16em;
+          padding: 3px 7px;
+          border-radius: 999px;
+        }
+        .b2-prequal-preview-tag-filter {
+          background: rgba(10, 42, 107, 0.10);
+          color: var(--launch-navy);
+        }
+        .b2-prequal-preview-tag-open {
+          background: rgba(27, 158, 143, 0.16);
+          color: var(--launch-teal-3);
+        }
+        .b2-prequal-preview-prompt {
+          flex: 1;
+          min-width: 0;
+        }
+        .b2-prequal-preview-bench {
+          flex-shrink: 0;
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--lq-ink-3);
+        }
+        .b2-prequal-skip-hint {
+          margin: 0;
+          padding: 12px 14px;
+          font-size: 13px;
+          color: var(--lq-ink-3);
+          border: 1px dashed var(--lq-line-2);
+          border-radius: 10px;
+        }
+
+        /* Benchmark block — per-question pass/fail filter inside the
+           pre-qualifier card. Navy-tinted so it reads as a partner-set
+           "gate" sitting under the question content. */
+        .b2-bench {
+          border-radius: 10px;
+          padding: 12px 14px;
+          background: rgba(10, 42, 107, 0.04);
+          border: 1px solid rgba(10, 42, 107, 0.14);
+        }
+        .b2-bench-head {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 14px;
+          margin-bottom: 10px;
+        }
+        .b2-bench-label {
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--launch-navy);
+          font-weight: 600;
+        }
+        .b2-bench-meta {
+          font-family: var(--font-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--lq-ink-3);
+        }
+        .b2-bench-body {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 8px;
+        }
+        .b2-bench-prefix {
+          font-size: 13px;
+          color: var(--lq-ink-2);
+          flex-shrink: 0;
+        }
+        .b2-bench-slider-wrap {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .b2-bench-slider {
+          flex: 1;
+          appearance: none;
+          -webkit-appearance: none;
+          height: 4px;
+          border-radius: 999px;
+          background: linear-gradient(to right, var(--launch-navy) 0%, rgba(10, 42, 107, 0.18) 100%);
+          outline: none;
+          cursor: pointer;
+        }
+        .b2-bench-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 18px; height: 18px;
+          border-radius: 50%;
+          background: var(--launch-navy);
+          border: 2px solid #fff;
+          box-shadow: 0 1px 3px rgba(10, 42, 107, 0.30);
+          cursor: pointer;
+        }
+        .b2-bench-slider::-moz-range-thumb {
+          width: 18px; height: 18px;
+          border-radius: 50%;
+          background: var(--launch-navy);
+          border: 2px solid #fff;
+          box-shadow: 0 1px 3px rgba(10, 42, 107, 0.30);
+          cursor: pointer;
+        }
+        .b2-bench-value {
+          flex-shrink: 0;
+          font-family: var(--font-mono);
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--launch-navy);
+          min-width: 50px;
+          text-align: right;
+        }
+        .b2-bench-hint {
+          margin: 0;
+          font-size: 12px;
+          color: var(--lq-ink-3);
+          line-height: 1.5;
+        }
+
+        /* Pass/Fail toggle on each hard-filter allowed answer. Green when
+           the answer counts as passing; muted when it doesn't. */
+        .b2-pass-toggle {
+          appearance: none;
+          flex-shrink: 0;
+          background: transparent;
+          border: 1px solid var(--lq-line-2);
+          border-radius: 999px;
+          padding: 4px 10px;
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--lq-ink-3);
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+        }
+        .b2-pass-toggle:hover:not(:disabled) {
+          border-color: var(--launch-navy);
+          color: var(--launch-navy);
+        }
+        .b2-pass-toggle:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .b2-pass-toggle.is-on {
+          background: var(--launch-teal-soft);
+          color: var(--launch-teal-3);
+          border-color: var(--launch-teal);
+        }
+
+        /* Live pass-rate preview — shown at the bottom of the pre-qualifier
+           section. Big % + a horizontal fill bar + a sentence telling the
+           partner how tight their gate currently is. */
+        .b2-passrate {
+          margin-top: 22px;
+          padding: 18px 20px;
+          border-radius: 14px;
+          background: #fff;
+          border: 1px solid var(--lq-line-2);
+          box-shadow: 0 1px 0 rgba(10, 42, 107, 0.03), 0 4px 14px -10px rgba(10, 42, 107, 0.10);
+        }
+        .b2-passrate-num {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+        .b2-passrate-pct {
+          font-family: var(--font-display);
+          font-weight: 500;
+          font-size: 36px;
+          line-height: 1;
+          color: var(--launch-navy);
+          letter-spacing: -0.02em;
+        }
+        .b2-passrate-sub {
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--lq-ink-3);
+        }
+        .b2-passrate-bar {
+          height: 6px;
+          border-radius: 999px;
+          background: rgba(10, 42, 107, 0.08);
+          overflow: hidden;
+          margin-bottom: 10px;
+        }
+        .b2-passrate-bar-fill {
+          height: 100%;
+          background: var(--launch-navy);
+          border-radius: 999px;
+          transition: width 280ms ease;
+        }
+        .b2-passrate-hint {
+          margin: 0;
+          font-size: 13px;
+          line-height: 1.55;
+          color: var(--lq-ink-2);
+        }
+        /* Loose / standard / tight / extreme colour cues */
+        .b2-passrate-loose .b2-passrate-pct { color: var(--launch-teal-3); }
+        .b2-passrate-loose .b2-passrate-bar-fill { background: var(--launch-teal); }
+        .b2-passrate-standard .b2-passrate-pct { color: var(--launch-navy); }
+        .b2-passrate-standard .b2-passrate-bar-fill { background: var(--launch-navy); }
+        .b2-passrate-tight .b2-passrate-pct { color: #a8521a; }
+        .b2-passrate-tight .b2-passrate-bar-fill { background: #a8521a; }
+        .b2-passrate-extreme .b2-passrate-pct { color: #7a0e2a; }
+        .b2-passrate-extreme .b2-passrate-bar-fill { background: #7a0e2a; }
+
+        /* Review-screen benchmark summary line — shown inline under each
+           pre-qualifier in Step 3 so the partner gets a confirmation pass
+           before shipping. */
+        .b2-review-bench {
+          display: flex;
+          gap: 8px;
+          padding: 8px 12px;
+          background: rgba(10, 42, 107, 0.04);
+          border-left: 2px solid var(--launch-navy);
+          border-radius: 4px;
+          font-size: 13px;
+          line-height: 1.5;
+          color: var(--lq-ink-2);
+          flex-wrap: wrap;
+        }
+        .b2-review-bench-label {
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--launch-navy);
+          font-weight: 600;
+        }
+        .b2-review-bench-value strong {
+          color: var(--lq-ink);
+          font-weight: 600;
+        }
+
         /* Section banner — numbered, eyebrow + title, count pill on the right.
            Visually anchors each of the two question sections (basic / launch)
            so partners always know which section they're in. */
@@ -1120,6 +1432,7 @@ function Step1Setup({
   questionCount, setQuestionCount, difficulty, setDifficulty,
   jobDescription, setJobDescription, idealCriteria, setIdealCriteria,
   selectedAttributes, setSelectedAttributes, companyValues, setCompanyValues,
+  usePrequal, setUsePrequal,
   isCorp, isGenerating, onGenerate, onSkipAI, ready,
 }: any) {
 
@@ -1276,6 +1589,78 @@ function Step1Setup({
         </div>
         </div>
       </section>
+
+      {/* ----- Pre-qualifier opt-in (corporate only). When ON, Step 2 adds a
+              "Pre-qualifier" section seeded with Savills-style examples
+              (graduate window, degree gate, communication probe) — each with
+              an editable benchmark. When OFF, the scenario ships scenario-
+              decisions-only with no intake screen.  ----- */}
+      {isCorp && (
+        <section className="b2-panel">
+          <div className="b2-panel-head">
+            <div>
+              <h2 className="b2-h2">Pre-qualifier questions</h2>
+              <p style={{ color: 'var(--lq-ink-2)', fontSize: 14, marginTop: 6, marginBottom: 0, maxWidth: '60ch' }}>
+                Add a quick screen before the scenario. Each question carries a
+                benchmark — candidates below get flagged on your Submissions
+                inbox, but still complete the scenario so you keep the data.
+              </p>
+            </div>
+            <span className="b2-panel-hint">optional</span>
+          </div>
+
+          {/* Yes / No toggle */}
+          <div className="b2-level" role="radiogroup" aria-label="Include pre-qualifier questions" style={{ marginBottom: 14 }}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={usePrequal === true}
+              onClick={() => setUsePrequal(true)}
+              className={usePrequal ? 'is-active' : ''}
+            >
+              Yes — include a quick screen
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={usePrequal === false}
+              onClick={() => setUsePrequal(false)}
+              className={!usePrequal ? 'is-active' : ''}
+            >
+              No — scenario only
+            </button>
+          </div>
+
+          {/* Inline example preview so partners see what they'd be authoring.
+              Compact, never blocks scroll — just signals "this is what it
+              looks like" so a Savills-style partner immediately recognises
+              their own pattern. */}
+          {usePrequal ? (
+            <div className="b2-prequal-preview">
+              <div className="b2-prequal-preview-eyebrow">You&rsquo;ll start with these — edit, remove, or add more in Step 2</div>
+              <ul className="b2-prequal-preview-list">
+                {PREQUAL_SEEDS.filter((s) => ['recent-graduate', 'degree-type', 'communication-collab'].includes(s.key)).map((s) => (
+                  <li key={s.key}>
+                    <span className={`b2-prequal-preview-tag b2-prequal-preview-tag-${s.kind === 'hard-filter' ? 'filter' : 'open'}`}>
+                      {s.kind === 'hard-filter' ? 'FILTER' : 'OPEN'}
+                    </span>
+                    <span className="b2-prequal-preview-prompt">{s.prompt}</span>
+                    <span className="b2-prequal-preview-bench">
+                      {s.kind === 'hard-filter' && s.passingAnswers
+                        ? `pass: ${s.passingAnswers.length}/${s.allowedAnswers?.length || 0}`
+                        : `min ${s.minScore}/10`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="b2-prequal-skip-hint">
+              Candidates will jump straight into the scenario when they enter the access code.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* ----- Brief — all optional. JD always visible; the rest tucked behind
               a "More details" disclosure so the panel doesn't dominate. ----- */}
@@ -1503,6 +1888,27 @@ function Step2Author({
       })
     )
   }
+  /** Open-text benchmark — minimum average AI score (0–10) the answer
+   *  must hit before the candidate is flagged below-benchmark. */
+  const setMinScore = (qid: string, value: number | undefined) => {
+    setGenericQs((prev: GenericIntakeQuestion[]) =>
+      prev.map((q) => q.id === qid ? { ...q, minScore: value } : q)
+    )
+  }
+  /** Hard-filter benchmark — toggle which allowed answer is a passing answer. */
+  const togglePassingAnswer = (qid: string, answer: string) => {
+    setGenericQs((prev: GenericIntakeQuestion[]) =>
+      prev.map((q) => {
+        if (q.id !== qid) return q
+        const current = q.passingAnswers || []
+        const has = current.includes(answer)
+        return {
+          ...q,
+          passingAnswers: has ? current.filter((a) => a !== answer) : [...current, answer],
+        }
+      })
+    )
+  }
 
   const isCorp = creatorType === 'corporate'
   const sectionTitle = isCorp ? 'Pre-qualifier questions' : 'Generic intake questions'
@@ -1627,65 +2033,132 @@ function Step2Author({
                 />
 
                 {kind === 'open-text' ? (
-                  <div style={{ marginTop: 16 }}>
-                    <span className="b2-label">AI looks for</span>
-                    <div>
-                      {CRITERION_TEMPLATES.map((c) => {
-                        const on = q.criterionIds.includes(c.id)
-                        return (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => toggleCriterion(q.id, c.id)}
-                            className={`b2-criterion ${on ? 'is-on' : ''}`}
-                            title={c.hint}
-                          >
-                            {on ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                            {c.label}
-                          </button>
-                        )
-                      })}
+                  <>
+                    <div style={{ marginTop: 16 }}>
+                      <span className="b2-label">AI looks for</span>
+                      <div>
+                        {CRITERION_TEMPLATES.map((c) => {
+                          const on = q.criterionIds.includes(c.id)
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => toggleCriterion(q.id, c.id)}
+                              className={`b2-criterion ${on ? 'is-on' : ''}`}
+                              title={c.hint}
+                            >
+                              {on ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                              {c.label}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div style={{ marginTop: 16 }}>
-                    <span className="b2-label">Allowed answers</span>
-                    <p style={{ color: 'var(--lq-ink-3)', fontSize: 12, marginTop: 0, marginBottom: 10 }}>
-                      Candidates pick one. Anyone who picks none of these (or skips) is auto-flagged on the Submissions list — they still get to play.
-                    </p>
-                    <div style={{ display: 'grid', gap: 6 }}>
-                      {(q.allowedAnswers || []).map((ans, ai) => (
-                        <div key={ai} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          <span className="b2-option-bullet">{String.fromCharCode(65 + ai)}</span>
+
+                    {/* Open-text BENCHMARK — minimum AI score the answer must hit
+                        to pass. Below the benchmark, candidate is flagged on
+                        Submissions (still completes the scenario). */}
+                    <div className="b2-bench b2-bench-open" style={{ marginTop: 14 }}>
+                      <div className="b2-bench-head">
+                        <span className="b2-bench-label">Benchmark</span>
+                        <span className="b2-bench-meta">below this → flagged on Submissions</span>
+                      </div>
+                      <div className="b2-bench-body">
+                        <span className="b2-bench-prefix">Minimum AI score</span>
+                        <div className="b2-bench-slider-wrap">
                           <input
-                            className="b2-input"
-                            placeholder={`Option ${String.fromCharCode(65 + ai)}`}
-                            value={ans}
-                            onChange={(e) => updateAllowedAnswer(q.id, ai, e.target.value)}
+                            type="range"
+                            min={0}
+                            max={10}
+                            step={1}
+                            value={q.minScore ?? 0}
+                            onChange={(e) => setMinScore(q.id, e.target.value === '0' ? undefined : parseInt(e.target.value))}
+                            className="b2-bench-slider"
+                            aria-label="Minimum AI score"
                           />
-                          {(q.allowedAnswers || []).length > 2 && (
+                          <span className="b2-bench-value">
+                            {q.minScore !== undefined ? `${q.minScore}/10` : 'none'}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="b2-bench-hint">
+                        {q.minScore === undefined
+                          ? 'No benchmark — answers are scored but never flagged.'
+                          : q.minScore <= 4
+                            ? 'Loose gate — most candidates pass.'
+                            : q.minScore <= 6
+                              ? 'Standard gate — average answers pass; weak ones flagged.'
+                              : 'Strict gate — only strong answers pass; many will be flagged.'}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ marginTop: 16 }}>
+                      <span className="b2-label">Possible answers</span>
+                      <p style={{ color: 'var(--lq-ink-3)', fontSize: 12, marginTop: 0, marginBottom: 10 }}>
+                        Candidates pick one. Tick the ones that COUNT AS PASSING — the rest flag the candidate on Submissions.
+                      </p>
+                      <div style={{ display: 'grid', gap: 6 }}>
+                        {(q.allowedAnswers || []).map((ans, ai) => {
+                          const isPassing = (q.passingAnswers || []).includes(ans) && ans.trim().length > 0
+                          return (
+                          <div key={ai} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <span className="b2-option-bullet">{String.fromCharCode(65 + ai)}</span>
+                            <input
+                              className="b2-input"
+                              placeholder={`Option ${String.fromCharCode(65 + ai)}`}
+                              value={ans}
+                              onChange={(e) => updateAllowedAnswer(q.id, ai, e.target.value)}
+                            />
                             <button
                               type="button"
-                              className="b2-btn-icon"
-                              onClick={() => removeAllowedAnswer(q.id, ai)}
-                              aria-label="Remove option"
-                              title="Remove option"
+                              onClick={() => togglePassingAnswer(q.id, ans)}
+                              disabled={ans.trim().length === 0}
+                              className={`b2-pass-toggle ${isPassing ? 'is-on' : ''}`}
+                              aria-label={isPassing ? 'Mark as failing' : 'Mark as passing'}
+                              title={isPassing ? 'This answer passes the gate' : 'Tick to mark this as a passing answer'}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              {isPassing ? <Check className="w-3 h-3" /> : <span style={{ width: 12, display: 'inline-block' }} />}
+                              {isPassing ? 'Passes' : 'Fails'}
                             </button>
-                          )}
-                        </div>
-                      ))}
+                            {(q.allowedAnswers || []).length > 2 && (
+                              <button
+                                type="button"
+                                className="b2-btn-icon"
+                                onClick={() => removeAllowedAnswer(q.id, ai)}
+                                aria-label="Remove option"
+                                title="Remove option"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        )})}
+                      </div>
+                      <button
+                        type="button"
+                        className="b2-btn b2-btn-ghost"
+                        style={{ marginTop: 8 }}
+                        onClick={() => addAllowedAnswer(q.id)}
+                      >
+                        <Plus className="w-4 h-4" /> Add option
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className="b2-btn b2-btn-ghost"
-                      style={{ marginTop: 8 }}
-                      onClick={() => addAllowedAnswer(q.id)}
-                    >
-                      <Plus className="w-4 h-4" /> Add option
-                    </button>
-                  </div>
+
+                    {/* Hard-filter BENCHMARK summary */}
+                    <div className="b2-bench b2-bench-filter" style={{ marginTop: 14 }}>
+                      <div className="b2-bench-head">
+                        <span className="b2-bench-label">Benchmark</span>
+                        <span className="b2-bench-meta">below this → flagged on Submissions</span>
+                      </div>
+                      <p className="b2-bench-hint" style={{ margin: 0 }}>
+                        {(q.passingAnswers || []).filter(a => a.trim().length > 0).length === 0
+                          ? '⚠ No passing answers ticked — every candidate gets flagged. Tick at least one.'
+                          : `Pass if candidate picks: ${(q.passingAnswers || []).filter(a => a.trim().length > 0).join(' · ')}`}
+                      </p>
+                    </div>
+                  </>
                 )}
               </div>
             )
@@ -1699,6 +2172,59 @@ function Step2Author({
               <Plus className="w-4 h-4" /> Hard filter
             </button>
           </div>
+
+          {/* PASS-RATE PREVIEW — quick estimate of how the partner's
+              benchmarks would narrow a typical applicant pool. Uses a
+              heuristic distribution; not exact, but realistic enough to
+              show the FILTER EFFECT before they ship. Helps a Savills-
+              style partner sanity-check that their gate isn't too tight
+              (e.g. "min 9/10 + degree gate + grad window → ~3%"). */}
+          {(() => {
+            const baseline = 100  // imagined typical applicant pool
+            // Heuristic distribution for open-text — sketch but plausible.
+            // Real LLM data will replace this curve.
+            const openPassRate = (min?: number): number => {
+              if (min === undefined || min <= 0) return 1.0
+              const curve: Record<number, number> = { 1: 0.95, 2: 0.92, 3: 0.88, 4: 0.82, 5: 0.72, 6: 0.58, 7: 0.42, 8: 0.26, 9: 0.13, 10: 0.05 }
+              return curve[Math.round(min)] ?? 1.0
+            }
+            const filterPassRate = (q: GenericIntakeQuestion): number => {
+              const total = (q.allowedAnswers || []).filter(a => a.trim().length > 0).length
+              if (total === 0) return 1.0
+              const passing = (q.passingAnswers || []).filter(a => a.trim().length > 0).length
+              if (passing === 0) return 0.0  // no passing answer → everyone fails
+              // Skew slightly toward passing (real applicants self-select toward roles they qualify for)
+              const raw = passing / total
+              return Math.min(1.0, raw + 0.10)
+            }
+            const compoundRate = genericQs.reduce((acc, q) => {
+              if (!q.prompt.trim()) return acc
+              const r = (q.kind || 'open-text') === 'hard-filter' ? filterPassRate(q) : openPassRate(q.minScore)
+              return acc * r
+            }, 1.0)
+            const pct = Math.round(compoundRate * 100)
+            const expected = Math.round(baseline * compoundRate)
+            const tone = pct >= 60 ? 'loose' : pct >= 25 ? 'standard' : pct >= 10 ? 'tight' : 'extreme'
+            return (
+              <div className={`b2-passrate b2-passrate-${tone}`}>
+                <div className="b2-passrate-num">
+                  <span className="b2-passrate-pct">{pct}%</span>
+                  <span className="b2-passrate-sub">expected pass rate</span>
+                </div>
+                <div className="b2-passrate-bar">
+                  <div className="b2-passrate-bar-fill" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="b2-passrate-hint">
+                  Of <strong>{baseline}</strong> typical applicants, about{' '}
+                  <strong>{expected}</strong> would pass all your filters.
+                  {tone === 'extreme' && ' Very tight — consider loosening a benchmark.'}
+                  {tone === 'tight' && ' Tight — gets you a sharp shortlist.'}
+                  {tone === 'standard' && ' Standard — a healthy shortlist.'}
+                  {tone === 'loose' && ' Loose — most candidates pass through.'}
+                </p>
+              </div>
+            )
+          })()}
         </div>
       )}
       </>)}
@@ -1941,31 +2467,64 @@ function Step3Review({
 
       {showGenericQuestions && genericQs.filter((g: GenericIntakeQuestion) => g.prompt.trim()).length > 0 && (
         <>
-          <div className="b2-section-title"><h2 className="b2-h2">Intake questions &amp; AI criteria</h2></div>
+          <div className="b2-section-title">
+            <h2 className="b2-h2">Pre-qualifier questions &amp; benchmarks</h2>
+            <span className="b2-pill b2-pill-navy">{genericQs.filter(g => g.prompt.trim()).length} filter{genericQs.filter(g => g.prompt.trim()).length === 1 ? '' : 's'}</span>
+          </div>
           {genericQs
             .filter((g: GenericIntakeQuestion) => g.prompt.trim())
-            .map((g: GenericIntakeQuestion, i: number) => (
+            .map((g: GenericIntakeQuestion, i: number) => {
+              const kind = g.kind || 'open-text'
+              const passing = (g.passingAnswers || []).filter(a => a.trim().length > 0)
+              return (
               <div className="b2-card" key={g.id}>
-                <div className="b2-h3">Q{i + 1}. {g.prompt}</div>
-                <div style={{ marginTop: 10 }}>
-                  {g.criterionIds.length === 0 ? (
-                    <span style={{ color: 'var(--lq-ink-3)', fontSize: 13 }}>
-                      No AI criteria selected — answers will be stored unscored.
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span className={`b2-pill ${kind === 'hard-filter' ? 'b2-pill-navy' : 'b2-pill-teal'}`}>
+                    {kind === 'hard-filter' ? 'Filter' : 'Open'}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 15, color: 'var(--lq-ink)' }}>
+                    Q{i + 1}. {g.prompt}
+                  </span>
+                </div>
+                {/* Benchmark summary — what counts as pass */}
+                <div className="b2-review-bench">
+                  <span className="b2-review-bench-label">Benchmark:</span>
+                  {kind === 'open-text' ? (
+                    <span className="b2-review-bench-value">
+                      {g.minScore === undefined
+                        ? <em style={{ color: 'var(--lq-ink-3)' }}>no benchmark — scored but never flagged</em>
+                        : <>Minimum AI score <strong>{g.minScore}/10</strong> across criteria</>}
                     </span>
                   ) : (
-                    g.criterionIds.map((cid) => {
-                      const c = CRITERION_TEMPLATES.find((x) => x.id === cid)
-                      if (!c) return null
-                      return (
-                        <span key={cid} className="b2-criterion is-on" style={{ cursor: 'default' }}>
-                          <Check className="w-3 h-3" /> {c.label}
-                        </span>
-                      )
-                    })
+                    <span className="b2-review-bench-value">
+                      {passing.length === 0
+                        ? <strong style={{ color: '#7a0e2a' }}>⚠ no passing answers — every candidate gets flagged</strong>
+                        : <>Pass if picked: <strong>{passing.join(' · ')}</strong></>}
+                    </span>
                   )}
                 </div>
+                {/* AI criteria (open-text only) */}
+                {kind === 'open-text' && (
+                  <div style={{ marginTop: 10 }}>
+                    {g.criterionIds.length === 0 ? (
+                      <span style={{ color: 'var(--lq-ink-3)', fontSize: 13 }}>
+                        No AI criteria selected — answers will be stored unscored.
+                      </span>
+                    ) : (
+                      g.criterionIds.map((cid) => {
+                        const c = CRITERION_TEMPLATES.find((x) => x.id === cid)
+                        if (!c) return null
+                        return (
+                          <span key={cid} className="b2-criterion is-on" style={{ cursor: 'default' }}>
+                            <Check className="w-3 h-3" /> {c.label}
+                          </span>
+                        )
+                      })
+                    )}
+                  </div>
+                )}
               </div>
-            ))}
+            )})}
         </>
       )}
 

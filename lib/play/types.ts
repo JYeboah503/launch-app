@@ -18,8 +18,18 @@ export interface GenericIntakeQuestion {
   prompt: string
   /** Only used when kind === 'open-text' — refs into CRITERION_TEMPLATES. */
   criterionIds: string[]
-  /** Only used when kind === 'hard-filter' — strings the candidate must pick from. */
+  /** Only used when kind === 'hard-filter' — every possible answer the
+   *  candidate picks from. */
   allowedAnswers?: string[]
+  /** Only used when kind === 'hard-filter' — which of the allowedAnswers
+   *  ARE the passing answers. If omitted, defaults to "the first one is
+   *  the pass" for back-compat. The candidate is flagged below-benchmark
+   *  if their pick is not in this list. */
+  passingAnswers?: string[]
+  /** Only used when kind === 'open-text' — minimum AI score (0–10) the
+   *  averaged criteria must hit for the candidate to pass this question.
+   *  Undefined ⇒ no benchmark (question is scored but never flagged). */
+  minScore?: number
 }
 
 export type FactorKind = 'time' | 'live' | 'meter' | 'signal' | 'metric' | 'quote'

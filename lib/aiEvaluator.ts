@@ -31,8 +31,18 @@ export interface QuestionVerdict {
   oneLiner: string
   /** Only populated for open-text. */
   criteria: CriterionVerdict[]
-  /** Only populated for hard-filter. */
+  /** Only populated for hard-filter — true if the candidate's pick is in
+   *  the question's passingAnswers (or, if not set, in allowedAnswers). */
   qualified?: boolean
+  /** True if this answer falls below the partner-set benchmark:
+   *   - open-text: overall < question.minScore
+   *   - hard-filter: !qualified
+   *  Used to flag the whole Submission so the partner sees a red badge
+   *  on the Submissions inbox. */
+  belowBenchmark?: boolean
+  /** The benchmark itself, surfaced so the review UI can show
+   *  "scored 5/10 — needed 7" inline. */
+  benchmark?: { kind: 'min-score'; value: number } | { kind: 'allowed-list'; values: string[] }
 }
 
 /* ---------------------------------------------------------------- */
@@ -151,11 +161,18 @@ export function evaluateAnswer(
 ): QuestionVerdict {
   const kind = question.kind || 'open-text'
 
-  // Hard-filter: did they pick one of the allowed answers? Deterministic.
+  // Hard-filter: did they pick one of the passing answers? Deterministic.
   if (kind === 'hard-filter') {
-    const allowed = (question.allowedAnswers || []).map((a) => a.trim().toLowerCase())
-    const picked = (answer || '').trim().toLowerCase()
-    const qualified = picked.length > 0 && allowed.includes(picked)
+    const allAnswers = (question.allowedAnswers || []).map((a) => a.trim())
+    // passingAnswers defines the gate. Fallback: every allowedAnswer passes
+    // (the partner hasn't restricted) — preserves back-compat with scenarios
+    // shipped before the benchmark field existed.
+    const passing = (question.passingAnswers && question.passingAnswers.length > 0
+      ? question.passingAnswers
+      : allAnswers
+    ).map((a) => a.trim().toLowerCase())
+    const picked = (answer || '').trim()
+    const qualified = picked.length > 0 && passing.includes(picked.toLowerCase())
     return {
       questionId: question.id,
       prompt: question.prompt,
@@ -169,6 +186,8 @@ export function evaluateAnswer(
           : 'Candidate skipped this filter.'),
       criteria: [],
       qualified,
+      belowBenchmark: !qualified,
+      benchmark: { kind: 'allowed-list', values: question.passingAnswers && question.passingAnswers.length > 0 ? question.passingAnswers : allAnswers },
     }
   }
 
@@ -181,8 +200,11 @@ export function evaluateAnswer(
   const overall = criteria.length
     ? Math.round(criteria.reduce((n, v) => n + v.score, 0) / criteria.length)
     : 0
+  const hasBenchmark = typeof question.minScore === 'number'
+  const belowBenchmark = hasBenchmark && overall < (question.minScore as number)
   const oneLiner = (() => {
     if (criteria.length === 0) return 'Stored unscored — no AI criteria selected.'
+    if (belowBenchmark) return `Below benchmark — ${overall}/10, partner set ${question.minScore}/10.`
     if (overall >= 8) return 'Strong: hits the criteria well.'
     if (overall >= 5) return 'OK: partially meets the criteria.'
     return 'Weak: misses most of the criteria.'
@@ -196,6 +218,10 @@ export function evaluateAnswer(
     overall,
     oneLiner,
     criteria,
+    belowBenchmark: belowBenchmark || undefined,
+    benchmark: hasBenchmark
+      ? { kind: 'min-score', value: question.minScore as number }
+      : undefined,
   }
 }
 

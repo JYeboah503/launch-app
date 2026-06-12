@@ -8,6 +8,7 @@
  */
 
 import type { QuestionVerdict } from '@/lib/aiEvaluator'
+import type { CandidateProfile } from '@/lib/candidateProfile'
 
 export interface Submission {
   id: string
@@ -16,11 +17,21 @@ export interface Submission {
   candidateName: string
   variant: 'playful' | 'professional'
   submittedAt: string  // ISO
+  /** ISO timestamp of when the candidate first entered the scenario.
+   *  Used by the role-detail filter to surface "time to complete"
+   *  as a confidence proxy. Optional for back-compat. */
+  startedAt?: string
+  /** Full candidate-collected basic profile — captured on the intake
+   *  screen BEFORE the scenario. This is the single source of truth
+   *  for partner-side filtering on the role detail page (ATAR, degree,
+   *  graduation year, industries, salary expectations, etc.). */
+  profile?: CandidateProfile
   /** AI verdicts on each intake question (open text answers + 0–10 scores). */
   intake: QuestionVerdict[]
-  /** True if any hard-filter intake question came back as not qualified —
-   *  surfaces a top-level red badge on the Submissions surface so the org
-   *  can sort/filter quickly. */
+  /** True if any pre-qualifier benchmark was missed — hard-filter wrong
+   *  answer OR open-text score below the partner-set minScore. Surfaces
+   *  a top-level red badge on the Submissions surface so the org can
+   *  sort/filter quickly. */
   notQualified?: boolean
   /** Decisions the candidate made in the scenario, plus skill credited. */
   decisions: Array<{
@@ -56,7 +67,9 @@ function write(list: Submission[]): void {
 export function addSubmission(s: Submission): void {
   const all = read()
   all.unshift(s)
-  write(all.slice(0, 200)) // cap so localStorage doesn't run away
+  // Cap kept generous (500) — seed data alone places ~190 entries; the
+  // partner's later real submissions push the oldest seeds out as they go.
+  write(all.slice(0, 500))
 }
 
 export function listSubmissions(): Submission[] {

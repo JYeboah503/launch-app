@@ -381,7 +381,21 @@ export function SubmissionsView() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {s.notQualified && (
+                    {s.notQualified && (() => {
+                      // Disambiguate WHY they're flagged so the partner sees
+                      // "Below benchmark" (open-text score missed) vs the
+                      // original "Not qualified" (hard-filter wrong answer).
+                      const failedKinds = new Set(
+                        (s.intake || [])
+                          .filter(v => v.belowBenchmark === true)
+                          .map(v => v.kind)
+                      )
+                      const onlyOpen = failedKinds.has('open-text') && !failedKinds.has('hard-filter')
+                      const label = onlyOpen ? 'Below benchmark' : 'Not qualified'
+                      const title = onlyOpen
+                        ? 'One or more open-text answers fell below the partner-set minimum score.'
+                        : 'Failed one or more pre-qualifier benchmarks (hard filter or open-text minimum score).'
+                      return (
                       <span
                         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full"
                         style={{
@@ -393,11 +407,11 @@ export function SubmissionsView() {
                           textTransform: 'uppercase',
                           fontWeight: 600,
                         }}
-                        title="Failed one or more hard filters"
+                        title={title}
                       >
-                        Not qualified
+                        {label}
                       </span>
-                    )}
+                    )})()}
                     {intakeAvg !== null && (
                       <span
                         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full"

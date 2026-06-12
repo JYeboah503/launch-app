@@ -403,24 +403,31 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
           profile={{ name: studentName }}
           variant={currentScenarioVariant}
           genericQuestions={currentGenericQuestions}
-          onIntakeComplete={(answers) => {
+          onIntakeComplete={(answers, profile) => {
             // Evaluate the answers via the AI stub and persist a submission
             // immediately, so the org sees it even if the candidate bails on
             // the scenario afterwards.
-            if (currentGenericQuestions && currentScenarioCode) {
-              const verdicts = evaluateAll(currentGenericQuestions, answers)
-              // Any hard-filter that came back unqualified flags the whole
-              // submission so the partner can sort/filter quickly.
-              const notQualified = verdicts.some(
-                (v) => v.kind === 'hard-filter' && v.qualified === false,
-              )
+            if (currentScenarioCode) {
+              // Even when the scenario has no pre-qualifier questions, the
+              // host still gets called with the captured profile (and empty
+              // answers) so we ALWAYS write a Submission with full profile.
+              const verdicts = currentGenericQuestions
+                ? evaluateAll(currentGenericQuestions, answers)
+                : []
+              // Any verdict marked belowBenchmark flags the whole submission:
+              // covers BOTH hard-filter (picked non-passing answer) and
+              // open-text (overall < minScore) cases. Partner sees a single
+              // red "Below benchmark" badge on Submissions; can sort/filter
+              // by the flag.
+              const notQualified = verdicts.some((v) => v.belowBenchmark === true)
               addSubmission({
                 id: `sub-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
                 scenarioCode: currentScenarioCode,
                 scenarioTitle: currentScenarioTitle,
-                candidateName: studentName || 'Student',
+                candidateName: profile?.name || studentName || 'Student',
                 variant: currentScenarioVariant,
                 submittedAt: new Date().toISOString(),
+                profile,
                 intake: verdicts,
                 notQualified,
                 decisions: [],

@@ -58,6 +58,35 @@ function generateStudents(count: number): Student[] {
     'Situational Awareness & Systems Thinking'
   ]
 
+  // Extended profile dimensions for the role-detail filter pipeline
+  const universities = [
+    'University of Sydney', 'UNSW Sydney', 'University of Melbourne', 'Monash University',
+    'University of Queensland', 'ANU', 'UTS', 'Macquarie University', 'RMIT',
+    'University of Adelaide', 'University of Western Australia', 'Bond University',
+  ]
+  const locations = [
+    'Sydney, NSW', 'Melbourne, VIC', 'Brisbane, QLD', 'Perth, WA',
+    'Adelaide, SA', 'Canberra, ACT', 'Hobart, TAS', 'Newcastle, NSW',
+    'Wollongong, NSW', 'Gold Coast, QLD',
+  ]
+  const industriesPool = [
+    'Property / Real Estate', 'Finance / Banking', 'Consulting / Strategy',
+    'Technology', 'Engineering', 'Marketing', 'Operations', 'Sales',
+    'Design', 'Government / Public Sector', 'Legal',
+  ]
+  const workRightsDist: Array<Student['workRights']> = [
+    'citizen-permanent', 'citizen-permanent', 'citizen-permanent', 'citizen-permanent',  // 67%
+    'visa-unrestricted', 'visa-restricted',                                                // 33%
+  ]
+  const salaryDist: Array<Student['expectedSalary']> = [
+    '60-75', '60-75', '75-90', '75-90', '75-90', '90-110', '90-110',
+    '110-130', 'flexible',
+  ]
+  const relocateDist: Array<Student['willingRelocate']> = [
+    'yes-anywhere', 'yes-in-country', 'yes-in-country', 'yes-in-state',
+    'yes-in-state', 'yes-in-state', 'no', 'no',
+  ]
+
   const students: Student[] = []
 
   for (let i = 1; i <= count; i++) {
@@ -65,8 +94,8 @@ function generateStudents(count: number): Student[] {
     const lastName = lastNames[Math.floor(Math.random() * lastNames.length)]
     const studentInterests = interests[Math.floor(Math.random() * interests.length)]
     const degree = degrees[Math.floor(Math.random() * degrees.length)]
-    const atar = 95 + Math.random() * 4.8 // ATAR between 95 and 99.8
-    
+    const atar = 88 + Math.random() * 11.9  // broader 88–99.95 range
+
     // Select 3 random capabilities with scores
     const selectedCapabilities = []
     const shuffledCapabilities = [...capabilities].sort(() => Math.random() - 0.5)
@@ -77,14 +106,34 @@ function generateStudents(count: number): Student[] {
       })
     }
 
+    // Profile extras — realistic distributions
+    const indPick = [...industriesPool].sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * 3))
+    const strengthsPick = [...capabilities].sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * 3))
+    const gradYear = 2024 + Math.floor(Math.random() * 4)  // 2024..2027
+    const availDays = Math.floor(Math.random() * 120)  // 0..120 days out
+    const availDate = new Date(Date.now() + availDays * 86400000).toISOString().slice(0, 10)
+    const prequalPassed = Math.random() < 0.72  // ~72% pass benchmarks by default
+    const completionTimeMs = (4 + Math.random() * 22) * 60 * 1000  // 4–26 min
+
     students.push({
       id: String(i),
       name: `${firstName} ${lastName}`,
       interests: studentInterests,
       topCapabilities: selectedCapabilities,
-      overallScore: 82 + Math.floor(Math.random() * 15),
+      overallScore: 70 + Math.floor(Math.random() * 28),
       degree,
       atar: Math.round(atar * 10) / 10,
+      university: universities[Math.floor(Math.random() * universities.length)],
+      graduationYear: gradYear,
+      location: locations[Math.floor(Math.random() * locations.length)],
+      workRights: workRightsDist[Math.floor(Math.random() * workRightsDist.length)],
+      industries: indPick,
+      selfRatedStrengths: strengthsPick,
+      availableFrom: availDate,
+      expectedSalary: salaryDist[Math.floor(Math.random() * salaryDist.length)],
+      willingRelocate: relocateDist[Math.floor(Math.random() * relocateDist.length)],
+      prequalStatus: prequalPassed ? 'passed' : 'flagged',
+      completionTimeMs: Math.round(completionTimeMs),
     })
   }
 
