@@ -214,6 +214,13 @@ export function ScenarioBuilderV2({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usePrequal])
   const [genericCollapsed, setGenericCollapsed] = useState<boolean>(false)
+  /** Partner-chosen "basics" the candidate fills in at the very start.
+   *  Full name + Email are always required; this state controls every
+   *  toggleable extra (ATAR, university, degree, etc.). Each becomes a
+   *  filter axis on the role detail page. */
+  const [basicExtras, setBasicExtras] = useState<string[]>([
+    'atar', 'university', 'degree', 'graduationYear', 'location',
+  ])
   const [decisions, setDecisions] = useState<ScenarioDecision[]>([
     DEFAULT_DECISION('judgement'),
     DEFAULT_DECISION('integrity'),
@@ -465,6 +472,8 @@ export function ScenarioBuilderV2({
             creatorType={creatorType}
             decisions={decisions}
             setDecisions={setDecisions}
+            basicExtras={basicExtras}
+            setBasicExtras={setBasicExtras}
             onRegenerateOne={handleRegenerateOne}
             onRegenerateUnpinned={handleRegenerateUnpinned}
             isGenerating={isGenerating}
@@ -1175,6 +1184,91 @@ export function ScenarioBuilderV2({
           font-weight: 600;
         }
 
+        /* Basics card — small + tight. No nested panels, no helper paragraph.
+           One header line + a wrapping row of locked + toggle chips. */
+        .b2-basics {
+          margin: 4px 0 24px;
+          padding: 14px 16px;
+          background: #fff;
+          border: 1px solid var(--lq-line);
+          border-radius: 12px;
+        }
+        .b2-basics-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          margin-bottom: 10px;
+        }
+        .b2-basics-eyebrow {
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--lq-ink-3);
+          font-weight: 600;
+        }
+        .b2-basics-count {
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--launch-navy);
+          font-weight: 600;
+        }
+        .b2-basics-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .b2-basics-chip {
+          appearance: none;
+          background: #fff;
+          border: 1px solid var(--lq-line-2);
+          border-radius: 999px;
+          padding: 5px 11px 5px 6px;
+          font-family: var(--font-body);
+          font-size: 12px;
+          color: var(--lq-ink-2);
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+        }
+        .b2-basics-chip:hover { border-color: var(--launch-navy); color: var(--lq-ink); }
+        .b2-basics-chip.is-on {
+          background: var(--launch-navy);
+          color: var(--lq-cream);
+          border-color: var(--launch-navy);
+        }
+        .b2-basics-chip.is-locked {
+          background: var(--launch-teal-soft);
+          border-color: rgba(27, 158, 143, 0.30);
+          color: var(--launch-teal-3);
+          cursor: default;
+        }
+        .b2-basics-chip-mark {
+          display: inline-flex;
+          width: 16px;
+          height: 16px;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          font-family: var(--font-mono);
+          font-size: 10px;
+          font-weight: 700;
+          background: rgba(10, 42, 107, 0.08);
+          color: var(--launch-navy);
+        }
+        .b2-basics-chip.is-on .b2-basics-chip-mark {
+          background: rgba(246, 242, 234, 0.20);
+          color: var(--lq-cream);
+        }
+        .b2-basics-chip.is-locked .b2-basics-chip-mark {
+          background: rgba(27, 158, 143, 0.20);
+          color: var(--launch-teal-3);
+        }
+
         /* Section banner — numbered, eyebrow + title, count pill on the right.
            Visually anchors each of the two question sections (basic / launch)
            so partners always know which section they're in. */
@@ -1822,9 +1916,15 @@ function Step1Setup({
 
 function Step2Author({
   genericQs, setGenericQs, showGenericQuestions, genericCollapsed, setGenericCollapsed, creatorType,
-  decisions, setDecisions, onRegenerateOne, onRegenerateUnpinned, isGenerating,
+  decisions, setDecisions, basicExtras, setBasicExtras,
+  onRegenerateOne, onRegenerateUnpinned, isGenerating,
   onBack, onNext, ready,
 }: any) {
+  const toggleExtra = (k: string) => {
+    setBasicExtras((prev: string[]) =>
+      prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]
+    )
+  }
   const addGeneric = (kind: 'open-text' | 'hard-filter' = 'open-text') => {
     setGenericQs((prev: GenericIntakeQuestion[]) => [...prev, DEFAULT_GENERIC('', kind)])
   }
@@ -1948,6 +2048,50 @@ function Step2Author({
           ? 'Two sections. Pre-qualifier questions run before the scenario as a quick screen — optional. Scenario decisions are the live moments where capability shows up.'
           : 'Scenario decisions are the live moments where capability shows up. Each question shows what it tests so you always know what you’re measuring.'}
       </p>
+
+      {/* Basics card — partner picks which basic-info fields every candidate
+          gets asked at intake. Full name + Email always collected; the rest
+          are +/− toggle chips. Tight inline card — no nested panels. */}
+      {creatorType === 'corporate' && (
+        <div className="b2-basics">
+          <div className="b2-basics-head">
+            <span className="b2-basics-eyebrow">Basics · every candidate fills in</span>
+            <span className="b2-basics-count">{basicExtras.length} extras</span>
+          </div>
+          <div className="b2-basics-chips">
+            <span className="b2-basics-chip is-locked"><span className="b2-basics-chip-mark">✓</span> Full name</span>
+            <span className="b2-basics-chip is-locked"><span className="b2-basics-chip-mark">✓</span> Email</span>
+            {[
+              { k: 'atar',            l: 'ATAR' },
+              { k: 'university',      l: 'University' },
+              { k: 'degree',          l: 'Degree' },
+              { k: 'graduationYear',  l: 'Graduation year' },
+              { k: 'major',           l: 'Major' },
+              { k: 'location',        l: 'Location' },
+              { k: 'phone',           l: 'Phone' },
+              { k: 'workRights',      l: 'Work rights' },
+              { k: 'industries',      l: 'Industries' },
+              { k: 'availableFrom',   l: 'Start date' },
+              { k: 'expectedSalary',  l: 'Salary range' },
+              { k: 'willingRelocate', l: 'Relocate' },
+            ].map((f) => {
+              const on = basicExtras.includes(f.k)
+              return (
+                <button
+                  key={f.k}
+                  type="button"
+                  onClick={() => toggleExtra(f.k)}
+                  className={`b2-basics-chip ${on ? 'is-on' : ''}`}
+                  aria-pressed={on}
+                >
+                  <span className="b2-basics-chip-mark">{on ? '−' : '+'}</span>
+                  {f.l}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────
           SECTION 1 — Pre-qualifier intake questions (BASIC).

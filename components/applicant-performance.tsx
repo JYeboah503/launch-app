@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { ChevronLeft, X } from 'lucide-react'
 import type { Student } from '@/components/student-list'
+import { CandidateName } from '@/components/candidate-name'
 
 const CAPABILITY_NAMES = [
   'Problem Solving',
@@ -167,7 +168,7 @@ export function ApplicantPerformance({ students, onBack, roleSkills, roleName, r
             filteredStudents.map((student) => (
               <div key={student.id} className="corp-card p-6">
                 <div className="mb-4">
-                  <h3 className="text-lg" style={{ fontFamily: 'var(--font-display)', fontWeight: 500, color: 'var(--lq-ink)' }}>{student.name}</h3>
+                  <h3 className="text-lg" style={{ fontFamily: 'var(--font-display)', fontWeight: 500, color: 'var(--lq-ink)' }}><CandidateName name={student.name} /></h3>
                   <p className="text-sm" style={{ color: 'var(--lq-ink-3)' }}>{student.degree} • ATAR: {student.atar}</p>
                 </div>
 

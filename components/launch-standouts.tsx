@@ -2,6 +2,7 @@
 
 import type { Student } from '@/components/student-list'
 import { RevealOnScroll } from '@/components/motion'
+import { CandidateName } from '@/components/candidate-name'
 
 interface LaunchStandoutsProps {
   students: Student[]
@@ -73,7 +74,7 @@ export function LaunchStandouts({ students, onSelectStudent }: LaunchStandoutsPr
                       letterSpacing: '-0.018em',
                     }}
                   >
-                    {student.name}
+                    <CandidateName name={student.name} />
                   </h3>
                   <div className="flex items-baseline gap-3">
                     {student.atar && (

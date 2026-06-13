@@ -24,7 +24,7 @@ import type { QuestionVerdict } from '@/lib/aiEvaluator'
 /* PUBLIC ENTRYPOINT                                                    */
 /* ─────────────────────────────────────────────────────────────────── */
 
-const SEED_FLAG = 'launch.seedData.v1.applied'
+const SEED_FLAG = 'launch.seedData.v2.applied'  // bumped: adds decisions[]
 
 /** Run on partner-side mount. Idempotent. */
 export function seedIfNeeded(): { rolesSeeded: number; submissionsSeeded: number } {
@@ -32,6 +32,14 @@ export function seedIfNeeded(): { rolesSeeded: number; submissionsSeeded: number
   try {
     if (window.localStorage.getItem(SEED_FLAG) === '1') {
       return { rolesSeeded: 0, submissionsSeeded: 0 }
+    }
+    // Wipe any prior-version seed data so re-seed lands cleanly with the
+    // newer shape (decisions[], etc.). Real partner-built submissions
+    // survive via id mismatch with seed-sub-* prefix.
+    if (window.localStorage.getItem('launch.seedData.v1.applied') === '1') {
+      window.localStorage.removeItem('launch.submissions.v1')
+      window.localStorage.removeItem('launch.scenarioStore.v1')
+      window.localStorage.removeItem('launch.seedData.v1.applied')
     }
   } catch { /* ignore */ }
 
@@ -329,6 +337,40 @@ function genVerdict(q: GenericIntakeQuestion, shouldPass: boolean): QuestionVerd
   }
 }
 
+/** Per-role decision bank — realistic scenario decisions with 3 options each.
+ *  Mock content; real plays will populate this from the live scenario at
+ *  play time. The whole bank is what makes the path visualisation possible
+ *  for seeded candidates. */
+const DECISION_BANK: Record<string, Array<{ prompt: string; skill: string; options: string[] }>> = {
+  'seed-grad-property': [
+    { prompt: 'A senior agent disagrees with the comparable sales you used in a pitch deck. The pitch is in 18 minutes. What\'s your first move?', skill: 'Reasoning', options: ['Hold the comparables — defend them with sourced data.', 'Swap them out for the agent\'s preferred picks.', 'Mark both sets up; let the client see the spread.'] },
+    { prompt: 'A tenant calls about an urgent gas-safety issue on a property you don\'t cover. Your colleague who manages it is on annual leave.', skill: 'Execution & Ownership', options: ['Triage it yourself; loop the colleague async.', 'Call the property manager rotation phone.', 'Pass the tenant to reception with the duty manager number.'] },
+    { prompt: 'Mid-inspection, a buyer asks a yield question you don\'t know the answer to. The buyer is high-intent.', skill: 'Integrity & Ethics', options: ['Say you\'ll come back with the number tonight.', 'Estimate the range; flag it\'s a working figure.', 'Pivot to the figures you DO know that matter to the decision.'] },
+    { prompt: 'You\'ve been asked to write a market update for a Tier-1 client. You have 90 minutes and three half-finished sources.', skill: 'Problem Solving', options: ['Ship a tight 1-pager from the strongest source.', 'Pull all three into a longer note with caveats.', 'Push back, asking for an extra day to triangulate properly.'] },
+    { prompt: 'A colleague who\'s been at the firm 8 years asks you to "tweak" a valuation up by 3% to keep a client happy.', skill: 'Integrity & Ethics', options: ['Decline and explain your reasoning.', 'Run the higher number past the head of valuations first.', 'Find a defensible mid-point and document it.'] },
+    { prompt: 'You\'re building the slides for a graduate cohort presentation. The team lead wants "story over data"; you think the data carries it.', skill: 'Collaboration', options: ['Lead with a story; back it with two strong charts.', 'Lead with the data; bookend it with the story.', 'Build two versions; let the team lead choose at dry-run.'] },
+  ],
+  'seed-investment-associate': [
+    { prompt: 'A target company\'s last three years of EBITDA show a sharp jump in year 3 that the seller can\'t explain on the call. The deadline is Friday.', skill: 'Reasoning', options: ['Push the timeline; demand the underlying schedules.', 'Model both adjusted and unadjusted; flag the difference in the IC paper.', 'Lean on the auditor\'s sign-off and price it in the bid.'] },
+    { prompt: 'A senior partner pressures you to soften a risk in the investment memo. The risk is real and material.', skill: 'Integrity & Ethics', options: ['Keep the risk verbatim; add mitigation language.', 'Reframe the risk as a "watch item" with monitoring plan.', 'Remove it from the memo; raise it verbally at IC.'] },
+    { prompt: 'Mid-due-diligence, you find a customer concentration risk the analyst missed. The deal lead is presenting tomorrow.', skill: 'Execution & Ownership', options: ['Re-run the model overnight; brief the lead at 6am.', 'Flag it now; let the lead decide whether to delay.', 'Add it as a risk factor; keep the deal on schedule.'] },
+    { prompt: 'A junior analyst keeps making the same modelling mistake. They\'re hard-working but disorganised.', skill: 'Leadership', options: ['Build a checklist with them and pair on the next one.', 'Take the work off their plate for the deal.', 'Escalate to the team lead for a formal conversation.'] },
+    { prompt: 'You disagree with the partner\'s call on a deal you\'ve been on for 3 months. They want to bid; you think it\'s wrong.', skill: 'Judgement', options: ['Write a counter-memo; circulate before IC.', 'Bring up your concerns 1:1 before IC.', 'Defer to the partner; document your view for the file.'] },
+    { prompt: 'A founder you\'re backing wants to hire a CTO who\'s a friend rather than the strongest candidate from your shortlist.', skill: 'Leadership', options: ['Push hard for the shortlist candidate; bring board pressure.', 'Set a 6-month performance gate for the friend; have the shortlist as backup.', 'Defer to the founder — it\'s their company.'] },
+    { prompt: 'Your model says the IRR works at the asking price; your gut says the seller\'s confidence is suspicious.', skill: 'Situational', options: ['Trust the model; bid at the level.', 'Bid 8% under and walk if rejected.', 'Spend two more weeks on the diligence before bidding.'] },
+    { prompt: 'A board member emails you directly with a "private question" about a portfolio company. The CEO doesn\'t know.', skill: 'Integrity & Ethics', options: ['Answer the question; copy the CEO.', 'Decline politely; ask them to use proper channels.', 'Answer the question privately; raise it with the partner.'] },
+    { prompt: 'Markets crashed overnight. The IC paper you wrote yesterday no longer reflects reality.', skill: 'Adaptability', options: ['Withdraw the paper; rewrite the macro section.', 'Add a 1-page addendum; keep the body intact.', 'Present as-is and discuss the macro shift live.'] },
+  ],
+  'seed-brand-strategist': [
+    { prompt: 'The creative director wants a louder campaign; the data says the audience responds to quieter, more authentic work.', skill: 'Reasoning', options: ['Pitch a quieter approach with the data to back it.', 'Build both routes; A/B them in a small market first.', 'Defer to the creative director — they have the taste call.'] },
+    { prompt: 'A retail client wants their refresh to "feel premium" but their margins won\'t support premium pricing.', skill: 'Problem Solving', options: ['Reframe "premium" as craft and consistency, not luxury.', 'Push back on the brief; surface the contradiction.', 'Run a positioning workshop with the founders.'] },
+    { prompt: 'Two designers on your team have a creative disagreement that\'s slowing the project. The client deadline is in 8 days.', skill: 'Collaboration', options: ['Bring them into a room; lead a structured debate.', 'Pick a direction yourself; commit and move.', 'Have them each ship their version; client picks.'] },
+    { prompt: 'A junior strategist sent the client a deck that has the wrong logo on the wrong section. The client noticed.', skill: 'Integrity & Ethics', options: ['Own it yourself; protect the junior strategist publicly.', 'Be transparent with the client about who did what.', 'Send a corrected deck immediately; deal with the team conversation internally.'] },
+    { prompt: 'A long-term client is asking for work that\'s outside your team\'s expertise. The fee is significant.', skill: 'Judgement', options: ['Take it; build the expertise as you go.', 'Refer them to a trusted partner agency; keep the relationship warm.', 'Take it and partner with a freelance specialist invisibly.'] },
+    { prompt: 'You\'ve been asked to lead a pitch in two weeks. You\'ve never led a pitch before.', skill: 'Leadership', options: ['Accept and ask the partner to shadow you.', 'Co-lead with the partner; flag your inexperience to the team.', 'Decline; suggest the partner takes lead, you\'ll be the deputy.'] },
+  ],
+}
+
 export function SEED_SUBMISSIONS(roles: SeedRole[]): Submission[] {
   const subs: Submission[] = []
   for (const role of roles) {
@@ -355,6 +397,27 @@ export function SEED_SUBMISSIONS(roles: SeedRole[]): Submission[] {
       // Submitted somewhere in the last 30 days, weighted to recent
       const ageDays = Math.floor(Math.random() * Math.random() * 30)
       const submittedAt = new Date(Date.now() - ageDays * ONE_DAY - Math.floor(Math.random() * ONE_DAY)).toISOString()
+      // Decisions — deterministic per-submission pick at each step so the
+      // path through the scenario is stable across re-renders. Uses the
+      // role's DECISION_BANK; populates full prompt + 3 options per step.
+      const bank = DECISION_BANK[role.id] || []
+      const decisions = bank.map((d, stepIdx) => {
+        const idHash = `${role.id}-${i}-${stepIdx}`
+        let h = 0
+        for (let c = 0; c < idHash.length; c++) h = ((h << 5) - h) + idHash.charCodeAt(c) | 0
+        const pickedIdx = Math.abs(h) % 3
+        return {
+          stepIdx,
+          prompt: d.prompt,
+          skill: d.skill,
+          label: d.options[pickedIdx],
+          options: d.options.map((label, oi) => ({
+            id: `opt-${stepIdx}-${oi}`,
+            label,
+            picked: oi === pickedIdx,
+          })),
+        }
+      })
       subs.push({
         id: `seed-sub-${role.id}-${i}`,
         scenarioCode: role.accessCode,
@@ -366,7 +429,7 @@ export function SEED_SUBMISSIONS(roles: SeedRole[]): Submission[] {
         profile,
         intake,
         notQualified: finalNotQ,
-        decisions: [],
+        decisions,
       })
     }
   }

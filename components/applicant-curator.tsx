@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Search, X, Plus, ChevronLeft } from 'lucide-react'
 import type { Student } from '@/components/student-list'
+import { CandidateName } from '@/components/candidate-name'
 
 interface ApplicantCuratorProps {
   students: Student[]
@@ -173,7 +174,7 @@ export function ApplicantCurator({ students, onBack, onCuratedListCreated }: App
                   onClick={(e) => e.stopPropagation()}
                 />
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold truncate" style={{ color: 'var(--lq-ink)' }}>{student.name}</h3>
+                  <h3 className="font-bold truncate" style={{ color: 'var(--lq-ink)' }}><CandidateName name={student.name} /></h3>
                   <p className="text-xs" style={{ color: 'var(--lq-ink-3)' }}>{student.degree}</p>
                   <div className="flex gap-2 mt-2 flex-wrap">
                     {student.interests.map(interest => (

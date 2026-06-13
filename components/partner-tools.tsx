@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { X, ArrowUpRight } from 'lucide-react'
 import type { Student } from '@/components/student-list'
+import { CandidateName } from '@/components/candidate-name'
 import { RevealOnScroll } from '@/components/motion'
 
 interface PartnerToolsProps {
@@ -238,7 +239,7 @@ export function PartnerTools({
                                   color: 'var(--lq-ink)',
                                 }}
                               >
-                                {student.name}
+                                <CandidateName name={student.name} />
                               </p>
                             </div>
                             {student.atar && (

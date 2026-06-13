@@ -3,6 +3,7 @@
 import { ArrowDown, TrendingUp } from 'lucide-react'
 import type { Student } from '@/components/student-list'
 import { cn } from '@/lib/utils'
+import { CandidateName } from '@/components/candidate-name'
 
 interface CapabilityDetailViewProps {
   capabilityName: string
@@ -159,7 +160,7 @@ export function CapabilityDetailView({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div>
-                          <h3 className="text-lg font-semibold text-foreground">{student.name}</h3>
+                          <h3 className="text-lg font-semibold text-foreground"><CandidateName name={student.name} /></h3>
                         </div>
                       </div>
 

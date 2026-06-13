@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listSubmissions, type Submission } from '@/lib/submissionStore'
 import { CAPABILITIES } from '@/lib/builderData'
+import { CandidateName } from '@/components/candidate-name'
 import { Search, X, Bookmark, BookmarkPlus, Trash2 } from 'lucide-react'
 import {
   listViews,
@@ -28,6 +29,10 @@ export function SubmissionsView() {
   // ---- Filters ----
   const [minScore, setMinScore] = useState<number>(0)
   const [hideNotQualified, setHideNotQualified] = useState<boolean>(false)
+  /** Inverse of hideNotQualified — show ONLY flagged candidates. The
+   *  segmented status toggle drives both, but they're exclusive so a
+   *  partner never sees "show only flagged + hide flagged" at once. */
+  const [showFlaggedOnly, setShowFlaggedOnly] = useState<boolean>(false)
   const [capabilityFilter, setCapabilityFilter] = useState<string[]>([])
   const [keyword, setKeyword] = useState<string>('')
 
@@ -83,6 +88,7 @@ export function SubmissionsView() {
       const score = scoreFor(s)
       if (score !== null && score < minScore) return false
       if (hideNotQualified && s.notQualified) return false
+      if (showFlaggedOnly && !s.notQualified) return false
       if (capabilityFilter.length > 0) {
         const strong = strongCapsFor(s)
         const any = capabilityFilter.some((c) => strong.has(c))
@@ -99,15 +105,16 @@ export function SubmissionsView() {
       }
       return true
     })
-  }, [submissions, minScore, hideNotQualified, capabilityFilter, keyword])
+  }, [submissions, minScore, hideNotQualified, showFlaggedOnly, capabilityFilter, keyword])
 
   const totalCount = submissions.length
   const filteredCount = filtered.length
-  const activeFilterCount = (minScore > 0 ? 1 : 0) + (hideNotQualified ? 1 : 0) + (capabilityFilter.length > 0 ? 1 : 0) + (keyword.trim() ? 1 : 0)
+  const activeFilterCount = (minScore > 0 ? 1 : 0) + (hideNotQualified ? 1 : 0) + (showFlaggedOnly ? 1 : 0) + (capabilityFilter.length > 0 ? 1 : 0) + (keyword.trim() ? 1 : 0)
 
   const clearAll = () => {
     setMinScore(0)
     setHideNotQualified(false)
+    setShowFlaggedOnly(false)
     setCapabilityFilter([])
     setKeyword('')
   }
@@ -238,64 +245,103 @@ export function SubmissionsView() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
-          {/* Keyword search */}
-          <div style={{ position: 'relative' }}>
-            <Search className="w-4 h-4" style={{ position: 'absolute', left: 12, top: 12, color: 'var(--lq-ink-3)' }} />
+        <div className="sv-filters">
+          {/* Search — full width */}
+          <div className="sv-search">
+            <Search className="w-4 h-4 sv-search-icon" />
             <input
-              className="w-full"
-              style={{ padding: '10px 14px 10px 36px', borderRadius: 10, border: '1px solid var(--lq-line-2)', background: '#fff', color: 'var(--lq-ink)', outline: 'none' }}
-              placeholder="Search intake answers, candidate name, scenario title…"
+              className="sv-search-input"
+              placeholder="Search by name, answer, or scenario"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
             />
+            {keyword && (
+              <button
+                type="button"
+                onClick={() => setKeyword('')}
+                className="sv-search-clear"
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
           </div>
 
-          {/* Score range */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>Minimum AI score</span>
-              <span className="editorial-mono" style={{ color: 'var(--launch-navy)', fontWeight: 600 }}>{minScore}/10</span>
+          {/* Status segmented toggle — replaces the cryptic checkbox.
+              Three states partner actually thinks in: see everyone /
+              only the ones who passed / only the flagged. */}
+          <div className="sv-row">
+            <span className="sv-row-label">Show</span>
+            <div className="sv-seg">
+              {[
+                { value: 'all',       label: 'Everyone' },
+                { value: 'qualified', label: 'Passed pre-quals' },
+                { value: 'flagged',   label: 'Flagged' },
+              ].map((opt) => {
+                const active =
+                  (opt.value === 'all'       && !hideNotQualified && !showFlaggedOnly) ||
+                  (opt.value === 'qualified' && hideNotQualified) ||
+                  (opt.value === 'flagged'   && showFlaggedOnly)
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`sv-seg-btn ${active ? 'is-active' : ''}`}
+                    onClick={() => {
+                      if (opt.value === 'all')       { setHideNotQualified(false); setShowFlaggedOnly(false) }
+                      if (opt.value === 'qualified') { setHideNotQualified(true);  setShowFlaggedOnly(false) }
+                      if (opt.value === 'flagged')   { setHideNotQualified(false); setShowFlaggedOnly(true) }
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
             </div>
-            <input
-              type="range"
-              min={0}
-              max={10}
-              step={1}
-              value={minScore}
-              onChange={(e) => setMinScore(Number(e.target.value))}
-              style={{ width: '100%', accentColor: 'var(--launch-navy)' }}
-            />
           </div>
 
-          {/* Not-qualified toggle */}
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={hideNotQualified}
-              onChange={(e) => setHideNotQualified(e.target.checked)}
-              style={{ width: 16, height: 16, accentColor: 'var(--launch-navy)' }}
-            />
-            <span style={{ color: 'var(--lq-ink-2)', fontSize: 14 }}>Hide candidates flagged Not qualified</span>
-          </label>
+          {/* Minimum intake score slider — same data, clearer label */}
+          <div className="sv-row">
+            <span className="sv-row-label">Min intake score</span>
+            <div className="sv-slider-wrap">
+              <input
+                type="range"
+                min={0}
+                max={10}
+                step={1}
+                value={minScore}
+                onChange={(e) => setMinScore(Number(e.target.value))}
+                className="sv-slider"
+                aria-label="Minimum intake score"
+              />
+              <span className="sv-slider-val">
+                {minScore === 0 ? 'any' : `${minScore}/10`}
+              </span>
+            </div>
+          </div>
 
-          {/* Capability strength */}
+          {/* Capability chips — proper flex+gap layout so they READ as
+              distinct chips, not a run-on string. */}
           <div>
-            <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)', display: 'block', marginBottom: 6 }}>
-              Strong in capability {capabilityFilter.length > 0 ? `· ${capabilityFilter.length} selected` : '(pick any)'}
-            </span>
-            <div>
+            <div className="sv-row-head">
+              <span className="sv-row-label">Strong in capability</span>
+              <span className="sv-row-hint">
+                {capabilityFilter.length > 0
+                  ? `${capabilityFilter.length} picked · matches any`
+                  : 'Pick any — narrows to candidates strong in at least one'}
+              </span>
+            </div>
+            <div className="sv-cap-chips">
               {CAPABILITIES.map((c) => {
                 const on = capabilityFilter.includes(c.name)
                 return (
                   <button
                     key={c.key}
                     type="button"
-                    className="b2-criterion"
-                    style={on
-                      ? { background: 'var(--launch-navy)', color: 'var(--lq-cream)', borderColor: 'var(--launch-navy)', fontWeight: 600 }
-                      : undefined}
-                    onClick={() => setCapabilityFilter((prev) => prev.includes(c.name) ? prev.filter((x) => x !== c.name) : [...prev, c.name])}
+                    className={`sv-cap-chip ${on ? 'is-on' : ''}`}
+                    onClick={() => setCapabilityFilter((prev) =>
+                      prev.includes(c.name) ? prev.filter((x) => x !== c.name) : [...prev, c.name]
+                    )}
                     title={c.measure}
                   >
                     {c.short}
@@ -303,12 +349,170 @@ export function SubmissionsView() {
                 )
               })}
             </div>
-            <p style={{ color: 'var(--lq-ink-3)', fontSize: 12, marginTop: 6 }}>
-              Matches candidates who showed strength on at least one of the picked capabilities during the scenario.
-            </p>
           </div>
         </div>
       </div>
+
+      <style>{`
+        .sv-filters {
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+        }
+        /* Search */
+        .sv-search {
+          position: relative;
+        }
+        .sv-search-icon {
+          position: absolute;
+          left: 14px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--lq-ink-3);
+          pointer-events: none;
+        }
+        .sv-search-input {
+          width: 100%;
+          background: #fff;
+          border: 1px solid var(--lq-line-2);
+          border-radius: 999px;
+          padding: 11px 40px 11px 40px;
+          font-family: var(--font-body);
+          font-size: 14px;
+          color: var(--lq-ink);
+          outline: none;
+          transition: border-color 160ms ease, box-shadow 160ms ease;
+        }
+        .sv-search-input:focus {
+          border-color: var(--launch-navy);
+          box-shadow: 0 0 0 3px rgba(10, 42, 107, 0.08);
+        }
+        .sv-search-clear {
+          position: absolute;
+          right: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          appearance: none;
+          background: transparent;
+          border: none;
+          color: var(--lq-ink-3);
+          font-size: 20px;
+          line-height: 1;
+          cursor: pointer;
+          padding: 6px;
+        }
+        .sv-search-clear:hover { color: var(--launch-navy); }
+
+        /* Row layouts */
+        .sv-row {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+        .sv-row-head {
+          display: flex;
+          align-items: baseline;
+          gap: 10px;
+          margin-bottom: 10px;
+          flex-wrap: wrap;
+        }
+        .sv-row-label {
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--lq-ink-3);
+          font-weight: 600;
+          flex-shrink: 0;
+          min-width: 140px;
+        }
+        .sv-row-hint {
+          font-size: 12px;
+          color: var(--lq-ink-3);
+        }
+
+        /* Segmented toggle */
+        .sv-seg {
+          display: inline-flex;
+          background: rgba(10, 42, 107, 0.04);
+          border: 1px solid var(--lq-line-2);
+          border-radius: 999px;
+          padding: 3px;
+        }
+        .sv-seg-btn {
+          appearance: none;
+          background: transparent;
+          border: none;
+          padding: 7px 14px;
+          border-radius: 999px;
+          font-family: var(--font-body);
+          font-weight: 500;
+          font-size: 13px;
+          color: var(--lq-ink-2);
+          cursor: pointer;
+          transition: background 140ms ease, color 140ms ease;
+        }
+        .sv-seg-btn:hover:not(.is-active) { color: var(--lq-ink); }
+        .sv-seg-btn.is-active {
+          background: var(--launch-navy);
+          color: var(--lq-cream);
+          font-weight: 600;
+        }
+
+        /* Slider */
+        .sv-slider-wrap {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          min-width: 260px;
+        }
+        .sv-slider {
+          flex: 1;
+          accent-color: var(--launch-navy);
+        }
+        .sv-slider-val {
+          font-family: var(--font-mono);
+          font-size: 12px;
+          letter-spacing: 0.10em;
+          color: var(--launch-navy);
+          font-weight: 700;
+          min-width: 50px;
+          text-align: right;
+        }
+
+        /* Capability chips — FIXED: proper flex+gap parent so chips
+           space evenly and wrap nicely. Each chip is a tight pill. */
+        .sv-cap-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .sv-cap-chip {
+          appearance: none;
+          background: #fff;
+          border: 1px solid var(--lq-line-2);
+          border-radius: 999px;
+          padding: 6px 14px;
+          font-family: var(--font-body);
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--lq-ink-2);
+          cursor: pointer;
+          transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+        }
+        .sv-cap-chip:hover {
+          border-color: var(--launch-navy);
+          color: var(--lq-ink);
+        }
+        .sv-cap-chip.is-on {
+          background: var(--launch-navy);
+          color: var(--lq-cream);
+          border-color: var(--launch-navy);
+          font-weight: 600;
+        }
+      `}</style>
 
       {submissions.length === 0 ? (
         <div className="corp-card p-12 text-center">
@@ -373,7 +577,7 @@ export function SubmissionsView() {
                         color: 'var(--lq-ink)',
                       }}
                     >
-                      {s.candidateName} <span style={{ color: 'var(--lq-ink-3)' }}>·</span>{' '}
+                      <CandidateName name={s.candidateName} /> <span style={{ color: 'var(--lq-ink-3)' }}>·</span>{' '}
                       <span style={{ color: 'var(--lq-ink-2)' }}>{s.scenarioTitle}</span>
                     </h3>
                     <div className="editorial-mono mt-1" style={{ color: 'var(--lq-ink-3)' }}>

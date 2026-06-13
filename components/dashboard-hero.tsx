@@ -7,6 +7,15 @@ import { cn } from '@/lib/utils'
 interface DashboardHeroProps {
   onStudentClick?: (studentId: string) => void
   onCapabilityClick?: (capabilityKey: string, capabilityName: string) => void
+  /** Optional. When provided, the chart REFLECTS YOUR PIPELINE — bars are
+   *  weighted by how many of your active scenarios test each capability
+   *  (weighted further by applicants per scenario). Without this, the chart
+   *  shows the global aggregate baseline as before. */
+  roleWeights?: Array<{ capability: string; weight: number }>
+  /** Optional override for the headline + helper line so the chart can
+   *  read as "What my scenarios are measuring" vs the default. */
+  customTitle?: string
+  customSubtitle?: string
 }
 
 const BASE_CAPABILITIES = [
@@ -69,17 +78,34 @@ const SCORES_DATA = {
 
 const timeRanges = ['Weekly', 'Monthly', 'Yearly'] as const
 
-export function DashboardHero({ onCapabilityClick }: DashboardHeroProps) {
+export function DashboardHero({ onCapabilityClick, roleWeights, customTitle, customSubtitle }: DashboardHeroProps) {
   const [selectedRange, setSelectedRange] = useState<'Weekly' | 'Monthly' | 'Yearly'>('Weekly')
   const [isOpen, setIsOpen] = useState(false)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
 
   const rangeData = SCORES_DATA[selectedRange]
-  const scores = rangeData.scores
-  const maxScore = Math.max(...scores.map((s) => s.score))
+  // If roleWeights provided, override the base scores so each bar's HEIGHT
+  // reflects how much that capability is being measured across the partner's
+  // active scenarios (weighted by applicant volume). Otherwise fall back
+  // to the baseline aggregate.
+  const scores = roleWeights && roleWeights.length > 0
+    ? BASE_CAPABILITIES.map((cap) => {
+        const matching = roleWeights.find((r) => r.capability === cap.name)
+        const weight = matching ? matching.weight : 0
+        return {
+          score: Math.min(100, 40 + Math.round(weight * 60)),  // 40..100 scaled by weight 0..1
+          change: 0,
+          topPercent: 0,
+          candidatesImproved: 0,
+          improvementPercent: 0,
+        }
+      })
+    : rangeData.scores
+  const maxScore = Math.max(...scores.map((s) => s.score), 100)
   const avgScore = Math.round(scores.reduce((sum, s) => sum + s.score, 0) / scores.length)
   const totalChange = scores.reduce((sum, s) => sum + s.change, 0)
   const hoveredData = hoveredIndex !== null ? scores[hoveredIndex] : null
+  const usingRoleWeights = !!(roleWeights && roleWeights.length > 0)
 
   return (
     <section className="section-pad-sm">
@@ -88,12 +114,16 @@ export function DashboardHero({ onCapabilityClick }: DashboardHeroProps) {
           {/* Header */}
           <div className="flex items-end justify-between mb-8 flex-wrap gap-3">
             <div>
-              <div className="editorial-eyebrow mb-2" style={{ color: 'var(--lq-ink-3)' }}>Capabilities · aggregate</div>
+              <div className="editorial-eyebrow mb-2" style={{ color: 'var(--lq-ink-3)' }}>
+                {usingRoleWeights ? 'Your pipeline · capability mix' : 'Capabilities · aggregate'}
+              </div>
               <h2 className="editorial-display-sm" style={{ fontSize: 'clamp(22px, 2.6vw, 32px)' }}>
-                The shape of the talent pool.
+                {customTitle ?? (usingRoleWeights ? 'What your scenarios are measuring.' : 'The shape of the talent pool.')}
               </h2>
               <p className="text-sm mt-2" style={{ color: 'var(--lq-ink-2)' }}>
-                Average decision-quality across every candidate, by capability.
+                {customSubtitle ?? (usingRoleWeights
+                  ? 'Weighted by applicants per role — the taller the bar, the more capability volume in your pipeline tests it.'
+                  : 'Average decision-quality across every candidate, by capability.')}
               </p>
             </div>
             <div className="relative inline-flex">

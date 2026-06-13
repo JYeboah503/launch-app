@@ -455,24 +455,36 @@ img {
     border-color: var(--lq-line-2);
   }
   .corp-btn-ghost:hover { color: var(--lq-ink); border-color: var(--launch-navy); }
-  /* Corporate shell — left rail + centre work area */
+  /* Corporate shell — left rail + centre work area.
+     Sidebar is FLUSH to the viewport edge (no outer max-width cap), so the
+     navigation reads as a fixed page chrome rather than a floating panel.
+     The work area then expands proportionally with the laptop screen. */
   .corp-body {
     display: flex;
     align-items: flex-start;
-    max-width: 1400px;
-    margin: 0 auto;
     width: 100%;
   }
   .corp-rail {
     position: sticky;
-    top: 64px;
+    /* Sticky offset matches the CorporateTopBar height (h-32 = 128px) so the
+       rail tucks immediately under the brand bar. */
+    top: 128px;
     flex-shrink: 0;
-    width: 240px;
-    padding: 24px 12px 24px 16px;
+    width: 232px;
+    /* No left padding — the rail's left edge is the page edge. The items
+       themselves carry their own horizontal padding (.corp-rail-item). */
+    padding: 24px 12px 24px 18px;
     border-right: 1px solid var(--lq-line);
     align-self: stretch;
     background: rgba(255, 255, 255, 0.55);
-    min-height: calc(100vh - 64px);
+    min-height: calc(100vh - 128px);
+  }
+  /* Wider laptops get a touch more sidebar room so labels never wrap. */
+  @media (min-width: 1440px) {
+    .corp-rail { width: 252px; padding-left: 26px; }
+  }
+  @media (min-width: 1720px) {
+    .corp-rail { width: 268px; padding-left: 32px; }
   }
   .corp-rail-nav {
     display: flex;
@@ -524,6 +536,23 @@ img {
   .corp-rail-item-jump:hover {
     color: var(--launch-teal);
     background: var(--launch-teal-soft);
+  }
+  /* Sidebar section header — separates "Your company" (partner-direct) from
+     "Launch tools" (platform-wide features). Small editorial caption. */
+  .corp-rail-group {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--lq-ink-3);
+    padding: 4px 14px 6px;
+    margin-bottom: 2px;
+  }
+  .corp-rail-group-2 {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--lq-line);
   }
   .corp-rail-sep {
     height: 1px;
@@ -620,4 +649,25 @@ img {
   outline: 2px solid var(--launch-lime);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* Candidate name masking — visual blur on every candidate / student /
+   applicant identifier rendered on the corporate dashboard. The row stays
+   clickable (no pointer-events:none), the layout is preserved (no display
+   change to block), but the name itself is unreadable.
+
+   `inline-block` constrains the blur ghost so it doesn't bleed into the
+   next line. `user-select: none` prevents copying the underlying string
+   off-screen. */
+.candidate-name {
+  display: inline-block;
+  filter: blur(6px);
+  -webkit-filter: blur(6px);
+  user-select: none;
+  -webkit-user-select: none;
+  /* Tiny extra horizontal padding gives the blur a little breathing room
+     before the next element (e.g. a status pill). */
+  padding: 0 4px;
+  margin: 0 -2px;
+  vertical-align: baseline;
 }

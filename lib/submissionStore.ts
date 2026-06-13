@@ -33,11 +33,22 @@ export interface Submission {
    *  a top-level red badge on the Submissions surface so the org can
    *  sort/filter quickly. */
   notQualified?: boolean
-  /** Decisions the candidate made in the scenario, plus skill credited. */
+  /** Decisions the candidate made in the scenario, plus skill credited.
+   *  Optional `prompt` + `options` carry the full decision tree so the
+   *  partner can visualise the path the candidate took (which one of
+   *  the alternatives they picked at each step). */
   decisions: Array<{
     stepIdx: number
     label?: string
     skill?: string
+    /** The decision prompt the candidate saw. */
+    prompt?: string
+    /** All options shown, with which one was picked. */
+    options?: Array<{
+      id: string
+      label: string
+      picked: boolean
+    }>
   }>
 }
 

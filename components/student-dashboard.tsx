@@ -464,7 +464,7 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
       <div className="fixed top-0 left-0 right-0 z-40 border-b" style={{ borderColor: 'rgba(146, 184, 255, 0.12)', background: 'rgba(7, 9, 28, 0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <LaunchWordmark height={26} tone="light" ariaLabel="LAUNCH" />
+            <LaunchWordmark height={40} tone="light" ariaLabel="LAUNCH" />
             <span className="hidden sm:inline editorial-mono" style={{ color: 'rgba(246, 242, 234, 0.5)' }}>
               · student
             </span>

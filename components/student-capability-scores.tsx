@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { TrendingUp, Minus, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CandidateName } from '@/components/candidate-name'
 
 interface StudentCapabilityScoresProps {
   student: {
@@ -13,17 +14,20 @@ interface StudentCapabilityScoresProps {
   allStudentsData?: Array<{ id: string; name: string; capabilities: Array<{ name: string; level: number }> }>
 }
 
+/* All capability metadata only — no per-cap colour. The chart and cards
+ * use the LAUNCH palette (navy + teal + cream) uniformly; emphasis comes
+ * from being required vs not, not from a rainbow per capability. */
 const BASE_CAPABILITIES = [
-  { name: 'Judgement & Decision-Making', short: 'Judgement', key: 'judgement', bgColor: 'bg-blue-500', colorClass: 'text-blue-500' },
-  { name: 'Reasoning & Critical Thinking', short: 'Reasoning', key: 'reasoning', bgColor: 'bg-purple-500', colorClass: 'text-purple-500' },
-  { name: 'Problem Solving', short: 'Problem Solving', key: 'problemSolving', bgColor: 'bg-pink-500', colorClass: 'text-pink-500' },
-  { name: 'Leadership & Influence', short: 'Leadership', key: 'leadership', bgColor: 'bg-red-500', colorClass: 'text-red-500' },
-  { name: 'Adaptability & Cognitive Flexibility', short: 'Adaptability', key: 'adaptability', bgColor: 'bg-orange-500', colorClass: 'text-orange-500' },
-  { name: 'Emotional Intelligence', short: 'EQ', key: 'emotionalIntelligence', bgColor: 'bg-yellow-500', colorClass: 'text-yellow-500' },
-  { name: 'Execution & Ownership', short: 'Execution', key: 'execution', bgColor: 'bg-green-500', colorClass: 'text-green-500' },
-  { name: 'Integrity & Ethics', short: 'Integrity', key: 'integrity', bgColor: 'bg-emerald-500', colorClass: 'text-emerald-500' },
-  { name: 'Collaboration', short: 'Collaboration', key: 'collaboration', bgColor: 'bg-teal-500', colorClass: 'text-teal-500' },
-  { name: 'Situational Awareness & Systems Thinking', short: 'Situational Awareness', key: 'situationalAwareness', bgColor: 'bg-cyan-500', colorClass: 'text-cyan-500' },
+  { name: 'Judgement & Decision-Making',          short: 'Judgement',             key: 'judgement' },
+  { name: 'Reasoning & Critical Thinking',        short: 'Reasoning',             key: 'reasoning' },
+  { name: 'Problem Solving',                       short: 'Problem Solving',       key: 'problemSolving' },
+  { name: 'Leadership & Influence',                short: 'Leadership',            key: 'leadership' },
+  { name: 'Adaptability & Cognitive Flexibility',  short: 'Adaptability',          key: 'adaptability' },
+  { name: 'Emotional Intelligence',                short: 'EQ',                    key: 'emotionalIntelligence' },
+  { name: 'Execution & Ownership',                 short: 'Execution',             key: 'execution' },
+  { name: 'Integrity & Ethics',                    short: 'Integrity',             key: 'integrity' },
+  { name: 'Collaboration',                         short: 'Collaboration',         key: 'collaboration' },
+  { name: 'Situational Awareness & Systems Thinking', short: 'Situational',         key: 'situationalAwareness' },
 ]
 
 const STUDENT_SCORES_DATA = {
@@ -128,20 +132,63 @@ export function StudentCapabilityScores({ student, roleSkills, allStudentsData }
               const rank = calculateRank(skillName, capabilityData.level)
               
               return (
-                <div key={skillName} className={cn(
-                  'rounded-lg p-4 border-2 transition-all',
-                  'border-accent bg-accent/10'
-                )}>
+                <div
+                  key={skillName}
+                  className="rounded-xl p-4 transition-all"
+                  style={{
+                    background: '#fbf8f1',
+                    border: '1px solid rgba(10, 42, 107, 0.18)',
+                    boxShadow: '0 1px 0 rgba(10, 42, 107, 0.02), 0 4px 14px -12px rgba(10, 42, 107, 0.10)',
+                  }}
+                >
                   <div className="flex items-start justify-between gap-2 mb-3">
-                    <p className="text-xs font-semibold text-muted-foreground line-clamp-2">{capability.short}</p>
+                    <p
+                      className="text-xs line-clamp-2"
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10,
+                        letterSpacing: '0.16em',
+                        textTransform: 'uppercase',
+                        color: 'var(--lq-ink-3)',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {capability.short}
+                    </p>
                     {rank && (
-                      <div className="px-2 py-0.5 bg-accent text-slate-900 text-xs font-bold rounded">
+                      <div
+                        className="px-2 py-0.5 text-xs rounded"
+                        style={{
+                          background: 'var(--launch-navy)',
+                          color: 'var(--lq-cream)',
+                          fontFamily: 'var(--font-mono)',
+                          fontWeight: 700,
+                          letterSpacing: '0.06em',
+                          fontSize: 10,
+                        }}
+                      >
                         #{rank}
                       </div>
                     )}
                   </div>
-                  <p className="text-2xl font-bold text-foreground">{capabilityData.level}</p>
-                  <p className="text-xs text-muted-foreground mt-1">out of 100</p>
+                  <p
+                    className="text-3xl"
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontWeight: 500,
+                      letterSpacing: '-0.02em',
+                      color: 'var(--launch-navy)',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {capabilityData.level}
+                  </p>
+                  <p
+                    className="text-xs mt-1"
+                    style={{ color: 'var(--lq-ink-3)' }}
+                  >
+                    out of 100
+                  </p>
                 </div>
               )
             })}
@@ -157,15 +204,35 @@ export function StudentCapabilityScores({ student, roleSkills, allStudentsData }
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">Average Capability Score</p>
               </div>
-              <div className={cn('flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold', totalChange > 0 ? 'bg-green-500/15 text-green-600' : totalChange < 0 ? 'bg-red-500/15 text-red-600' : 'bg-muted text-muted-foreground')}>
-                <TrendingUp size={16} style={{ transform: totalChange < 0 ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+              <div
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm"
+                style={{
+                  background:
+                    totalChange > 0
+                      ? 'rgba(27, 158, 143, 0.14)'
+                      : totalChange < 0
+                        ? 'rgba(122, 14, 42, 0.10)'
+                        : 'rgba(10, 42, 107, 0.06)',
+                  color:
+                    totalChange > 0
+                      ? 'var(--launch-teal-3)'
+                      : totalChange < 0
+                        ? '#7a0e2a'
+                        : 'var(--lq-ink-2)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  letterSpacing: '0.10em',
+                  fontWeight: 700,
+                }}
+              >
+                <TrendingUp size={14} style={{ transform: totalChange < 0 ? 'rotate(180deg)' : 'rotate(0deg)' }} />
                 {totalChange > 0 ? '+' : ''}{totalChange} across all capabilities
               </div>
             </div>
             <div className="flex flex-col items-end">
               {hoveredData && (
                 <div className="text-lg font-bold text-blue-950 dark:text-blue-200 uppercase">
-                  {student.name} INCREASED THEIR SCORE BY {rangeData.improvementPercent}%
+                  <CandidateName name={student.name} /> INCREASED THEIR SCORE BY {rangeData.improvementPercent}%
                 </div>
               )}
             </div>
@@ -173,45 +240,79 @@ export function StudentCapabilityScores({ student, roleSkills, allStudentsData }
         </div>
       )}
 
-      {/* Bar Chart */}
+      {/* Bar Chart — restrained navy palette. Required-capability bars
+          fill solid navy; non-required sit as cream-tinted ghosts so the
+          required ones read at a glance without rainbow colour-coding. */}
       <div className="flex items-end justify-between gap-2 h-56">
         {BASE_CAPABILITIES.map((capability, index) => {
           const data = scores[index]
           if (!data) return null
-          
+
           const heightPercent = (data.level / maxScore) * 100
           const isHovered = hoveredIndex === index
           const isRoleSkill = roleSkills && roleSkills.includes(data.name)
           const rank = isRoleSkill ? calculateRank(data.name, data.level) : null
 
+          // Single navy ramp — required bars filled solid, non-required as
+          // subtle parchment ghosts. Hover lifts any bar to the same solid
+          // navy so the partner can probe.
+          const barStyle: React.CSSProperties = {
+            height: `${heightPercent * 1.6}px`,
+            transition: 'background 200ms ease, box-shadow 200ms ease, transform 160ms ease',
+          }
+          if (isRoleSkill || isHovered) {
+            // Active state: solid navy with a slight inner highlight
+            barStyle.background = `linear-gradient(180deg, var(--launch-navy-2) 0%, var(--launch-navy) 100%)`
+            barStyle.boxShadow = '0 8px 18px -12px rgba(10, 42, 107, 0.40)'
+          } else {
+            // Idle non-required: cream ghost with a thin navy border
+            barStyle.background = '#f6efe0'
+            barStyle.border = '1px solid rgba(10, 42, 107, 0.08)'
+          }
+
           return (
             <button
               key={capability.key}
-              className="flex flex-col items-center flex-1 group cursor-pointer transition-opacity hover:opacity-80"
+              className="flex flex-col items-center flex-1 group cursor-pointer"
               onMouseEnter={() => setHoveredIndex(index)}
               onMouseLeave={() => setHoveredIndex(null)}
+              style={{ background: 'transparent', border: 'none', padding: 0 }}
             >
-              {/* Rank Badge - shown for role-assessed skills */}
+              {/* Rank chip — only shown for role-assessed skills */}
               {rank && (
-                <div className="mb-2 px-2 py-1 bg-accent/20 text-accent text-xs font-bold rounded-full">
+                <div
+                  className="mb-2 px-2 py-1 rounded-full"
+                  style={{
+                    background: 'var(--launch-navy)',
+                    color: 'var(--lq-cream)',
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    letterSpacing: '0.06em',
+                    fontSize: 10,
+                  }}
+                >
                   #{rank}
                 </div>
               )}
 
-              {/* Bar Container - Bottom Aligned */}
+              {/* Bar Container — Bottom Aligned */}
               <div className="relative w-full h-40 flex flex-col items-center justify-end">
                 <div
-                  className={cn(
-                    'w-3/4 rounded-t-lg transition-all duration-300 cursor-pointer flex items-center justify-center',
-                    isRoleSkill && !isHovered ? 'opacity-100 ring-2 ring-accent' : !isHovered ? 'bg-muted/40 opacity-50' : '',
-                    isHovered ? capability.bgColor : isRoleSkill ? capability.bgColor : 'bg-muted/40'
-                  )}
-                  style={{
-                    height: `${heightPercent * 1.6}px`,
-                  }}>
-                  {/* Score in center of bar on hover */}
+                  className="w-3/4 rounded-t-lg cursor-pointer flex items-center justify-center"
+                  style={barStyle}
+                >
+                  {/* Score read-out — visible on hover OR on required bars
+                      when score reads well at this height. */}
                   {isHovered && (
-                    <div className="text-white text-2xl font-extrabold">
+                    <div
+                      style={{
+                        color: 'var(--lq-cream)',
+                        fontFamily: 'var(--font-display)',
+                        fontWeight: 600,
+                        fontSize: 24,
+                        letterSpacing: '-0.02em',
+                      }}
+                    >
                       {data.level}
                     </div>
                   )}
@@ -219,15 +320,33 @@ export function StudentCapabilityScores({ student, roleSkills, allStudentsData }
               </div>
 
               {/* Label */}
-              <div className="text-center w-full">
-                <p className={cn('text-xs font-medium leading-tight h-10 flex items-center justify-center px-1', 
-                  isRoleSkill ? 'text-foreground font-bold' : 'text-foreground'
-                )}>
+              <div className="text-center w-full mt-2">
+                <p
+                  className="text-xs leading-tight h-10 flex items-center justify-center px-1"
+                  style={{
+                    color: isRoleSkill ? 'var(--lq-ink)' : 'var(--lq-ink-2)',
+                    fontFamily: 'var(--font-body)',
+                    fontWeight: isRoleSkill ? 600 : 500,
+                  }}
+                >
                   {capability.short}
                 </p>
-                <div className={cn('flex items-center justify-center gap-0.5 text-xs font-semibold', 
-                  (data.change || 0) > 0 ? 'text-green-500' : (data.change || 0) < 0 ? 'text-red-500' : 'text-muted-foreground'
-                )}>
+                <div
+                  className="flex items-center justify-center gap-0.5 text-xs"
+                  style={{
+                    color:
+                      (data.change || 0) > 0
+                        ? 'var(--launch-teal-3)'
+                        : (data.change || 0) < 0
+                          ? '#7a0e2a'
+                          : 'var(--lq-ink-3)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                  }}
+                >
                   {(data.change || 0) > 0 ? (
                     <>
                       <TrendingUp size={12} />

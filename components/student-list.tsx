@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { CandidateName } from '@/components/candidate-name'
 
 export interface Student {
   id: string
@@ -83,7 +84,7 @@ export function StudentList({
                     color: 'var(--lq-ink)',
                   }}
                 >
-                  {student.name}
+                  <CandidateName name={student.name} />
                 </h4>
               </div>
 

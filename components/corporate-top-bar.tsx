@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react'
 import { LaunchWordmark } from '@/components/launch-wordmark'
+import { PartnerAccountMenu } from '@/components/partner-account-menu'
 
 /**
  * CorporateTopBar — the shared sticky header that lives on every
@@ -23,12 +24,17 @@ import { LaunchWordmark } from '@/components/launch-wordmark'
 interface CorporateTopBarProps {
   /** Right-hand actions slot — buttons, kebab menu, etc. */
   actions?: ReactNode
-  /** Optional eyebrow override (defaults to "· corporate"). Use for sub-routes
-   *  to add a "· role · applicants" trail if you want — kept simple for now. */
+  /** Called when the partner picks "Sign out" from the account menu. */
+  onSignOut?: () => void
+  /** Called when the partner picks "Account settings" from the menu. */
+  onOpenAccount?: () => void
+  /** No longer rendered — kept on the type for back-compat with existing
+   *  callers passing eyebrow strings; the contextual trail words have
+   *  been dropped in favour of a cleaner just-the-logo top bar. */
   eyebrow?: string
 }
 
-export function CorporateTopBar({ actions, eyebrow = '· corporate' }: CorporateTopBarProps) {
+export function CorporateTopBar({ actions, onSignOut, onOpenAccount }: CorporateTopBarProps) {
   return (
     <header
       className="sticky top-0 z-40"
@@ -39,16 +45,18 @@ export function CorporateTopBar({ actions, eyebrow = '· corporate' }: Corporate
         WebkitBackdropFilter: 'blur(12px)',
       }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <LaunchWordmark height={26} tone="dark" ariaLabel="LAUNCH" />
-          {eyebrow && (
-            <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>
-              {eyebrow}
-            </span>
-          )}
+      {/* Full-width bar: brand mark flush-left (lining up with the sidebar's
+          left edge below it), account controls flush-right. No max-width
+          centering — that's what was making the page feel "floating" on
+          larger laptops. */}
+      <div className="w-full pl-4 sm:pl-6 lg:pl-7 pr-4 sm:pr-8 h-32 flex items-center justify-between">
+        <div className="flex items-center">
+          <LaunchWordmark height={72} tone="dark" ariaLabel="LAUNCH" />
         </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        <div className="flex items-center gap-3">
+          {actions}
+          <PartnerAccountMenu onSignOut={onSignOut} onOpenAccount={onOpenAccount} />
+        </div>
       </div>
     </header>
   )

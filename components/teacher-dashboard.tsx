@@ -120,9 +120,9 @@ export function TeacherDashboard({ onBack }: TeacherDashboardProps) {
           WebkitBackdropFilter: 'blur(12px)',
         }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 h-24 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <LaunchWordmark height={26} tone="dark" ariaLabel="LAUNCH" />
+            <LaunchWordmark height={44} tone="dark" ariaLabel="LAUNCH" />
             <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>
               · teacher
             </span>

@@ -53,8 +53,10 @@ export interface ApplicantFilters {
   atarRange: [number, number]
   /** Subset of degree strings to include. Empty = all. */
   degrees: string[]
-  /** Graduation year range. */
-  gradYearRange: [number, number]
+  /** Graduation years to include (multi-select toggle). Empty = all. */
+  gradYears: number[]
+  /** Universities to include (multi-select toggle). Empty = all. */
+  universities: string[]
   /** Industries of interest. Empty = all. */
   industries: string[]
   /** Work rights statuses to include. */
@@ -72,9 +74,10 @@ export interface ApplicantFilters {
 }
 
 export const DEFAULT_FILTERS: ApplicantFilters = {
-  atarRange: [88, 100],
+  atarRange: [0, 100],
   degrees: [],
-  gradYearRange: [2024, 2027],
+  gradYears: [],
+  universities: [],
   industries: [],
   workRights: [],
   salaryBands: [],
@@ -87,9 +90,14 @@ export const DEFAULT_FILTERS: ApplicantFilters = {
 export function applyApplicantFilters(students: Student[], f: ApplicantFilters): Student[] {
   const kw = f.keyword.trim().toLowerCase()
   return students.filter((s) => {
+    // Defensive on new fields — saved-view localStorage may still carry
+    // the older filter shape without these arrays defined.
+    const gradYears = f.gradYears || []
+    const universities = f.universities || []
     if (s.atar !== undefined && (s.atar < f.atarRange[0] || s.atar > f.atarRange[1])) return false
     if (f.degrees.length > 0 && s.degree && !f.degrees.includes(s.degree)) return false
-    if (s.graduationYear !== undefined && (s.graduationYear < f.gradYearRange[0] || s.graduationYear > f.gradYearRange[1])) return false
+    if (gradYears.length > 0 && (s.graduationYear === undefined || !gradYears.includes(s.graduationYear))) return false
+    if (universities.length > 0 && (!s.university || !universities.includes(s.university))) return false
     if (f.industries.length > 0 && !(s.industries || []).some((i) => f.industries.includes(i))) return false
     if (f.workRights.length > 0 && (!s.workRights || !f.workRights.includes(s.workRights))) return false
     if (f.salaryBands.length > 0 && (!s.expectedSalary || !f.salaryBands.includes(s.expectedSalary))) return false
@@ -138,8 +146,23 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
   const toggleInList = (list: string[], v: string) =>
     list.includes(v) ? list.filter((x) => x !== v) : [...list, v]
 
+  // Build the universities option list — top 8 by frequency in the pool.
+  const allUniversities = useMemo(() => {
+    const tally: Record<string, number> = {}
+    for (const s of students) if (s.university) tally[s.university] = (tally[s.university] || 0) + 1
+    return Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([u]) => u)
+  }, [students])
+  // Build the graduation year option list — every year present in the pool.
+  const allGradYears = useMemo(() => {
+    const set = new Set<number>()
+    for (const s of students) if (s.graduationYear !== undefined) set.add(s.graduationYear)
+    return Array.from(set).sort()
+  }, [students])
+
   const activeFilterCount =
     (filters.degrees.length > 0 ? 1 : 0) +
+    ((filters.universities || []).length > 0 ? 1 : 0) +
+    ((filters.gradYears || []).length > 0 ? 1 : 0) +
     (filters.industries.length > 0 ? 1 : 0) +
     (filters.workRights.length > 0 ? 1 : 0) +
     (filters.salaryBands.length > 0 ? 1 : 0) +
@@ -147,8 +170,7 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
     (filters.prequalStatus !== 'all' ? 1 : 0) +
     (filters.minOverall > 0 ? 1 : 0) +
     (filters.keyword.trim().length > 0 ? 1 : 0) +
-    (filters.atarRange[0] > 88 || filters.atarRange[1] < 100 ? 1 : 0) +
-    (filters.gradYearRange[0] > minGradYear || filters.gradYearRange[1] < maxGradYear ? 1 : 0)
+    (filters.atarRange[0] > 0 ? 1 : 0)
 
   return (
     <div className="raf-root">
@@ -196,38 +218,66 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
 
       {/* Filter group toggle row */}
       <div className="raf-groups">
-        <FilterGroupTab name="Profile" active={expanded === 'profile'} onToggle={() => setExpanded(expanded === 'profile' ? null : 'profile')} count={filters.degrees.length + (filters.atarRange[0] > 88 || filters.atarRange[1] < 100 ? 1 : 0) + (filters.gradYearRange[0] > minGradYear || filters.gradYearRange[1] < maxGradYear ? 1 : 0)} />
+        <FilterGroupTab name="Profile" active={expanded === 'profile'} onToggle={() => setExpanded(expanded === 'profile' ? null : 'profile')} count={
+          (filters.atarRange[0] > 0 ? 1 : 0)
+          + ((filters.gradYears || []).length > 0 ? 1 : 0)
+          + (filters.degrees.length > 0 ? 1 : 0)
+          + ((filters.universities || []).length > 0 ? 1 : 0)
+        } />
         <FilterGroupTab name="Eligibility" active={expanded === 'eligibility'} onToggle={() => setExpanded(expanded === 'eligibility' ? null : 'eligibility')} count={filters.workRights.length + filters.industries.length} />
         <FilterGroupTab name="Looking for" active={expanded === 'looking'} onToggle={() => setExpanded(expanded === 'looking' ? null : 'looking')} count={filters.salaryBands.length + filters.relocate.length} />
       </div>
 
       {expanded === 'profile' && (
         <div className="raf-panel">
-          <div className="raf-panel-grid">
-            <RangeField
-              label="ATAR"
-              min={88}
-              max={100}
-              step={0.5}
-              value={filters.atarRange}
-              onChange={(r) => patch({ atarRange: r })}
-              format={(n) => n.toFixed(1)}
-            />
-            <RangeField
-              label="Graduation year"
-              min={Math.min(2024, minGradYear)}
-              max={Math.max(2027, maxGradYear)}
-              step={1}
-              value={filters.gradYearRange}
-              onChange={(r) => patch({ gradYearRange: r })}
-              format={(n) => String(Math.round(n))}
-            />
-          </div>
+          {/* 1. ATAR — single-handle minimum threshold. The partner picks
+                  the floor ("show candidates with ATAR ≥ X"); the upper
+                  bound is always 100. The second handle was redundant for
+                  recruitment filtering — you almost never want to exclude
+                  the top end. */}
+          <MinField
+            label="ATAR"
+            min={0}
+            max={100}
+            step={0.5}
+            value={filters.atarRange[0]}
+            onChange={(v) => patch({ atarRange: [v, 100] })}
+            format={(n) => n.toFixed(1)}
+          />
+
+          {/* 2. Graduation year — segmented multi-pick toggle. Different
+                  mechanic than the slider above; better fit for a
+                  discrete-year filter. */}
+          <YearTogglePicker
+            label="Graduation year"
+            options={allGradYears}
+            value={filters.gradYears || []}
+            onToggle={(v) => {
+              const cur = filters.gradYears || []
+              patch({
+                gradYears: cur.includes(v)
+                  ? cur.filter((y) => y !== v)
+                  : [...cur, v],
+              })
+            }}
+          />
+
+          {/* 3. Degrees — chip multi-pick (unchanged content; different
+                  mechanic than the year toggles above). */}
           <MultiChipPicker
             label={`Degrees (top ${allDegrees.length})`}
             options={allDegrees}
             value={filters.degrees}
             onToggle={(v) => patch({ degrees: toggleInList(filters.degrees, v) })}
+          />
+
+          {/* 4. Universities — multi-select dropdown. A 4th distinct input
+                  type (not a slider, not a toggle row, not a chip wrap). */}
+          <UniversityMultiSelect
+            label={`Universities (top ${allUniversities.length})`}
+            options={allUniversities}
+            value={filters.universities || []}
+            onToggle={(v) => patch({ universities: toggleInList(filters.universities || [], v) })}
           />
         </div>
       )}
@@ -501,7 +551,11 @@ function MultiChipPicker({
   )
 }
 
-function RangeField({
+/** Single-handle minimum-threshold slider. Renders one slider that sets the
+ *  minimum value; the upper bound is implicitly the slider's `max`. Replaces
+ *  the previous 2-handle RangeField, which gave partners a redundant "upper
+ *  bound" control they never used in recruitment filtering. */
+function MinField({
   label,
   min,
   max,
@@ -514,15 +568,21 @@ function RangeField({
   min: number
   max: number
   step: number
-  value: [number, number]
-  onChange: (v: [number, number]) => void
+  value: number
+  onChange: (v: number) => void
   format: (n: number) => string
 }) {
   return (
     <div className="raf-range">
+      {/* "ATAR · ≥ 0" reads as a single phrase. When the partner hasn't
+          touched the slider, show "any" in place of the number so the
+          default state isn't read as "ATAR ≥ 0 (filtered)". */}
       <div className="raf-range-label">
-        <span>{label}</span>
-        <span className="raf-range-value">{format(value[0])} – {format(value[1])}</span>
+        <span className="raf-range-label-name">{label}</span>
+        <span className="raf-range-label-sep">·</span>
+        <span className="raf-range-value">
+          {value <= min ? 'any' : <>&ge; {format(value)}</>}
+        </span>
       </div>
       <div className="raf-range-controls">
         <input
@@ -530,36 +590,230 @@ function RangeField({
           min={min}
           max={max}
           step={step}
-          value={value[0]}
-          onChange={(e) => onChange([parseFloat(e.target.value), value[1]])}
-        />
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value[1]}
-          onChange={(e) => onChange([value[0], parseFloat(e.target.value)])}
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value))}
         />
       </div>
       <style>{`
         .raf-range-label {
           display: flex;
-          justify-content: space-between;
-          margin-bottom: 8px;
+          align-items: baseline;
+          gap: 8px;
+          margin-bottom: 10px;
           font-family: var(--font-mono);
           font-size: 10px;
           letter-spacing: 0.16em;
           text-transform: uppercase;
-          color: var(--lq-ink-3);
           font-weight: 600;
         }
+        .raf-range-label-name { color: var(--lq-ink-3); }
+        .raf-range-label-sep { color: var(--lq-ink-3); opacity: 0.5; }
         .raf-range-value { color: var(--launch-navy); }
         .raf-range-controls { display: flex; gap: 8px; }
         .raf-range-controls input[type="range"] {
           flex: 1;
           accent-color: var(--launch-navy);
         }
+      `}</style>
+    </div>
+  )
+}
+
+/** Graduation year multi-toggle — small year pills, click to add/remove. */
+function YearTogglePicker({
+  label,
+  options,
+  value,
+  onToggle,
+}: {
+  label: string
+  options: number[]
+  value: number[]
+  onToggle: (v: number) => void
+}) {
+  return (
+    <div className="raf-yearpick">
+      <div className="raf-yearpick-label">
+        <span>{label}</span>
+        <span className="raf-yearpick-meta">
+          {value.length === 0 ? 'any year' : value.length === 1 ? `Class of ${value[0]}` : `${value.length} years picked`}
+        </span>
+      </div>
+      <div className="raf-yearpick-row">
+        {options.map((y) => {
+          const on = value.includes(y)
+          return (
+            <button
+              key={y}
+              type="button"
+              onClick={() => onToggle(y)}
+              className={`raf-yearpick-pill ${on ? 'is-on' : ''}`}
+            >
+              {y}
+            </button>
+          )
+        })}
+      </div>
+      <style>{`
+        .raf-yearpick-label {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+          margin-bottom: 10px;
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          font-weight: 600;
+          color: var(--lq-ink-3);
+        }
+        .raf-yearpick-meta { color: var(--launch-navy); }
+        .raf-yearpick-row { display: flex; gap: 6px; flex-wrap: wrap; }
+        .raf-yearpick-pill {
+          appearance: none;
+          background: #fff;
+          border: 1px solid var(--lq-line-2);
+          border-radius: 8px;
+          padding: 7px 14px;
+          font-family: var(--font-mono);
+          font-size: 12px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          color: var(--lq-ink-2);
+          cursor: pointer;
+          transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+        }
+        .raf-yearpick-pill:hover { border-color: var(--launch-navy); color: var(--lq-ink); }
+        .raf-yearpick-pill.is-on {
+          background: var(--launch-navy);
+          color: var(--lq-cream);
+          border-color: var(--launch-navy);
+        }
+      `}</style>
+    </div>
+  )
+}
+
+/** University multi-select dropdown — click to open, tick boxes for each
+ *  university. Closes on outside click. */
+function UniversityMultiSelect({
+  label,
+  options,
+  value,
+  onToggle,
+}: {
+  label: string
+  options: string[]
+  value: string[]
+  onToggle: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="raf-uni" onMouseLeave={() => setOpen(false)}>
+      <div className="raf-uni-label">
+        <span>{label}</span>
+      </div>
+      <button
+        type="button"
+        className="raf-uni-trigger"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span className="raf-uni-trigger-text">
+          {value.length === 0 ? 'Pick one or more universities' : value.length === 1 ? value[0] : `${value.length} universities picked`}
+        </span>
+        <span className="raf-uni-trigger-caret">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <div className="raf-uni-menu">
+          {options.map((u) => {
+            const on = value.includes(u)
+            return (
+              <button
+                key={u}
+                type="button"
+                onClick={() => onToggle(u)}
+                className={`raf-uni-item ${on ? 'is-on' : ''}`}
+              >
+                <span className="raf-uni-item-check">{on ? '✓' : ''}</span>
+                <span className="raf-uni-item-name">{u}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <style>{`
+        .raf-uni { position: relative; }
+        .raf-uni-label {
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--lq-ink-3);
+          font-weight: 600;
+          margin-bottom: 8px;
+        }
+        .raf-uni-trigger {
+          appearance: none;
+          width: 100%;
+          background: #fff;
+          border: 1px solid var(--lq-line-2);
+          border-radius: 10px;
+          padding: 10px 14px;
+          font-family: var(--font-body);
+          font-size: 13px;
+          color: var(--lq-ink);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          cursor: pointer;
+          transition: border-color 140ms ease;
+        }
+        .raf-uni-trigger:hover { border-color: var(--launch-navy); }
+        .raf-uni-trigger-text {
+          color: ${value.length === 0 ? 'var(--lq-ink-3)' : 'var(--lq-ink)'};
+        }
+        .raf-uni-trigger-caret { color: var(--lq-ink-3); font-size: 10px; }
+        .raf-uni-menu {
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          right: 0;
+          background: #fff;
+          border: 1px solid var(--lq-line-2);
+          border-radius: 10px;
+          box-shadow: 0 8px 24px -10px rgba(10, 42, 107, 0.20);
+          padding: 4px;
+          z-index: 10;
+          max-height: 280px;
+          overflow-y: auto;
+        }
+        .raf-uni-item {
+          appearance: none;
+          background: transparent;
+          border: none;
+          width: 100%;
+          padding: 8px 10px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          cursor: pointer;
+          border-radius: 6px;
+          font-family: var(--font-body);
+          font-size: 13px;
+          color: var(--lq-ink-2);
+          text-align: left;
+          transition: background 120ms ease, color 120ms ease;
+        }
+        .raf-uni-item:hover { background: rgba(10, 42, 107, 0.04); color: var(--lq-ink); }
+        .raf-uni-item-check {
+          flex-shrink: 0;
+          width: 16px;
+          font-family: var(--font-mono);
+          font-weight: 700;
+          color: var(--launch-navy);
+        }
+        .raf-uni-item.is-on { color: var(--launch-navy); font-weight: 600; }
       `}</style>
     </div>
   )

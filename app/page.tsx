@@ -9,6 +9,8 @@ import { PartnerAuthView } from '@/components/partner-auth-view'
 import { TeacherDashboard } from '@/components/teacher-dashboard'
 import { LaunchWordmark } from '@/components/launch-wordmark'
 import { CorporateTopBar } from '@/components/corporate-top-bar'
+import { PartnerLogoTag } from '@/components/partner-logo-tag'
+import { PartnerAccountPage } from '@/components/partner-account-page'
 import { RoleApplicantFilters, applyApplicantFilters, DEFAULT_FILTERS, type ApplicantFilters } from '@/components/role-applicant-filters'
 import type { AppMode } from '@/lib/roles'
 import { addCustomScenarioStub } from '@/lib/scenarioStore'
@@ -22,6 +24,7 @@ import { CTASection } from '@/components/cta-section'
 import { DashboardHero } from '@/components/dashboard-hero'
 import { DashboardFilter } from '@/components/dashboard-filter'
 import { LaunchStandouts } from '@/components/launch-standouts'
+import { CandidateName } from '@/components/candidate-name'
 import { PartnerTools } from '@/components/partner-tools'
 import { ScenarioBuilder } from '@/components/scenario-builder'
 import { ScenarioBuilderV2 } from '@/components/scenario-builder-v2'
@@ -55,7 +58,7 @@ export default function Page() {
   const [partnerView, setPartnerView] = useState<'dashboard' | 'curator' | 'createChallenge' | 'performance'>('dashboard')
   // Left-rail nav for the corporate dashboard. Each item swaps the
   // centre work area; persisted in localStorage so refresh keeps your view.
-  const [corporateNav, setCorporateNav] = useState<'overview' | 'chart' | 'roles' | 'standouts' | 'tools' | 'builder' | 'submissions'>('overview')
+  const [corporateNav, setCorporateNav] = useState<'overview' | 'roles' | 'standouts' | 'builder'>('overview')
   const [showBuilderV2, setShowBuilderV2] = useState(false)
   const [curatedList, setCuratedList] = useState<{ students: Student[], name: string } | null>(null)
   const [createdChallenges, setCreatedChallenges] = useState<any[]>([])
@@ -76,6 +79,8 @@ export default function Page() {
    *  "just created" highlight on its card in the Scenarios section so
    *  they see exactly where their work landed. Cleared on a timer. */
   const [justCreatedRoleId, setJustCreatedRoleId] = useState<string | null>(null)
+  /** When true, the Account settings page takes over the corporate work area. */
+  const [showAccountPage, setShowAccountPage] = useState<boolean>(false)
   useEffect(() => {
     if (!justCreatedRoleId) return
     const t = setTimeout(() => setJustCreatedRoleId(null), 6000)
@@ -96,6 +101,15 @@ export default function Page() {
   useEffect(() => {
     setSubmissions(listSubmissions())
   }, [corporateNav, isPartnerLoggedIn])
+
+  // Scenario builder: ready-to-go entry. The moment a partner navigates to
+  // the Builder sidebar item, the builder takeover opens — no intro screen,
+  // no "+ New scenario" click needed. The intro/3-step copy is preserved
+  // in the background for context but the partner is already inside the
+  // builder, focused on the first input.
+  useEffect(() => {
+    if (corporateNav === 'builder') setShowBuilderV2(true)
+  }, [corporateNav])
   /** Derived stats for the corporate overview funnel — actionable numbers,
    *  not marketing metrics. Recomputes when submissions or roles change. */
   const corpStats = useMemo(() => {
@@ -167,37 +181,68 @@ export default function Page() {
     if (!selectedStudentId) return null
     const fromStatic = STUDENT_PROFILES[selectedStudentId]
     if (fromStatic) return fromStatic
-    const subs = listSubmissions()
-    const sub = subs.find((s) => s.id === selectedStudentId)
-    if (!sub) return null
-    const p = sub.profile
-    if (!p) return null
-    // Mock per-capability levels deterministically from the submission id.
-    const allCaps = [
+    // Shared deterministic-hash → capability levels so each candidate
+    // ALWAYS lands with the same numbers across re-renders.
+    const ALL_CAPS = [
       'Judgement & Decision-Making', 'Reasoning & Critical Thinking',
       'Problem Solving', 'Leadership & Influence',
       'Adaptability & Cognitive Flexibility', 'Emotional Intelligence',
       'Execution & Ownership', 'Integrity & Ethics',
       'Collaboration', 'Situational Awareness & Systems Thinking',
     ]
-    let h = 0
-    for (let i = 0; i < sub.id.length; i++) h = ((h << 5) - h) + sub.id.charCodeAt(i) | 0
-    const capabilities = allCaps.map((name, i) => ({
-      name,
-      level: 60 + (Math.abs(h + i * 7) % 36),
-    }))
-    return {
-      id: sub.id,
-      name: p.name,
-      interests: p.industries || [],
-      capabilities,
-      bio: p.whyLooking
-        ? `${p.name} — ${p.whyLooking}`
-        : `${p.name} applied for ${sub.scenarioTitle}. Profile collected at intake.`,
-      degree: p.degree,
-      atar: p.atar,
-      school: p.university || '—',
-    } as any
+    const seededCaps = (seedId: string) => {
+      let h = 0
+      for (let i = 0; i < seedId.length; i++) h = ((h << 5) - h) + seedId.charCodeAt(i) | 0
+      return ALL_CAPS.map((name, i) => ({ name, level: 60 + (Math.abs(h + i * 7) % 36) }))
+    }
+
+    // Fallback 2 — Submission-derived profile (seeded role applicants + real plays).
+    const subs = listSubmissions()
+    const sub = subs.find((s) => s.id === selectedStudentId)
+    if (sub && sub.profile) {
+      const p = sub.profile
+      return {
+        id: sub.id,
+        name: p.name,
+        interests: p.industries || [],
+        capabilities: seededCaps(sub.id),
+        bio: p.whyLooking
+          ? `${p.name} — ${p.whyLooking}`
+          : `${p.name} applied for ${sub.scenarioTitle}. Profile collected at intake.`,
+        degree: p.degree,
+        atar: p.atar,
+        school: p.university || '—',
+      } as any
+    }
+
+    // Fallback 3 — MOCK_STUDENTS catalogue (the 1,200-strong pool used by
+    // Overview Standouts, Discovery tools etc.). Without this fallback,
+    // clicking any candidate beyond the hardcoded 3 returns null → blank
+    // page. AI summary, Contact via LAUNCH, capabilities all hidden.
+    const mock = MOCK_STUDENTS.find((m) => m.id === selectedStudentId)
+    if (mock) {
+      // The candidate's "top capabilities" come from generateStudents (3
+      // capabilities, level 75–95). Spread those plus the unseen others
+      // out across the full 10-capability shape so the StudentCapability-
+      // Scores chart has every axis to plot.
+      const topMap = new Map(mock.topCapabilities.map((c) => [c.name, c.level]))
+      const caps = ALL_CAPS.map((name) => ({
+        name,
+        level: topMap.get(name) ?? 60 + ((mock.overallScore + name.length) % 30),
+      }))
+      return {
+        id: mock.id,
+        name: mock.name,
+        interests: mock.interests,
+        capabilities: caps,
+        bio: `${mock.name.split(' ')[0]} is a strong all-rounder with standout signals in ${mock.topCapabilities.slice(0, 2).map(c => c.name).join(' and ')}. ATAR ${mock.atar?.toFixed(1) || '—'} · ${mock.degree || '—'}.`,
+        degree: mock.degree,
+        atar: mock.atar,
+        school: mock.university || '—',
+      } as any
+    }
+
+    return null
   }, [selectedStudentId])
 
   const studentChallenges = selectedStudentId ? CHALLENGES[selectedStudentId] || [] : []
@@ -274,6 +319,7 @@ export default function Page() {
   if (selectedCapability) {
     return (
       <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
+        <PartnerLogoTag />
         <CorporateTopBar
           eyebrow={`· corporate · capability`}
           actions={
@@ -304,6 +350,7 @@ export default function Page() {
   if (showChallenges && selectedStudent) {
     return (
       <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
+        <PartnerLogoTag />
         <CorporateTopBar
           eyebrow={`· corporate · ${selectedStudent.name} · challenges`}
           actions={
@@ -329,6 +376,7 @@ export default function Page() {
   if (selectedStudent) {
     return (
       <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
+        <PartnerLogoTag />
         <CorporateTopBar
           eyebrow={`· corporate · candidate`}
           actions={
@@ -344,6 +392,13 @@ export default function Page() {
 
           <StudentProfileView
             student={selectedStudent}
+            /* When the candidate landed via a real (or seeded) submission,
+               pass it through so the profile shows their raw pre-qualifier
+               answers + AI verdict per question. */
+            submission={(() => {
+              if (!selectedStudentId) return null
+              return listSubmissions().find((s) => s.id === selectedStudentId) || null
+            })()}
             onChallengesClick={() => setShowChallenges(true)}
             onContactClick={() => {
               alert(`Contact request for ${selectedStudent.name} submitted through LAUNCH platform`)
@@ -362,6 +417,28 @@ export default function Page() {
 
   // Dashboard view - only for partners
   if (isPartnerLoggedIn) {
+    // Account settings page — takes over the work area, has its own internal sub-nav
+    if (showAccountPage) {
+      return (
+        <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
+          <PartnerLogoTag />
+          <CorporateTopBar
+            onSignOut={() => {
+              setIsPartnerLoggedIn(false)
+              setShowAccountPage(false)
+              setAppMode('landing')
+            }}
+            actions={
+              <button onClick={() => setShowAccountPage(false)} className="corp-btn corp-btn-ghost">
+                ← Back to dashboard
+              </button>
+            }
+          />
+          <PartnerAccountPage />
+        </main>
+      )
+    }
+
     // Show role candidates view
     if (selectedRoleView) {
       const selectedRole = activeRoles.find(r => r.id === selectedRoleView)
@@ -385,6 +462,7 @@ export default function Page() {
       
       return (
         <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
+          <PartnerLogoTag />
           <CorporateTopBar
             eyebrow="· corporate · role"
             actions={
@@ -491,7 +569,7 @@ export default function Page() {
                           <div className="flex items-start justify-between mb-2">
                             <div className="min-w-0">
                               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 15, color: 'var(--lq-ink)' }}>
-                                {a.name}
+                                <CandidateName name={a.name} />
                               </div>
                               <div className="text-xs truncate" style={{ color: 'var(--lq-ink-3)' }}>
                                 {a.degree || '—'} · {a.university || '—'}
@@ -602,90 +680,25 @@ export default function Page() {
       )
     }
 
-    // Show applicant performance view
-    if (partnerView === 'performance') {
-      return (
-        <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
-          <CorporateTopBar
-            eyebrow="· corporate · applicants"
-            actions={
-              <button onClick={() => setPartnerView('dashboard')} className="corp-btn corp-btn-ghost">
-                ← Dashboard
-              </button>
-            }
-          />
-          <ApplicantPerformance
-            students={MOCK_STUDENTS}
-            onBack={() => setPartnerView('dashboard')}
-          />
-        </main>
-      )
-    }
-
-    // Show applicant curator
-    if (partnerView === 'curator') {
-      return (
-        <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
-          <CorporateTopBar
-            eyebrow="· corporate · curate"
-            actions={
-              <button onClick={() => setPartnerView('dashboard')} className="corp-btn corp-btn-ghost">
-                ← Dashboard
-              </button>
-            }
-          />
-          <ApplicantCurator
-            students={MOCK_STUDENTS}
-            onBack={() => setPartnerView('dashboard')}
-            onCuratedListCreated={(students, name) => {
-              setCuratedList({ students, name })
-              setPartnerView('createChallenge')
-            }}
-          />
-        </main>
-      )
-    }
-
-    // Show create challenge wizard
-    if (partnerView === 'createChallenge' && curatedList) {
-      return (
-        <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
-          <CorporateTopBar
-            eyebrow="· corporate · new challenge"
-            actions={
-              <button
-                onClick={() => {
-                  setPartnerView('dashboard')
-                  setCuratedList(null)
-                }}
-                className="corp-btn corp-btn-ghost"
-              >
-                ← Dashboard
-              </button>
-            }
-          />
-          <CreateChallenge
-            curatedList={curatedList}
-            onBack={() => {
-              setPartnerView('dashboard')
-              setCuratedList(null)
-            }}
-            onChallengeCreated={(challenge) => {
-              setCreatedChallenges([...createdChallenges, challenge])
-              setPartnerView('dashboard')
-              setCuratedList(null)
-            }}
-          />
-        </main>
-      )
-    }
+    // (Performance + Curate + CreateChallenge views removed — the role-detail
+    //  filter pipeline does both jobs once a partner has active scenarios.)
 
     // Show partner dashboard
     return (
       <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
         <div className="w-full">
+          <PartnerLogoTag />
           {/* Corporate top bar — shared component, used across every corporate sub-view */}
           <CorporateTopBar
+            onOpenAccount={() => setShowAccountPage(true)}
+            onSignOut={() => {
+              setIsPartnerLoggedIn(false)
+              setSelectedCapabilities([])
+              setSelectedInterests([])
+              setSelectedStudentId(null)
+              setSelectedCapability(null)
+              setAppMode('landing')
+            }}
             actions={
               <>
                 <button
@@ -715,14 +728,13 @@ export default function Page() {
           <div className="corp-body">
             <aside className="corp-rail">
               <nav className="corp-rail-nav" aria-label="Corporate sections">
+                {/* Group 1: Your company — things the partner directly controls
+                    (their dashboard, their roles, the builder they author scenarios with) */}
+                <div className="corp-rail-group">Your company</div>
                 {([
                   { key: 'overview',    label: 'Overview' },
-                  { key: 'chart',       label: 'Capability chart' },
                   { key: 'roles',       label: 'Active roles' },
-                  { key: 'standouts',   label: 'Standouts' },
-                  { key: 'tools',       label: 'Discovery tools' },
                   { key: 'builder',     label: 'Scenario builder' },
-                  { key: 'submissions', label: 'Submissions' },
                 ] as const).map((item) => (
                   <button
                     key={item.key}
@@ -733,21 +745,22 @@ export default function Page() {
                     {item.label}
                   </button>
                 ))}
-                <div className="corp-rail-sep" />
-                <button
-                  type="button"
-                  onClick={() => setPartnerView('curator')}
-                  className="corp-rail-item corp-rail-item-jump"
-                >
-                  Curate applicants <span aria-hidden>→</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPartnerView('performance')}
-                  className="corp-rail-item corp-rail-item-jump"
-                >
-                  Performance <span aria-hidden>→</span>
-                </button>
+
+                {/* Group 2: Launch tools — generic platform features that work
+                    across all corporates, not tied to a specific role. */}
+                <div className="corp-rail-group corp-rail-group-2">Launch tools</div>
+                {([
+                  { key: 'standouts',   label: 'Standouts' },
+                ] as const).map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setCorporateNav(item.key)}
+                    className={`corp-rail-item${corporateNav === item.key ? ' corp-rail-item-active' : ''}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </nav>
             </aside>
             <div className="corp-work">
@@ -814,19 +827,19 @@ export default function Page() {
                 label: 'Submissions',
                 value: corpStats.submissionsTotal,
                 helper: corpStats.thisWeek > 0 ? `+${corpStats.thisWeek} this week` : 'this week',
-                onClick: () => setCorporateNav('submissions'),
+                onClick: () => setCorporateNav('roles'),
               },
               {
                 label: 'Qualified',
                 value: corpStats.qualifiedCount,
                 helper: corpStats.submissionsTotal === 0 ? '—' : `${corpStats.qualifiedPct}% pass rate`,
-                onClick: () => setCorporateNav('submissions'),
+                onClick: () => setCorporateNav('roles'),
               },
               {
                 label: 'Flagged',
                 value: corpStats.flaggedCount,
                 helper: corpStats.submissionsTotal === 0 ? '—' : 'below benchmark',
-                onClick: () => setCorporateNav('submissions'),
+                onClick: () => setCorporateNav('roles'),
               },
             ].map((s) => (
               <button
@@ -859,7 +872,7 @@ export default function Page() {
                 </h2>
                 <button
                   type="button"
-                  onClick={() => setCorporateNav('submissions')}
+                  onClick={() => setCorporateNav('roles')}
                   className="editorial-mono transition-colors"
                   style={{ color: 'var(--launch-navy)' }}
                 >
@@ -894,7 +907,7 @@ export default function Page() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, color: 'var(--lq-ink)' }}>
-                            {sub.candidateName}
+                            <CandidateName name={sub.candidateName} />
                           </span>
                           {sub.notQualified && (
                             <span
@@ -911,7 +924,7 @@ export default function Page() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setCorporateNav('submissions')}
+                        onClick={() => setCorporateNav('roles')}
                         className="editorial-mono text-xs"
                         style={{ color: 'var(--launch-navy)', flexShrink: 0 }}
                       >
@@ -943,7 +956,7 @@ export default function Page() {
                   <li key={s.id} className="py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="mb-1" style={{ fontFamily: 'var(--font-display)', fontWeight: 500, color: 'var(--lq-ink)' }}>
-                        {s.name}
+                        <CandidateName name={s.name} />
                       </div>
                       <div className="text-xs truncate" style={{ color: 'var(--lq-ink-3)' }}>
                         {s.topCapabilities.slice(0, 2).map(c => c.name).join(' · ')}
@@ -1040,10 +1053,14 @@ export default function Page() {
           )}
           </>)}
 
-          {/* Active Roles — empty state + grid */}
+          {/* Active Roles — active scenarios (top) + capability chart (bottom).
+              Order matters: partners come here primarily to manage their live
+              scenarios, so those lead. The capability chart at the bottom
+              answers "what are my scenarios measuring across the portfolio?"
+              — a portfolio-level reflection, not a navigation surface. */}
           {corporateNav === 'roles' && (
             <div>
-              <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-10 sm:pt-12 pb-2">
+              <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-6 sm:pt-8 pb-2">
                 <div className="flex items-start justify-between gap-6 flex-wrap mb-2">
                   <div>
                     <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>Scenarios</div>
@@ -1195,27 +1212,144 @@ export default function Page() {
                 </div>
               </div>
               )}
+
+              {/* Capability chart — what the partner's scenarios actually
+                  measure. Sits at the bottom because it's reflective, not
+                  navigational. Bars are weighted by THIS partner's active
+                  scenarios + applicants per role, so the picture reflects
+                  their pipeline, not the global pool. */}
+              {activeRoles.length > 0 && (() => {
+                const tally: Record<string, number> = {}
+                let total = 0
+                for (const role of activeRoles) {
+                  const subs = submissions.filter(s => s.scenarioCode === role.accessCode).length || 1
+                  for (const skill of (role.skills || [])) {
+                    tally[skill] = (tally[skill] || 0) + subs
+                    total += subs
+                  }
+                }
+                const roleWeights = total === 0 ? [] :
+                  Object.entries(tally).map(([capability, w]) => ({ capability, weight: w / total }))
+                return (
+                  <section className="max-w-7xl mx-auto px-4 sm:px-8 pt-2 pb-12">
+                    <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>
+                      What your scenarios are measuring
+                    </div>
+                    <DashboardHero
+                      onCapabilityClick={(key, name) => setSelectedCapability({ key, name })}
+                      roleWeights={roleWeights}
+                    />
+                  </section>
+                )
+              })()}
             </div>
           )}
 
           {/* Anchor for "View standouts" action button */}
           <span id="standouts-anchor" aria-hidden />
 
-          {/* Partner Tools — Discovery. Component owns its own header. */}
-          {corporateNav === 'tools' && (
-            <PartnerTools
-              selectedTool={selectedTool}
-              students={filteredStudents}
-              onSelectStudent={setSelectedStudentId}
-              onToolSelect={(tool, option) => {
-                setSelectedTool({ tool, option })
-              }}
-            />
+          {/* Discovery tools removed from sidebar — its "Top by capability /
+              industry" mechanism is now folded into the Standouts surface
+              as a chip strip above the standouts grid. */}
+
+          {/* Filter chip strip — sits above Standouts. Old Discovery tools
+              filter mechanism, now inline + scoped to the Standouts page. */}
+          {corporateNav === 'standouts' && (
+            <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-2">
+              <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>Narrow standouts by</div>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Top-N chips */}
+                {[10, 25, 50, 100].map((n) => {
+                  const active = selectedTool?.tool === 'topCandidates' && selectedTool.option === `Top ${n}`
+                  return (
+                    <button
+                      key={`top-${n}`}
+                      type="button"
+                      onClick={() => setSelectedTool(active ? null : { tool: 'topCandidates', option: `Top ${n}` })}
+                      className={`sd-chip ${active ? 'is-on' : ''}`}
+                    >
+                      Top {n}
+                    </button>
+                  )
+                })}
+                <span className="sd-sep" />
+                {/* Capability chips */}
+                {[
+                  'Problem Solving', 'Leadership & Influence', 'Collaboration',
+                  'Reasoning & Critical Thinking', 'Adaptability & Cognitive Flexibility',
+                  'Execution & Ownership', 'Integrity & Ethics',
+                ].map((cap) => {
+                  const active = selectedTool?.tool === 'topByCapability' && selectedTool.option === cap
+                  return (
+                    <button
+                      key={cap}
+                      type="button"
+                      onClick={() => setSelectedTool(active ? null : { tool: 'topByCapability', option: cap })}
+                      className={`sd-chip ${active ? 'is-on' : ''}`}
+                      title={`Surface candidates strong in ${cap}`}
+                    >
+                      {cap.split(/\s+/)[0]}
+                    </button>
+                  )
+                })}
+                {selectedTool && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTool(null)}
+                    className="sd-clear"
+                  >
+                    Clear ×
+                  </button>
+                )}
+              </div>
+              <style>{`
+                .sd-chip {
+                  appearance: none;
+                  background: #fff;
+                  border: 1px solid var(--lq-line-2);
+                  border-radius: 999px;
+                  padding: 6px 14px;
+                  font-family: var(--font-body);
+                  font-size: 12px;
+                  font-weight: 500;
+                  color: var(--lq-ink-2);
+                  cursor: pointer;
+                  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+                }
+                .sd-chip:hover { border-color: var(--launch-navy); color: var(--lq-ink); }
+                .sd-chip.is-on {
+                  background: var(--launch-navy);
+                  color: var(--lq-cream);
+                  border-color: var(--launch-navy);
+                  font-weight: 600;
+                }
+                .sd-sep {
+                  width: 1px; height: 18px;
+                  background: var(--lq-line);
+                  margin: 0 6px;
+                }
+                .sd-clear {
+                  appearance: none;
+                  background: rgba(122, 14, 42, 0.08);
+                  color: #7a0e2a;
+                  border: 1px solid rgba(122, 14, 42, 0.20);
+                  border-radius: 999px;
+                  padding: 5px 12px;
+                  font-family: var(--font-mono);
+                  font-size: 10px;
+                  letter-spacing: 0.14em;
+                  text-transform: uppercase;
+                  cursor: pointer;
+                  font-weight: 700;
+                  margin-left: 4px;
+                }
+                .sd-clear:hover { background: rgba(122, 14, 42, 0.14); }
+              `}</style>
+            </div>
           )}
 
-          {/* Filter Summary — only when Discovery tools has a filter active.
-              Navy-toned, on-brand. */}
-          {selectedTool && (corporateNav === 'tools' || corporateNav === 'standouts') && (
+          {/* Filter summary banner — kept for compat with the chip strip */}
+          {selectedTool && corporateNav === 'standouts' && (
             <div className="max-w-7xl mx-auto px-4 sm:px-8">
               <div
                 className="rounded-md px-4 py-3 mb-4 flex items-center justify-between flex-wrap gap-2"
@@ -1307,7 +1441,14 @@ export default function Page() {
           </div>
           <ScenarioBuilderV2
             externalOpen={showBuilderV2}
-            onClose={() => setShowBuilderV2(false)}
+            onClose={() => {
+              // Close the takeover, then route back to Overview so the partner
+              // doesn't stare at an empty Builder shell. (If they just shipped
+              // a scenario, onRoleCreated has already routed to 'roles' first
+              // — this branch only fires when they bail out manually.)
+              setShowBuilderV2(false)
+              setCorporateNav('overview')
+            }}
             creatorType="corporate"
             onRoleCreated={(roleData) => {
               // Newest scenario first so the partner sees their fresh work
@@ -1333,14 +1474,13 @@ export default function Page() {
           />
           </>)}
 
-          {corporateNav === 'submissions' && <SubmissionsView />}
+          {/* Submissions sidebar removed — overlapped with the role-detail
+              filter pipeline. Cross-scenario "what's new" still lives on
+              the Overview's Recent submissions panel. */}
 
-          {/* Capability chart — component owns its own header. */}
-          {corporateNav === 'chart' && (
-            <DashboardHero
-              onCapabilityClick={(key, name) => setSelectedCapability({ key, name })}
-            />
-          )}
+          {/* Capability chart removed from sidebar — now mounts at the top
+              of Active roles so it serves as the overview of what's being
+              measured before the role cards. */}
 
           {/* Created Challenges */}
           {corporateNav === 'builder' && createdChallenges.length > 0 && (
@@ -1462,7 +1602,7 @@ function ManageSelect({
     >
       {/* LAUNCH wordmark — cream on cinema navy, top-left like the rest of the dark surfaces */}
       <div className="absolute top-6 left-6 sm:top-8 sm:left-10">
-        <LaunchWordmark height={26} tone="light" ariaLabel="LAUNCH" />
+        <LaunchWordmark height={40} tone="light" ariaLabel="LAUNCH" />
       </div>
       <div className="w-full max-w-3xl text-center">
         <div className="editorial-mono mb-4" style={{ color: 'rgba(146, 184, 255, 0.7)' }}>
