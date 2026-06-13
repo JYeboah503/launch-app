@@ -292,6 +292,13 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
       setCodeError('Code not recognised. Check spelling.')
       return
     }
+    // Closed scenarios stop accepting new entries — the partner has chosen
+    // to wind down recruitment for this role. Existing submissions stay
+    // visible on their side, but no new candidate can start.
+    if (stub.status === 'closed') {
+      setCodeError('This scenario is closed and is no longer accepting new candidates.')
+      return
+    }
     setCodeError(null)
     setCurrentScenarioTitle(stub.title)
     setCurrentScenarioDescription(

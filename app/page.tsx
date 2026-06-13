@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { HeroSection } from '@/components/hero-section'
 import { StudentAuthView } from '@/components/student-auth-view'
@@ -13,7 +13,7 @@ import { PartnerLogoTag } from '@/components/partner-logo-tag'
 import { PartnerAccountPage } from '@/components/partner-account-page'
 import { RoleApplicantFilters, applyApplicantFilters, DEFAULT_FILTERS, type ApplicantFilters } from '@/components/role-applicant-filters'
 import type { AppMode } from '@/lib/roles'
-import { addCustomScenarioStub } from '@/lib/scenarioStore'
+import { addCustomScenarioStub, setScenarioStatus, deleteCustomScenario } from '@/lib/scenarioStore'
 import { listSubmissions, type Submission } from '@/lib/submissionStore'
 import { seedIfNeeded, loadActiveRoles, submissionsToStudents } from '@/lib/seedData'
 import { listSubmissionsForCode } from '@/lib/submissionStore'
@@ -36,7 +36,7 @@ import { ApplicantCurator } from '@/components/applicant-curator'
 import { CreateChallenge } from '@/components/create-challenge'
 import { ApplicantPerformance } from '@/components/applicant-performance'
 import { MOCK_STUDENTS, STUDENT_PROFILES, CHALLENGES } from '@/lib/mock-data'
-import { Plus } from 'lucide-react'
+import { Plus, MoreHorizontal, Lock, Unlock, Trash2, X } from 'lucide-react'
 import type { Student } from '@/components/student-list'
 import { AnimatedCounter, Sparkline } from '@/components/motion'
 
@@ -65,6 +65,30 @@ export default function Page() {
   const [selectedTool, setSelectedTool] = useState<{ tool: string; option: string } | null>(null)
   const [activeRoles, setActiveRoles] = useState<any[]>([])
   const [selectedRoleView, setSelectedRoleView] = useState<string | null>(null)
+  /** Which role is currently being asked "delete this?" Used to gate the
+   *  destructive action behind an explicit confirm modal — never one click. */
+  const [roleToDelete, setRoleToDelete] = useState<{ id: string; name: string } | null>(null)
+
+  /** Toggle a scenario's open/closed status in the store + locally. Closing
+   *  stops new candidates from entering the access code (gated in
+   *  student-dashboard); existing submissions stay viewable. */
+  const handleToggleRoleStatus = (id: string, next: 'open' | 'closed') => {
+    setScenarioStatus(id, next)
+    setActiveRoles((prev) => prev.map((r) => r.id === id
+      ? { ...r, status: next, closedAt: next === 'closed' ? new Date().toISOString() : undefined }
+      : r,
+    ))
+  }
+  /** Confirmed delete — removes the scenario from the store and from the
+   *  in-memory list. Candidate submissions for the role's code stay in
+   *  submissionStore (independent), so a partner who deletes a role can still
+   *  resurface its applicant data if they want it. */
+  const handleConfirmDeleteRole = () => {
+    if (!roleToDelete) return
+    deleteCustomScenario(roleToDelete.id)
+    setActiveRoles((prev) => prev.filter((r) => r.id !== roleToDelete.id))
+    setRoleToDelete(null)
+  }
   const [roleSkillFilters, setRoleSkillFilters] = useState<Record<string, boolean>>({})
   const [selectedRoleSkill, setSelectedRoleSkill] = useState<string | null>(null)
   const [selectedRoleSkillTop, setSelectedRoleSkillTop] = useState<number>(10)
@@ -1144,22 +1168,53 @@ export default function Page() {
                   <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>{activeRoles.length} live</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {activeRoles.map((role) => (
+                  {activeRoles.map((role) => {
+                    const isClosed = role.status === 'closed'
+                    return (
                     <article
                       key={role.id}
                       onClick={() => setSelectedRoleView(role.id)}
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => { if (e.key === 'Enter') setSelectedRoleView(role.id) }}
-                      className="corp-card p-6 cursor-pointer group"
-                      style={role.id === justCreatedRoleId ? {
-                        borderColor: 'var(--launch-teal)',
-                        boxShadow: '0 0 0 3px rgba(27, 158, 143, 0.18)',
-                      } : undefined}
+                      className="corp-card p-6 cursor-pointer group relative"
+                      style={
+                        role.id === justCreatedRoleId
+                          ? { borderColor: 'var(--launch-teal)', boxShadow: '0 0 0 3px rgba(27, 158, 143, 0.18)' }
+                          // Closed cards fade so the partner can tell at a glance which
+                          // scenarios are still pulling candidates. Body content stays
+                          // legible (review of existing applicants still matters).
+                          : isClosed
+                            ? { opacity: 0.72, background: 'rgba(10, 42, 107, 0.02)' }
+                            : undefined
+                      }
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>Role</span>
-                        <span aria-hidden className="inline-block rounded-full opacity-40 group-hover:opacity-100 transition-opacity" style={{ width: 8, height: 8, background: 'var(--launch-navy)' }} />
+                        <div className="flex items-center gap-2">
+                          <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>Role</span>
+                          {isClosed && (
+                            <span
+                              className="editorial-mono"
+                              style={{
+                                background: 'rgba(122, 14, 42, 0.08)',
+                                color: '#7a0e2a',
+                                padding: '2px 8px',
+                                borderRadius: 999,
+                                fontSize: 9,
+                                letterSpacing: '0.14em',
+                                fontWeight: 700,
+                              }}
+                            >
+                              CLOSED
+                            </span>
+                          )}
+                        </div>
+                        <RoleActionsMenu
+                          role={role}
+                          isClosed={isClosed}
+                          onToggleStatus={(next) => handleToggleRoleStatus(role.id, next)}
+                          onRequestDelete={() => setRoleToDelete({ id: role.id, name: role.name })}
+                        />
                       </div>
                       <h3
                         className="text-xl mb-2"
@@ -1204,11 +1259,14 @@ export default function Page() {
                       <div className="flex items-center justify-between">
                         <span className="editorial-mono" style={{ color: 'var(--launch-navy)', fontSize: 11, letterSpacing: '0.06em', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{role.accessCode}</span>
                         <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)', fontSize: 10 }}>
-                          shipped {new Date(role.createdAt).toLocaleDateString()}
+                          {isClosed && role.closedAt
+                            ? `closed ${new Date(role.closedAt).toLocaleDateString()}`
+                            : `shipped ${new Date(role.createdAt).toLocaleDateString()}`}
                         </span>
                       </div>
                     </article>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
               )}
@@ -1547,6 +1605,17 @@ export default function Page() {
           )}
             </div>{/* /corp-work */}
           </div>{/* /corp-body */}
+
+          {/* Delete-scenario confirm modal — mounts only when a row's kebab
+              triggers it. The destructive button is the *secondary* one so
+              the partner has to read before they click. */}
+          {roleToDelete && (
+            <DeleteScenarioModal
+              roleName={roleToDelete.name}
+              onCancel={() => setRoleToDelete(null)}
+              onConfirm={handleConfirmDeleteRole}
+            />
+          )}
         </div>
       </main>
     )
@@ -1721,5 +1790,245 @@ function ManageSelect({
         .manage-card:hover .manage-card-arrow { transform: translateX(4px); }
       `}</style>
     </main>
+  )
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   RoleActionsMenu — kebab menu that hangs off each Active Scenario card.
+   Two actions:
+     · Close / Reopen  (toggles the scenario's accept-new-candidates state)
+     · Delete          (opens the confirm modal; never deletes inline)
+
+   The trigger uses stopPropagation on every interaction so clicking the menu
+   doesn't also navigate the partner into the role's detail view (the parent
+   card has its own onClick).
+   ─────────────────────────────────────────────────────────────────── */
+function RoleActionsMenu({
+  role,
+  isClosed,
+  onToggleStatus,
+  onRequestDelete,
+}: {
+  role: { id: string; name: string }
+  isClosed: boolean
+  onToggleStatus: (next: 'open' | 'closed') => void
+  onRequestDelete: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', handler)
+    return () => window.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div
+      ref={wrapRef}
+      className="ram-root"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        className="ram-trigger"
+        aria-label={`Manage ${role.name}`}
+        aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
+      >
+        <MoreHorizontal className="w-4 h-4" />
+      </button>
+      {open && (
+        <div className="ram-menu" role="menu">
+          <button
+            type="button"
+            className="ram-item"
+            onClick={(e) => {
+              e.stopPropagation()
+              setOpen(false)
+              onToggleStatus(isClosed ? 'open' : 'closed')
+            }}
+          >
+            {isClosed
+              ? <><Unlock className="w-4 h-4" /> Reopen scenario</>
+              : <><Lock className="w-4 h-4" /> Close scenario</>}
+          </button>
+          <div className="ram-sep" />
+          <button
+            type="button"
+            className="ram-item ram-item-danger"
+            onClick={(e) => { e.stopPropagation(); setOpen(false); onRequestDelete() }}
+          >
+            <Trash2 className="w-4 h-4" /> Delete scenario
+          </button>
+        </div>
+      )}
+      <style>{`
+        .ram-root { position: relative; }
+        .ram-trigger {
+          appearance: none;
+          background: transparent;
+          border: 1px solid transparent;
+          border-radius: 8px;
+          width: 28px;
+          height: 28px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--lq-ink-3);
+          cursor: pointer;
+          transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+        }
+        .ram-trigger:hover {
+          background: rgba(10, 42, 107, 0.06);
+          color: var(--launch-navy);
+          border-color: var(--lq-line);
+        }
+        .ram-menu {
+          position: absolute;
+          top: calc(100% + 4px);
+          right: 0;
+          width: 200px;
+          background: #fff;
+          border: 1px solid var(--lq-line);
+          border-radius: 12px;
+          padding: 6px;
+          box-shadow: 0 18px 36px -16px rgba(10, 42, 107, 0.24);
+          z-index: 30;
+        }
+        .ram-item {
+          appearance: none;
+          background: transparent;
+          border: none;
+          width: 100%;
+          padding: 8px 10px;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          cursor: pointer;
+          font-family: var(--font-body);
+          font-size: 13px;
+          color: var(--lq-ink);
+          text-align: left;
+          border-radius: 6px;
+        }
+        .ram-item:hover { background: rgba(10, 42, 107, 0.05); }
+        .ram-item-danger { color: #7a0e2a; }
+        .ram-item-danger:hover { background: rgba(122, 14, 42, 0.06); }
+        .ram-sep { height: 1px; background: var(--lq-line); margin: 4px 6px; }
+      `}</style>
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   DeleteScenarioModal — confirm gate for the destructive delete action.
+   Layered as a backdrop + card so the partner can never delete on a misclick.
+   ─────────────────────────────────────────────────────────────────── */
+function DeleteScenarioModal({
+  roleName,
+  onCancel,
+  onConfirm,
+}: {
+  roleName: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div className="dsm-root" role="dialog" aria-modal="true" aria-labelledby="dsm-title">
+      <div className="dsm-backdrop" onClick={onCancel} />
+      <div className="dsm-card">
+        <div className="dsm-head">
+          <div>
+            <div className="dsm-eyebrow">Delete scenario</div>
+            <h2 id="dsm-title" className="dsm-title">Permanently delete <em>{roleName}</em>?</h2>
+          </div>
+          <button type="button" onClick={onCancel} className="dsm-close" aria-label="Close">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="dsm-body">
+          <p>
+            This removes the scenario and its access code. Candidates who already
+            submitted will stay visible — their data lives independently.
+          </p>
+          <p style={{ color: 'var(--lq-ink-3)', marginTop: 8 }}>
+            If you only want to stop new candidates, <strong>close</strong> it
+            instead. Closing is reversible; deleting is not.
+          </p>
+        </div>
+        <div className="dsm-foot">
+          <button type="button" onClick={onCancel} className="corp-btn corp-btn-ghost">Cancel</button>
+          <button type="button" onClick={onConfirm} className="dsm-confirm">
+            <Trash2 className="w-4 h-4" /> Delete scenario
+          </button>
+        </div>
+        <style>{`
+          .dsm-root {
+            position: fixed; inset: 0; z-index: 100;
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+          }
+          .dsm-backdrop {
+            position: absolute; inset: 0;
+            background: rgba(10, 42, 107, 0.42);
+            backdrop-filter: blur(4px);
+          }
+          .dsm-card {
+            position: relative; background: #fff; border-radius: 18px;
+            width: 100%; max-width: 460px;
+            box-shadow: 0 24px 60px -18px rgba(10, 42, 107, 0.32);
+          }
+          .dsm-head {
+            padding: 22px 26px 16px;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            gap: 14px;
+            border-bottom: 1px solid var(--lq-line);
+          }
+          .dsm-eyebrow {
+            font-family: var(--font-mono); font-size: 10px;
+            letter-spacing: 0.18em; text-transform: uppercase;
+            color: #7a0e2a; font-weight: 700; margin-bottom: 4px;
+          }
+          .dsm-title {
+            margin: 0; font-family: var(--font-display); font-weight: 500;
+            font-size: 20px; letter-spacing: -0.018em; color: var(--lq-ink);
+          }
+          .dsm-title em { font-style: italic; color: var(--launch-navy); }
+          .dsm-close {
+            appearance: none; background: transparent;
+            border: 1px solid var(--lq-line-2); border-radius: 999px;
+            width: 30px; height: 30px;
+            display: inline-flex; align-items: center; justify-content: center;
+            color: var(--lq-ink-2); cursor: pointer;
+            transition: color 140ms ease, border-color 140ms ease;
+          }
+          .dsm-close:hover { color: var(--lq-ink); border-color: var(--launch-navy); }
+          .dsm-body {
+            padding: 20px 26px;
+            font-size: 14px; line-height: 1.55; color: var(--lq-ink-2);
+          }
+          .dsm-foot {
+            padding: 14px 26px 22px;
+            display: flex; gap: 10px; justify-content: flex-end;
+            border-top: 1px solid var(--lq-line);
+          }
+          .dsm-confirm {
+            appearance: none; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 8px 16px; border-radius: 999px;
+            background: #7a0e2a; color: var(--lq-cream);
+            border: 1px solid #7a0e2a;
+            font-family: var(--font-body); font-weight: 600; font-size: 13px;
+            transition: background 140ms ease, border-color 140ms ease;
+          }
+          .dsm-confirm:hover { background: #5d0a20; border-color: #5d0a20; }
+        `}</style>
+      </div>
+    </div>
   )
 }
