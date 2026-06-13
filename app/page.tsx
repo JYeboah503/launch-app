@@ -126,14 +126,15 @@ export default function Page() {
     setSubmissions(listSubmissions())
   }, [corporateNav, isPartnerLoggedIn])
 
-  // Scenario builder: ready-to-go entry. The moment a partner navigates to
-  // the Builder sidebar item, the builder takeover opens — no intro screen,
-  // no "+ New scenario" click needed. The intro/3-step copy is preserved
-  // in the background for context but the partner is already inside the
-  // builder, focused on the first input.
-  useEffect(() => {
-    if (corporateNav === 'builder') setShowBuilderV2(true)
-  }, [corporateNav])
+  // Scenario builder: ready-to-go entry. Every entry point (sidebar, CTAs,
+  // "+ New scenario") opens the takeover directly via `openBuilder`. No
+  // useEffect indirection — that was racing with onClose + the conditional
+  // builder mount, and the result was the sidebar button silently failing
+  // on the second navigation in. Direct setters = predictable behaviour.
+  const openBuilder = () => {
+    setCorporateNav('builder')
+    setShowBuilderV2(true)
+  }
   /** Derived stats for the corporate overview funnel — actionable numbers,
    *  not marketing metrics. Recomputes when submissions or roles change. */
   const corpStats = useMemo(() => {
@@ -763,7 +764,12 @@ export default function Page() {
                   <button
                     key={item.key}
                     type="button"
-                    onClick={() => setCorporateNav(item.key)}
+                    onClick={() => {
+                      // Builder is special: clicking it opens the takeover.
+                      // Everything else is plain navigation.
+                      if (item.key === 'builder') openBuilder()
+                      else setCorporateNav(item.key)
+                    }}
                     className={`corp-rail-item${corporateNav === item.key ? ' corp-rail-item-active' : ''}`}
                   >
                     {item.label}
@@ -829,7 +835,7 @@ export default function Page() {
               {/* Primary CTA — anchored to header, not floating */}
               <button
                 type="button"
-                onClick={() => { setCorporateNav('builder'); setShowBuilderV2(true) }}
+                onClick={() => { openBuilder() }}
                 className="corp-btn corp-btn-primary"
                 style={{ flexShrink: 0 }}
               >
@@ -914,7 +920,7 @@ export default function Page() {
                     type="button"
                     onClick={() => {
                       if (corpStats.activeScenarios === 0) {
-                        setCorporateNav('builder'); setShowBuilderV2(true)
+                        openBuilder()
                       } else {
                         setCorporateNav('roles')
                       }
@@ -1108,7 +1114,7 @@ export default function Page() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setCorporateNav('builder'); setShowBuilderV2(true) }}
+                    onClick={() => { openBuilder() }}
                     className="corp-btn corp-btn-primary"
                     style={{ flexShrink: 0 }}
                   >
@@ -1124,7 +1130,7 @@ export default function Page() {
                     </p>
                     <button
                       type="button"
-                      onClick={() => { setCorporateNav('builder'); setShowBuilderV2(true) }}
+                      onClick={() => { openBuilder() }}
                       className="corp-btn corp-btn-primary"
                     >
                       Start the builder
@@ -1478,7 +1484,7 @@ export default function Page() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowBuilderV2(true)}
+                onClick={() => openBuilder()}
                 className="corp-btn corp-btn-primary"
                 style={{ flexShrink: 0 }}
               >
@@ -1500,12 +1506,12 @@ export default function Page() {
           <ScenarioBuilderV2
             externalOpen={showBuilderV2}
             onClose={() => {
-              // Close the takeover, then route back to Overview so the partner
-              // doesn't stare at an empty Builder shell. (If they just shipped
-              // a scenario, onRoleCreated has already routed to 'roles' first
-              // — this branch only fires when they bail out manually.)
+              // Just close the modal. Leave the partner on the Builder
+              // landing page (intro + "+ New scenario" button) so they can
+              // re-open without a round-trip through the sidebar. If they
+              // shipped a scenario, onRoleCreated has already routed to
+              // Active scenarios first — this branch is the bail-out path.
               setShowBuilderV2(false)
-              setCorporateNav('overview')
             }}
             creatorType="corporate"
             onRoleCreated={(roleData) => {
