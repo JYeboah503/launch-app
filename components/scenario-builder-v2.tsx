@@ -2341,7 +2341,7 @@ function Step2Author({
               const raw = passing / total
               return Math.min(1.0, raw + 0.10)
             }
-            const compoundRate = genericQs.reduce((acc, q) => {
+            const compoundRate = genericQs.reduce((acc: number, q: GenericIntakeQuestion) => {
               if (!q.prompt.trim()) return acc
               const r = (q.kind || 'open-text') === 'hard-filter' ? filterPassRate(q) : openPassRate(q.minScore)
               return acc * r
@@ -2581,7 +2581,7 @@ function Step3Review({
         <>
           <div className="b2-section-title">
             <h2 className="b2-h2">Pre-qualifier questions &amp; benchmarks</h2>
-            <span className="b2-pill b2-pill-navy">{genericQs.filter(g => g.prompt.trim()).length} filter{genericQs.filter(g => g.prompt.trim()).length === 1 ? '' : 's'}</span>
+            <span className="b2-pill b2-pill-navy">{genericQs.filter((g: GenericIntakeQuestion) => g.prompt.trim()).length} filter{genericQs.filter((g: GenericIntakeQuestion) => g.prompt.trim()).length === 1 ? '' : 's'}</span>
           </div>
           {genericQs
             .filter((g: GenericIntakeQuestion) => g.prompt.trim())

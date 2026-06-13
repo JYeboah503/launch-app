@@ -329,14 +329,12 @@ function TeamSection() {
   // matches whatever name/email the partner saved in Company profile), plus
   // a clean "invite teammates" empty-state card below. No mock teammates.
   const [branding, setBranding] = useState<Branding>(DEFAULT_BRANDING)
-  const [profile, setProfile] = useState<ExtendedProfile>(DEFAULT_PROFILE)
   useEffect(() => {
     setBranding(readJSON(BRANDING_KEY, DEFAULT_BRANDING))
-    setProfile(readJSON(PROFILE_KEY, DEFAULT_PROFILE))
   }, [])
-  const ownerName = profile.primaryContactName?.trim() || branding.name
+  const ownerName = branding.name
   const ownerEmail = branding.email
-  const initials = ownerName.split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0,2).join('').toUpperCase()
+  const initials = ownerName.split(/\s+/).map((p: string) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 
   return (
     <SectionShell title="Team & permissions" subtitle="Bring your recruiters in. Roles control what they can see + change.">

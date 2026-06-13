@@ -189,18 +189,23 @@ export default function Page() {
         const count = parseInt(option.match(/\d+/)?.[0] || '10')
         students = students.slice(0, count)
       } else if (tool === 'topByCapability') {
-        // Filter by capability
+        // Filter to candidates who have this capability, then rank by their
+        // level on it. Property is `level`, not `score` — the previous code
+        // read .score which is undefined on the topCapabilities entry, so
+        // the sort was effectively a no-op (every candidate scored 0).
         students = students.filter((student) =>
           student.topCapabilities.some((cap) => cap.name === option)
         ).sort((a, b) => {
-          const capA = a.topCapabilities.find((c) => c.name === option)?.score || 0
-          const capB = b.topCapabilities.find((c) => c.name === option)?.score || 0
+          const capA = a.topCapabilities.find((c) => c.name === option)?.level || 0
+          const capB = b.topCapabilities.find((c) => c.name === option)?.level || 0
           return capB - capA
         })
       } else if (tool === 'topByIndustry') {
-        // Filter by industry (would need to check mock data for industry field)
+        // Students don't carry an `industry` field on the type, so the
+        // industry chip filter falls back to matching against the
+        // candidate's listed interests.
         students = students.filter((student) =>
-          student.interests?.includes(option) || student.industry === option
+          student.interests?.includes(option)
         )
       }
     }
@@ -894,7 +899,7 @@ export default function Page() {
                   className="editorial-stat"
                   style={{ fontSize: 'clamp(28px, 3vw, 44px)', color: 'var(--launch-navy)', lineHeight: 1 }}
                 >
-                  <AnimatedCounter value={s.value} duration={1100} suffix={s.suffix || ''} />
+                  <AnimatedCounter value={s.value} duration={1100} />
                 </div>
                 <div className="mt-3 pt-3 border-t border-[var(--lq-line)] editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>
                   {s.helper}
