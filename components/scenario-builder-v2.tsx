@@ -2400,7 +2400,6 @@ function Step2Author({
 
       {decisions.map((d: ScenarioDecision, idx: number) => {
         const cap = getCapability(d.capabilityKey)
-        const treeOpts = d.options.filter((o) => o.followUp).length
         return (
           <div key={d.id} className="b2-card">
             <div className="b2-section-title" style={{ marginTop: 0, marginBottom: 10, alignItems: 'center' }}>
@@ -2410,15 +2409,11 @@ function Step2Author({
                   value={d.difficulty}
                   onChange={(v) => updateDecision(d.id, { difficulty: v })}
                 />
-                {treeOpts > 0 && (
-                  <span
-                    className="b2-pill"
-                    style={{ background: 'rgba(10,42,107,0.06)', color: 'var(--launch-navy)' }}
-                    title="This question adapts: some answers lead to a follow-up question"
-                  >
-                    Adapts · {treeOpts}/{d.options.length} with follow-up
-                  </span>
-                )}
+                {/* "Adapts" pill removed: the partner no longer configures
+                    per-option follow-ups by hand — Launch handles dynamic
+                    follow-ups automatically based on the candidate's answer.
+                    Showing a pill that counted manual follow-ups was just
+                    UI noise after the simplification. */}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <button
@@ -2486,54 +2481,17 @@ function Step2Author({
               </div>
 
               <div>
-                <label className="b2-label">Answers &amp; optional follow-up</label>
-                <p style={{ color: 'var(--lq-ink-3)', fontSize: 12, marginTop: 0, marginBottom: 8 }}>
-                  Each answer can have its own follow-up question — a quick "why did you choose THIS?" probe with three sub-choices tagged as <strong style={{ color: 'var(--launch-teal-3)' }}>support</strong> · <strong style={{ color: 'var(--launch-navy)' }}>neutral</strong> · <strong style={{ color: '#7a0e2a' }}>challenge</strong>. Add a follow-up to one answer, all of them, or none — the question still works flat.
-                </p>
+                <label className="b2-label">Answers</label>
                 <div className="b2-options">
                   {d.options.map((o, oi) => (
-                    <OptionRowWithTree
+                    <OptionRow
                       key={o.id}
                       bullet={String.fromCharCode(65 + oi)}
-                      option={o}
-                      optionIndex={oi}
-                      onChangeText={(text) => updateDecisionOption(d.id, o.id, text)}
-                      onAddTree={() => updateDecision(d.id, {
-                        options: d.options.map((opt, j) => j === oi ? { ...opt, followUp: EMPTY_OPTION_FOLLOWUP(oi) } : opt),
-                      })}
-                      onChangeTree={(fu) => updateDecision(d.id, {
-                        options: d.options.map((opt, j) => j === oi ? { ...opt, followUp: fu } : opt),
-                      })}
-                      onRemoveTree={() => updateDecision(d.id, {
-                        options: d.options.map((opt, j) => j === oi ? { ...opt, followUp: undefined } : opt),
-                      })}
+                      value={o.text}
+                      onChange={(text) => updateDecisionOption(d.id, o.id, text)}
                     />
                   ))}
                 </div>
-                {treeOpts === 0 && (
-                  <button
-                    type="button"
-                    className="b2-btn b2-btn-ghost"
-                    style={{ marginTop: 8 }}
-                    onClick={() => updateDecision(d.id, {
-                      options: d.options.map((opt, j) => ({ ...opt, followUp: EMPTY_OPTION_FOLLOWUP(j) })),
-                    })}
-                  >
-                    <Plus className="w-4 h-4" /> Add a follow-up to every answer
-                  </button>
-                )}
-                {treeOpts > 0 && treeOpts < d.options.length && (
-                  <button
-                    type="button"
-                    className="b2-btn b2-btn-ghost"
-                    style={{ marginTop: 8 }}
-                    onClick={() => updateDecision(d.id, {
-                      options: d.options.map((opt, j) => opt.followUp ? opt : { ...opt, followUp: EMPTY_OPTION_FOLLOWUP(j) }),
-                    })}
-                  >
-                    <Plus className="w-4 h-4" /> Add follow-up to the remaining answers
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -2724,7 +2682,10 @@ function Step3Review({
 /* Dismissible; the dismissal sticks via localStorage.        */
 /* -------------------------------------------------------- */
 
-const EXPLAINER_DISMISS_KEY = 'launch.builder.dynamicQuestionsExplainer.dismissed.v1'
+/* Bumped to v2 because the explainer copy was rewritten + tightened.
+   Anyone who dismissed the v1 (longer, three-bullet) version sees the
+   new short version once. */
+const EXPLAINER_DISMISS_KEY = 'launch.builder.dynamicQuestionsExplainer.dismissed.v2'
 
 function DynamicQuestionsExplainer() {
   const [dismissed, setDismissed] = useState<boolean>(true)
@@ -2743,40 +2704,26 @@ function DynamicQuestionsExplainer() {
     <div className="b2-dyn-card">
       <div className="b2-dyn-head">
         <div>
-          <div className="b2-dyn-eyebrow">How candidates experience this</div>
-          <h4 className="b2-dyn-title">Questions adapt as candidates answer</h4>
+          <div className="b2-dyn-eyebrow">Heads up</div>
+          <h4 className="b2-dyn-title">A basic view of what each candidate will see</h4>
         </div>
         <button
           type="button"
           onClick={dismiss}
           className="b2-dyn-close"
-          aria-label="Dismiss explainer"
-          title="Got it — don't show this again"
+          aria-label="Dismiss"
+          title="Got it"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
       <p className="b2-dyn-body">
-        These are the questions every candidate starts with. Based on the answer
-        they pick, the next question can change &mdash; a strong answer can earn
-        a deeper probe, a weaker one opens up a different lens. You don&rsquo;t
-        have to wire this manually; just add a quick follow-up under any answer
-        and Launch handles the routing.
+        These are the starting questions and the answers each candidate is shown.
+        Launch adapts the next questions based on the answer they pick &mdash;
+        candidates can also write their own. You&rsquo;ll see the full path each
+        candidate took, and at every stage Launch is assessing the key traits
+        listed below.
       </p>
-      <ul className="b2-dyn-list">
-        <li>
-          <span className="b2-dyn-dot" style={{ background: 'var(--launch-teal-3)' }} />
-          <span>Launch scores every answer against research-backed benchmarks for the capability you picked.</span>
-        </li>
-        <li>
-          <span className="b2-dyn-dot" style={{ background: 'var(--launch-navy)' }} />
-          <span>On the shortlist side, you&rsquo;ll see exactly which answers each candidate chose and how they reasoned.</span>
-        </li>
-        <li>
-          <span className="b2-dyn-dot" style={{ background: 'var(--lq-ink-3)' }} />
-          <span>Adding follow-ups is optional &mdash; questions still work flat. Add them only when an answer deserves a probe.</span>
-        </li>
-      </ul>
       <style>{`
         .b2-dyn-card {
           border: 1px solid var(--lq-line);
@@ -2830,34 +2777,11 @@ function DynamicQuestionsExplainer() {
           border-color: var(--lq-line);
         }
         .b2-dyn-body {
-          margin: 0 0 12px;
+          margin: 0;
           color: var(--lq-ink-2);
           font-size: 13.5px;
           line-height: 1.6;
           max-width: 62ch;
-        }
-        .b2-dyn-list {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 7px;
-        }
-        .b2-dyn-list li {
-          display: flex;
-          gap: 10px;
-          align-items: flex-start;
-          font-size: 13px;
-          line-height: 1.55;
-          color: var(--lq-ink-2);
-        }
-        .b2-dyn-dot {
-          display: inline-block;
-          width: 6px; height: 6px;
-          border-radius: 999px;
-          margin-top: 7px;
-          flex-shrink: 0;
         }
       `}</style>
     </div>
@@ -2888,101 +2812,32 @@ function DifficultyPill({ value, onChange }: { value: Difficulty; onChange: (v: 
 }
 
 /* -------------------------------------------------------- */
-/* Per-option follow-up branch row                          */
+/* Per-option answer row — simple input with a bullet.       */
+/* No follow-up UI: Launch handles the dynamic adaptation    */
+/* (next question changes based on the candidate's answer)   */
+/* at runtime, so the partner just authors the basic answers.*/
 /* -------------------------------------------------------- */
 
-interface OptionRowWithTreeProps {
+function OptionRow({
+  bullet,
+  value,
+  onChange,
+}: {
   bullet: string
-  option: DecisionOption
-  optionIndex: number
-  onChangeText: (text: string) => void
-  onAddTree: () => void
-  onChangeTree: (fu: NonNullable<DecisionOption["followUp"]>) => void
-  onRemoveTree: () => void
-}
-
-function OptionRowWithTree({ bullet, option, optionIndex, onChangeText, onAddTree, onChangeTree, onRemoveTree }: OptionRowWithTreeProps) {
-  const [open, setOpen] = useState(false)
-  const fu = option.followUp
+  value: string
+  onChange: (text: string) => void
+}) {
   return (
     <div style={{ marginBottom: 8 }}>
-      <div className="b2-option-row" style={{ alignItems: "center" }}>
+      <div className="b2-option-row" style={{ alignItems: 'center' }}>
         <span className="b2-option-bullet">{bullet}</span>
         <input
           className="b2-input"
-          placeholder={`Option ${bullet}`}
-          value={option.text}
-          onChange={(e) => onChangeText(e.target.value)}
+          placeholder={`Answer ${bullet}`}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
         />
-        {!fu ? (
-          <button
-            type="button"
-            className="b2-btn b2-btn-ghost"
-            style={{ padding: "6px 10px", fontSize: 12 }}
-            onClick={onAddTree}
-            title="Ask a follow-up question when a candidate picks this answer"
-          >
-            <Plus className="w-3.5 h-3.5" /> Add follow-up
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="b2-btn-icon"
-            aria-label={open ? "Collapse follow-up" : "Expand follow-up"}
-            title={open ? "Collapse follow-up" : "Expand follow-up"}
-            onClick={() => setOpen(!open)}
-            style={{ background: "rgba(10, 42, 107, 0.06)", borderColor: "var(--launch-navy)", color: "var(--launch-navy)" }}
-          >
-            <span style={{ fontFamily: "var(--font-mono)" }}>{open ? "▾" : "▸"}</span>
-          </button>
-        )}
       </div>
-
-      {/* Per-option follow-up question body */}
-      {fu && open && (
-        <div style={{ marginTop: 6, marginLeft: 28, padding: "12px 14px", borderLeft: "2px solid var(--launch-navy)", background: "rgba(10, 42, 107, 0.03)", borderRadius: 6 }}>
-          <div className="b2-probe-head" style={{ marginBottom: 6 }}>
-            <span className="b2-label" style={{ margin: 0 }}>Follow-up if {bullet} is picked</span>
-            <button type="button" className="b2-btn-icon" aria-label="Remove follow-up" title="Remove this follow-up" onClick={onRemoveTree}>
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-          <input
-            className="b2-input"
-            placeholder="e.g. Why did you choose to delay the launch?"
-            value={fu.prompt}
-            onChange={(e) => onChangeTree({ ...fu, prompt: e.target.value })}
-          />
-          <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
-            {fu.choices.map((c, idx) => (
-              <div key={c.id}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span className={`b2-probe-tag b2-probe-tag-${c.leaning}`}>{c.leaning}</span>
-                  <input
-                    className="b2-input"
-                    placeholder={`${c.leaning} answer`}
-                    value={c.text}
-                    onChange={(e) => onChangeTree({
-                      ...fu,
-                      choices: fu.choices.map((cc, i) => i === idx ? { ...cc, text: e.target.value } : cc),
-                    })}
-                  />
-                </div>
-                <input
-                  className="b2-input"
-                  style={{ marginTop: 4, fontSize: 12, padding: "8px 12px", color: "var(--lq-ink-3)", fontStyle: "italic" }}
-                  placeholder="Reasoning note (optional — shown to the partner reviewing results)"
-                  value={c.reasoning || ""}
-                  onChange={(e) => onChangeTree({
-                    ...fu,
-                    choices: fu.choices.map((cc, i) => i === idx ? { ...cc, reasoning: e.target.value } : cc),
-                  })}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
