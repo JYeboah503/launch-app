@@ -2387,10 +2387,16 @@ function Step2Author({
           {decisions.length} question{decisions.length === 1 ? '' : 's'}
         </span>
       </div>
-      <p style={{ color: 'var(--lq-ink-2)', fontSize: 14, marginTop: 0, marginBottom: 16, maxWidth: '60ch' }}>
+      <p style={{ color: 'var(--lq-ink-2)', fontSize: 14, marginTop: 0, marginBottom: 12, maxWidth: '60ch' }}>
         The live moments inside the scenario. Each tests one capability —
         pick which capability, write the prompt, write the three options.
       </p>
+
+      {/* Friendly explainer — surfaces the "questions adapt to answers"
+          concept the moment the partner lands on this section, so the
+          follow-up buttons under each option don't feel like extra work.
+          Dismiss persists in localStorage so power users only see it once. */}
+      <DynamicQuestionsExplainer />
 
       {decisions.map((d: ScenarioDecision, idx: number) => {
         const cap = getCapability(d.capabilityKey)
@@ -2405,8 +2411,12 @@ function Step2Author({
                   onChange={(v) => updateDecision(d.id, { difficulty: v })}
                 />
                 {treeOpts > 0 && (
-                  <span className="b2-pill" style={{ background: 'rgba(10,42,107,0.06)', color: 'var(--launch-navy)' }}>
-                    Tree · {treeOpts}/{d.options.length} branches
+                  <span
+                    className="b2-pill"
+                    style={{ background: 'rgba(10,42,107,0.06)', color: 'var(--launch-navy)' }}
+                    title="This question adapts: some answers lead to a follow-up question"
+                  >
+                    Adapts · {treeOpts}/{d.options.length} with follow-up
                   </span>
                 )}
               </div>
@@ -2476,9 +2486,9 @@ function Step2Author({
               </div>
 
               <div>
-                <label className="b2-label">Options &amp; follow-up tree</label>
+                <label className="b2-label">Answers &amp; optional follow-up</label>
                 <p style={{ color: 'var(--lq-ink-3)', fontSize: 12, marginTop: 0, marginBottom: 8 }}>
-                  Each option can carry its OWN follow-up branch — a "why did you choose THIS?" probe with three leaning-tagged sub-choices (<strong style={{ color: 'var(--launch-teal-3)' }}>support</strong> · <strong style={{ color: 'var(--launch-navy)' }}>neutral</strong> · <strong style={{ color: '#7a0e2a' }}>challenge</strong>). Add branches selectively or to all options.
+                  Each answer can have its own follow-up question — a quick "why did you choose THIS?" probe with three sub-choices tagged as <strong style={{ color: 'var(--launch-teal-3)' }}>support</strong> · <strong style={{ color: 'var(--launch-navy)' }}>neutral</strong> · <strong style={{ color: '#7a0e2a' }}>challenge</strong>. Add a follow-up to one answer, all of them, or none — the question still works flat.
                 </p>
                 <div className="b2-options">
                   {d.options.map((o, oi) => (
@@ -2509,7 +2519,7 @@ function Step2Author({
                       options: d.options.map((opt, j) => ({ ...opt, followUp: EMPTY_OPTION_FOLLOWUP(j) })),
                     })}
                   >
-                    <Plus className="w-4 h-4" /> Add follow-up branches to all options
+                    <Plus className="w-4 h-4" /> Add a follow-up to every answer
                   </button>
                 )}
                 {treeOpts > 0 && treeOpts < d.options.length && (
@@ -2521,7 +2531,7 @@ function Step2Author({
                       options: d.options.map((opt, j) => opt.followUp ? opt : { ...opt, followUp: EMPTY_OPTION_FOLLOWUP(j) }),
                     })}
                   >
-                    <Plus className="w-4 h-4" /> Add branches to remaining options
+                    <Plus className="w-4 h-4" /> Add follow-up to the remaining answers
                   </button>
                 )}
               </div>
@@ -2708,6 +2718,153 @@ function Step3Review({
 
 
 /* -------------------------------------------------------- */
+/* DynamicQuestionsExplainer — friendly card explaining the   */
+/* "questions adapt to candidate answers" model so the per-   */
+/* option follow-up buttons don't read as random extra work.  */
+/* Dismissible; the dismissal sticks via localStorage.        */
+/* -------------------------------------------------------- */
+
+const EXPLAINER_DISMISS_KEY = 'launch.builder.dynamicQuestionsExplainer.dismissed.v1'
+
+function DynamicQuestionsExplainer() {
+  const [dismissed, setDismissed] = useState<boolean>(true)
+  // Hydrate on mount so the SSR pass doesn't leak the dismissed state.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try { setDismissed(window.localStorage.getItem(EXPLAINER_DISMISS_KEY) === '1') }
+    catch { /* ignore */ }
+  }, [])
+  const dismiss = () => {
+    setDismissed(true)
+    try { window.localStorage.setItem(EXPLAINER_DISMISS_KEY, '1') } catch { /* ignore */ }
+  }
+  if (dismissed) return null
+  return (
+    <div className="b2-dyn-card">
+      <div className="b2-dyn-head">
+        <div>
+          <div className="b2-dyn-eyebrow">How candidates experience this</div>
+          <h4 className="b2-dyn-title">Questions adapt as candidates answer</h4>
+        </div>
+        <button
+          type="button"
+          onClick={dismiss}
+          className="b2-dyn-close"
+          aria-label="Dismiss explainer"
+          title="Got it — don't show this again"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <p className="b2-dyn-body">
+        These are the questions every candidate starts with. Based on the answer
+        they pick, the next question can change &mdash; a strong answer can earn
+        a deeper probe, a weaker one opens up a different lens. You don&rsquo;t
+        have to wire this manually; just add a quick follow-up under any answer
+        and Launch handles the routing.
+      </p>
+      <ul className="b2-dyn-list">
+        <li>
+          <span className="b2-dyn-dot" style={{ background: 'var(--launch-teal-3)' }} />
+          <span>Launch scores every answer against research-backed benchmarks for the capability you picked.</span>
+        </li>
+        <li>
+          <span className="b2-dyn-dot" style={{ background: 'var(--launch-navy)' }} />
+          <span>On the shortlist side, you&rsquo;ll see exactly which answers each candidate chose and how they reasoned.</span>
+        </li>
+        <li>
+          <span className="b2-dyn-dot" style={{ background: 'var(--lq-ink-3)' }} />
+          <span>Adding follow-ups is optional &mdash; questions still work flat. Add them only when an answer deserves a probe.</span>
+        </li>
+      </ul>
+      <style>{`
+        .b2-dyn-card {
+          border: 1px solid var(--lq-line);
+          border-left: 3px solid var(--launch-navy);
+          background: linear-gradient(180deg, rgba(10, 42, 107, 0.04), rgba(10, 42, 107, 0.01));
+          border-radius: 12px;
+          padding: 18px 20px 16px;
+          margin-bottom: 18px;
+        }
+        .b2-dyn-head {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 10px;
+        }
+        .b2-dyn-eyebrow {
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          font-weight: 700;
+          color: var(--launch-navy);
+          margin-bottom: 4px;
+        }
+        .b2-dyn-title {
+          margin: 0;
+          font-family: var(--font-display);
+          font-weight: 500;
+          font-size: 17px;
+          letter-spacing: -0.012em;
+          color: var(--lq-ink);
+        }
+        .b2-dyn-close {
+          appearance: none;
+          background: transparent;
+          border: 1px solid transparent;
+          border-radius: 999px;
+          width: 28px; height: 28px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--lq-ink-3);
+          cursor: pointer;
+          flex-shrink: 0;
+          transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+        }
+        .b2-dyn-close:hover {
+          color: var(--launch-navy);
+          background: rgba(10, 42, 107, 0.06);
+          border-color: var(--lq-line);
+        }
+        .b2-dyn-body {
+          margin: 0 0 12px;
+          color: var(--lq-ink-2);
+          font-size: 13.5px;
+          line-height: 1.6;
+          max-width: 62ch;
+        }
+        .b2-dyn-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+        }
+        .b2-dyn-list li {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+          font-size: 13px;
+          line-height: 1.55;
+          color: var(--lq-ink-2);
+        }
+        .b2-dyn-dot {
+          display: inline-block;
+          width: 6px; height: 6px;
+          border-radius: 999px;
+          margin-top: 7px;
+          flex-shrink: 0;
+        }
+      `}</style>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------- */
 /* Inline helpers: difficulty pill + why-probe collapsible  */
 /* -------------------------------------------------------- */
 
@@ -2763,16 +2920,16 @@ function OptionRowWithTree({ bullet, option, optionIndex, onChangeText, onAddTre
             className="b2-btn b2-btn-ghost"
             style={{ padding: "6px 10px", fontSize: 12 }}
             onClick={onAddTree}
-            title="Add a follow-up branch under this option"
+            title="Ask a follow-up question when a candidate picks this answer"
           >
-            <Plus className="w-3.5 h-3.5" /> Branch
+            <Plus className="w-3.5 h-3.5" /> Add follow-up
           </button>
         ) : (
           <button
             type="button"
             className="b2-btn-icon"
-            aria-label={open ? "Collapse branch" : "Expand branch"}
-            title={open ? "Collapse branch" : "Expand branch"}
+            aria-label={open ? "Collapse follow-up" : "Expand follow-up"}
+            title={open ? "Collapse follow-up" : "Expand follow-up"}
             onClick={() => setOpen(!open)}
             style={{ background: "rgba(10, 42, 107, 0.06)", borderColor: "var(--launch-navy)", color: "var(--launch-navy)" }}
           >
@@ -2781,12 +2938,12 @@ function OptionRowWithTree({ bullet, option, optionIndex, onChangeText, onAddTre
         )}
       </div>
 
-      {/* Per-option follow-up tree body */}
+      {/* Per-option follow-up question body */}
       {fu && open && (
         <div style={{ marginTop: 6, marginLeft: 28, padding: "12px 14px", borderLeft: "2px solid var(--launch-navy)", background: "rgba(10, 42, 107, 0.03)", borderRadius: 6 }}>
           <div className="b2-probe-head" style={{ marginBottom: 6 }}>
             <span className="b2-label" style={{ margin: 0 }}>Follow-up if {bullet} is picked</span>
-            <button type="button" className="b2-btn-icon" aria-label="Remove branch" title="Remove this branch" onClick={onRemoveTree}>
+            <button type="button" className="b2-btn-icon" aria-label="Remove follow-up" title="Remove this follow-up" onClick={onRemoveTree}>
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
