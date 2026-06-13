@@ -126,6 +126,17 @@ export default function Page() {
     setSubmissions(listSubmissions())
   }, [corporateNav, isPartnerLoggedIn])
 
+  // Scroll to top on every meaningful navigation change. Without this, the
+  // partner clicks "Active roles" from mid-Overview and lands halfway down
+  // the new section because the window kept its previous scroll position.
+  // Covers sidebar nav, drill-in to a role detail, drill-in to a candidate,
+  // and capability-detail surfaces. Uses 'auto' (instant) rather than
+  // 'smooth' — a dashboard nav should feel like a page change, not a slide.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [corporateNav, selectedRoleView, selectedStudentId, selectedCapability])
+
   // Scenario builder: ready-to-go entry. Every entry point (sidebar, CTAs,
   // "+ New scenario") opens the takeover directly via `openBuilder`. No
   // useEffect indirection — that was racing with onClose + the conditional
