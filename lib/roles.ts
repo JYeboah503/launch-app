@@ -8,10 +8,11 @@
 /** Who is using the platform. A student/candidate is a "player". */
 export type UserRole = 'player' | 'teacher' | 'corporate'
 
-/** Top-level app surface the user is currently in. */
+/** Top-level app surface the user is currently in.
+ *  The hero offers three direct doors — Scenario, Partner access, Educator
+ *  access — each routing straight to its surface. No intermediate selector. */
 export type AppMode =
   | 'landing'
-  | 'manage-select'
   | 'play'
   | 'teacher'
   | 'corporate'

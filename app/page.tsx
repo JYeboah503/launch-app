@@ -42,9 +42,10 @@ import { AnimatedCounter, Sparkline } from '@/components/motion'
 
 export default function Page() {
   const router = useRouter()
-  // Two-door entry: 'landing' shows Play/Manage; 'manage-select' splits
-  // Teacher vs Corporate. The legacy isStudent/isPartner flags still gate the
-  // existing dashboards — appMode is a thin layer on top (see plan Section A).
+  // Three-door entry: 'landing' shows Scenario / Partner access / Educator
+  // access. Each door routes directly to its surface — there is no
+  // intermediate selector. The legacy isStudent/isPartner flags still gate
+  // the existing dashboards; appMode is a thin layer on top.
   const [appMode, setAppMode] = useState<AppMode>('landing')
   const [authView, setAuthView] = useState<'none' | 'student' | 'partner'>('none')
   const [isPartnerLoggedIn, setIsPartnerLoggedIn] = useState(false)
@@ -316,20 +317,6 @@ export default function Page() {
           setStudentName('')
           setAppMode('landing')
         }}
-      />
-    )
-  }
-
-  // Manage door — pick Teacher vs Corporate (no real auth)
-  if (appMode === 'manage-select') {
-    return (
-      <ManageSelect
-        onTeacher={() => setAppMode('teacher')}
-        onCorporate={() => {
-          setIsPartnerLoggedIn(true)
-          setAppMode('corporate')
-        }}
-        onBack={() => setAppMode('landing')}
       />
     )
   }
@@ -1643,174 +1630,35 @@ export default function Page() {
     )
   }
 
-  // Landing page view — single editorial scroll. Two doors:
-  //   Play  → student/candidate flow
-  //   Manage → Teacher vs Corporate selector
-  const enterPlay = () => {
+  // Landing page view — single editorial scroll. Three direct doors:
+  //   Scenario        → student/candidate play flow
+  //   Partner access  → corporate dashboard (no real auth in this front-end build)
+  //   Educator access → teacher dashboard stub
+  const enterScenario = () => {
     setStudentName('Student')
     setIsStudentLoggedIn(true)
     setAppMode('play')
   }
-  const enterManage = () => setAppMode('manage-select')
+  const enterPartner = () => {
+    setIsPartnerLoggedIn(true)
+    setAppMode('corporate')
+  }
+  const enterEducator = () => setAppMode('teacher')
 
   return (
     <main className="min-h-screen bg-background">
       <HeroSection
-        onStudentClick={enterPlay}
-        onPartnerClick={enterManage}
+        onScenarioClick={enterScenario}
+        onPartnerClick={enterPartner}
+        onEducatorClick={enterEducator}
       />
       <ResultsSection />
       <CapabilitiesSection />
       <CTASection
-        onPrimaryClick={enterPlay}
-        onPartnerClick={enterManage}
+        onPrimaryClick={enterScenario}
+        onPartnerClick={enterPartner}
+        onEducatorClick={enterEducator}
       />
-    </main>
-  )
-}
-
-/**
- * Manage door — lightweight Teacher vs Corporate selector. No real auth;
- * this just routes to the right management surface. (Section A foundation.)
- */
-function ManageSelect({
-  onTeacher,
-  onCorporate,
-  onBack,
-}: {
-  onTeacher: () => void
-  onCorporate: () => void
-  onBack: () => void
-}) {
-  return (
-    <main
-      className="min-h-screen flex flex-col items-center justify-center px-6"
-      style={{
-        background: 'linear-gradient(180deg, #07091c 0%, #0e1737 50%, #182046 100%)',
-        color: 'var(--lq-cream)',
-        position: 'relative',
-      }}
-    >
-      {/* LAUNCH wordmark — cream on cinema navy, top-left like the rest of the dark surfaces */}
-      <div className="absolute top-6 left-6 sm:top-8 sm:left-10">
-        <LaunchWordmark height={40} tone="light" ariaLabel="LAUNCH" />
-      </div>
-      <div className="w-full max-w-3xl text-center">
-        <div className="editorial-mono mb-4" style={{ color: 'rgba(146, 184, 255, 0.7)' }}>
-          Manage
-        </div>
-        <h1
-          className="mb-3"
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 300,
-            fontSize: 'clamp(32px, 5vw, 56px)',
-            letterSpacing: '-0.028em',
-            lineHeight: 1.05,
-            color: 'var(--lq-cream)',
-          }}
-        >
-          How will you be using Launch?
-        </h1>
-        <p
-          className="mb-12 mx-auto"
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontStyle: 'italic',
-            fontSize: 'clamp(16px, 1.6vw, 20px)',
-            color: 'rgba(246, 242, 234, 0.7)',
-            maxWidth: '46ch',
-          }}
-        >
-          Pick the space that fits — we&rsquo;ll tailor the dashboard and the
-          experience your people see.
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <button type="button" onClick={onTeacher} className="manage-card group">
-            <div className="manage-card-kicker">For schools</div>
-            <div className="manage-card-title">Teacher</div>
-            <div className="manage-card-body">
-              Create a classroom, set scenarios, and follow only your
-              students&rsquo; progress.
-            </div>
-            <span className="manage-card-arrow" aria-hidden>→</span>
-          </button>
-
-          <button type="button" onClick={onCorporate} className="manage-card group">
-            <div className="manage-card-kicker">For companies</div>
-            <div className="manage-card-title">Corporate</div>
-            <div className="manage-card-body">
-              Build role scenarios, surface real capability, and shortlist
-              candidates faster.
-            </div>
-            <span className="manage-card-arrow" aria-hidden>→</span>
-          </button>
-        </div>
-
-        <button
-          type="button"
-          onClick={onBack}
-          className="editorial-mono mt-10 inline-flex items-center gap-2 transition-colors"
-          style={{ color: 'rgba(246, 242, 234, 0.55)' }}
-        >
-          ← Back to home
-        </button>
-      </div>
-
-      <style>{`
-        .manage-card {
-          position: relative;
-          text-align: left;
-          padding: 28px 28px 30px;
-          border-radius: 20px;
-          background: rgba(246, 242, 234, 0.05);
-          border: 1px solid rgba(146, 184, 255, 0.18);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          cursor: pointer;
-          transition: transform 220ms cubic-bezier(0.2,0.7,0.2,1), background 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
-        }
-        .manage-card:hover {
-          transform: translateY(-2px);
-          background: rgba(246, 242, 234, 0.09);
-          border-color: rgba(146, 184, 255, 0.5);
-          box-shadow: 0 16px 40px rgba(10, 42, 107, 0.35);
-        }
-        .manage-card-kicker {
-          font-family: var(--font-mono);
-          font-size: 11px;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
-          color: rgba(146, 184, 255, 0.7);
-          margin-bottom: 10px;
-        }
-        .manage-card-title {
-          font-family: var(--font-display);
-          font-weight: 500;
-          font-size: clamp(26px, 3vw, 34px);
-          letter-spacing: -0.02em;
-          color: var(--lq-cream);
-          margin-bottom: 10px;
-        }
-        .manage-card-body {
-          font-family: var(--font-display);
-          font-style: italic;
-          font-size: 15px;
-          line-height: 1.5;
-          color: rgba(246, 242, 234, 0.66);
-          max-width: 32ch;
-        }
-        .manage-card-arrow {
-          position: absolute;
-          top: 26px;
-          right: 26px;
-          font-size: 20px;
-          color: rgba(146, 184, 255, 0.7);
-          transition: transform 220ms cubic-bezier(0.2,0.7,0.2,1);
-        }
-        .manage-card:hover .manage-card-arrow { transform: translateX(4px); }
-      `}</style>
     </main>
   )
 }

@@ -5,8 +5,12 @@ import { ScrollIndicator } from '@/components/motion'
 import { LaunchWordmark } from '@/components/launch-wordmark'
 
 interface HeroSectionProps {
-  onStudentClick: () => void
+  /** "Scenario" door — student / candidate play flow. */
+  onScenarioClick: () => void
+  /** "Partner access" door — corporate dashboard. */
   onPartnerClick: () => void
+  /** "Educator access" door — teacher dashboard. */
+  onEducatorClick: () => void
 }
 
 /**
@@ -27,9 +31,11 @@ interface HeroSectionProps {
  *   - LAUNCH wordmark (custom letterforms) in cream
  *   - Display headline "Launch talent. See how someone actually thinks."
  *   - Italic Newsreader lede about reading the texture of decisions
- *   - Two bold pills — Student (lime) + Partner (cream-edged glass)
+ *   - Three bold pills — Scenario (lime, primary) + Partner access (cream-edged glass)
+ *     + Educator access (cream-edged glass). Each routes directly to its
+ *     surface; there is no intermediate Manage selector.
  */
-export function HeroSection({ onStudentClick, onPartnerClick }: HeroSectionProps) {
+export function HeroSection({ onScenarioClick, onPartnerClick, onEducatorClick }: HeroSectionProps) {
   const [mounted, setMounted] = useState(false)
   const [logoH, setLogoH] = useState(52)
   useEffect(() => {
@@ -140,17 +146,24 @@ export function HeroSection({ onStudentClick, onPartnerClick }: HeroSectionProps
         >
           <button
             type="button"
-            onClick={onStudentClick}
+            onClick={onScenarioClick}
             className="hero-pill hero-pill-primary self-start"
           >
-            Play
+            Scenario
           </button>
           <button
             type="button"
             onClick={onPartnerClick}
             className="hero-pill hero-pill-secondary self-start"
           >
-            Manage
+            Partner access
+          </button>
+          <button
+            type="button"
+            onClick={onEducatorClick}
+            className="hero-pill hero-pill-secondary self-start"
+          >
+            Educator access
           </button>
         </div>
       </div>

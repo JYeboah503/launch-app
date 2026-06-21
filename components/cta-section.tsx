@@ -3,8 +3,12 @@
 import { RevealOnScroll } from '@/components/motion'
 
 interface CTASectionProps {
+  /** "Scenario" CTA — student/candidate play flow. */
   onPrimaryClick?: () => void
+  /** "Partner access" CTA — corporate dashboard. */
   onPartnerClick?: () => void
+  /** "Educator access" CTA — teacher dashboard. */
+  onEducatorClick?: () => void
 }
 
 /**
@@ -15,7 +19,7 @@ interface CTASectionProps {
  * and the two CTAs the visitor came to find. Echoes the hero language so the
  * page feels like one breath, not five sections.
  */
-export function CTASection({ onPrimaryClick, onPartnerClick }: CTASectionProps = {}) {
+export function CTASection({ onPrimaryClick, onPartnerClick, onEducatorClick }: CTASectionProps = {}) {
   return (
     <section
       id="beat-03"
@@ -82,7 +86,7 @@ export function CTASection({ onPrimaryClick, onPartnerClick }: CTASectionProps =
                 onClick={onPrimaryClick}
                 className="cta-pill cta-pill-primary"
               >
-                Play
+                Scenario
               </button>
             )}
             {onPartnerClick && (
@@ -91,7 +95,16 @@ export function CTASection({ onPrimaryClick, onPartnerClick }: CTASectionProps =
                 onClick={onPartnerClick}
                 className="cta-pill cta-pill-secondary"
               >
-                Manage
+                Partner access
+              </button>
+            )}
+            {onEducatorClick && (
+              <button
+                type="button"
+                onClick={onEducatorClick}
+                className="cta-pill cta-pill-secondary"
+              >
+                Educator access
               </button>
             )}
           </div>
