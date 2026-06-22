@@ -1340,25 +1340,13 @@ export default function Page() {
                   )
                 })}
                 <span className="sd-sep" />
-                {/* Capability chips */}
-                {[
-                  'Problem Solving', 'Leadership & Influence', 'Collaboration',
-                  'Reasoning & Critical Thinking', 'Adaptability & Cognitive Flexibility',
-                  'Execution & Ownership', 'Integrity & Ethics',
-                ].map((cap) => {
-                  const active = selectedTool?.tool === 'topByCapability' && selectedTool.option === cap
-                  return (
-                    <button
-                      key={cap}
-                      type="button"
-                      onClick={() => setSelectedTool(active ? null : { tool: 'topByCapability', option: cap })}
-                      className={`sd-chip ${active ? 'is-on' : ''}`}
-                      title={`Surface candidates strong in ${cap}`}
-                    >
-                      {cap.split(/\s+/)[0]}
-                    </button>
-                  )
-                })}
+                {/* Capabilities dropdown — single button that opens a list of
+                    the 10 Launch capabilities. Picking one ranks the
+                    standouts by that capability's score. */}
+                <CapabilityDropdown
+                  selected={selectedTool?.tool === 'topByCapability' ? selectedTool.option : null}
+                  onSelect={(cap) => setSelectedTool(cap ? { tool: 'topByCapability', option: cap } : null)}
+                />
                 {selectedTool && (
                   <button
                     type="button"
@@ -1901,4 +1889,144 @@ function DeleteScenarioModal({
       </div>
     </div>
   )
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   CapabilityDropdown — pill button + popover menu of the 10 Launch
+   capabilities. Lives on the Standouts chip strip in place of the
+   inline capability chips. One selection at a time; clicking the
+   active row again clears it. The selection is owned by the parent
+   (selectedTool state), so this component is purely presentational.
+   ─────────────────────────────────────────────────────────────────── */
+const LAUNCH_CAPABILITIES_10 = [
+  'Judgement & Decision-Making',
+  'Reasoning & Critical Thinking',
+  'Problem Solving',
+  'Leadership & Influence',
+  'Adaptability & Cognitive Flexibility',
+  'Emotional Intelligence',
+  'Execution & Ownership',
+  'Integrity & Ethics',
+  'Collaboration',
+  'Situational Awareness & Systems Thinking',
+]
+
+function CapabilityDropdown({
+  selected,
+  onSelect,
+}: {
+  selected: string | null
+  onSelect: (cap: string | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', handler)
+    return () => window.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const label = selected ? `Capability · ${shortenCap(selected)}` : 'Capabilities'
+  const active = !!selected
+
+  return (
+    <div ref={ref} className="cap-dd">
+      <button
+        type="button"
+        className={`sd-chip ${active ? 'is-on' : ''}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
+        {label} <span className="cap-dd-caret">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <div className="cap-dd-menu" role="listbox">
+          {LAUNCH_CAPABILITIES_10.map((cap) => {
+            const isSelected = cap === selected
+            return (
+              <button
+                key={cap}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                className={`cap-dd-item ${isSelected ? 'is-selected' : ''}`}
+                onClick={() => {
+                  // Picking the current row clears it; otherwise replace.
+                  onSelect(isSelected ? null : cap)
+                  setOpen(false)
+                }}
+              >
+                <span className="cap-dd-item-dot" aria-hidden />
+                <span>{cap}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <style>{`
+        .cap-dd { position: relative; display: inline-block; }
+        .cap-dd-caret {
+          font-family: var(--font-mono);
+          font-size: 10px;
+          margin-left: 4px;
+          opacity: 0.6;
+        }
+        .cap-dd-menu {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          z-index: 30;
+          min-width: 280px;
+          background: #fff;
+          border: 1px solid var(--lq-line);
+          border-radius: 12px;
+          box-shadow: 0 18px 36px -16px rgba(10, 42, 107, 0.24);
+          padding: 6px;
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+        }
+        .cap-dd-item {
+          appearance: none;
+          background: transparent;
+          border: none;
+          text-align: left;
+          padding: 9px 12px;
+          border-radius: 8px;
+          font-family: var(--font-body);
+          font-size: 13px;
+          color: var(--lq-ink);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          transition: background 120ms ease;
+        }
+        .cap-dd-item:hover { background: rgba(10, 42, 107, 0.05); }
+        .cap-dd-item.is-selected {
+          background: rgba(10, 42, 107, 0.10);
+          color: var(--launch-navy);
+          font-weight: 600;
+        }
+        .cap-dd-item-dot {
+          width: 6px; height: 6px;
+          border-radius: 999px;
+          background: var(--lq-line-2);
+          flex-shrink: 0;
+        }
+        .cap-dd-item.is-selected .cap-dd-item-dot { background: var(--launch-navy); }
+      `}</style>
+    </div>
+  )
+}
+
+/** Shorten a capability label for the button face — drops the
+ *  ampersand-suffix so it fits on a single line. */
+function shortenCap(name: string): string {
+  const cut = name.indexOf(' & ')
+  return cut > 0 ? name.slice(0, cut) : name
 }
