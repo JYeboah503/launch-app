@@ -558,6 +558,7 @@ export default function Page() {
                 students={roleApplicants}
                 filters={applicantFilters}
                 setFilters={setApplicantFilters}
+                scenarioCapabilities={selectedRole?.skills}
               />
             </section>
 
