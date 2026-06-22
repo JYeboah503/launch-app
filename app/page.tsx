@@ -63,7 +63,14 @@ export default function Page() {
   const [showBuilderV2, setShowBuilderV2] = useState(false)
   const [curatedList, setCuratedList] = useState<{ students: Student[], name: string } | null>(null)
   const [createdChallenges, setCreatedChallenges] = useState<any[]>([])
-  const [selectedTool, setSelectedTool] = useState<{ tool: string; option: string } | null>(null)
+  // Standouts filter — Top-N and capability work INDEPENDENTLY and COMPOSE.
+  // Partner can pick "Top 10" alone, "Problem Solving" alone, or combine
+  // them as "Top 10 by Problem Solving". Each chip toggles its own state;
+  // the filter pipeline below applies whichever are set. (Named with the
+  // "Standout" prefix to avoid colliding with the capability-detail-view
+  // `selectedCapability` state higher up in this component.)
+  const [selectedTopN, setSelectedTopN] = useState<number | null>(null)
+  const [selectedStandoutCap, setSelectedStandoutCap] = useState<string | null>(null)
   const [activeRoles, setActiveRoles] = useState<any[]>([])
   const [selectedRoleView, setSelectedRoleView] = useState<string | null>(null)
   /** Which role is currently being asked "delete this?" Used to gate the
@@ -90,9 +97,8 @@ export default function Page() {
     setActiveRoles((prev) => prev.filter((r) => r.id !== roleToDelete.id))
     setRoleToDelete(null)
   }
-  const [roleSkillFilters, setRoleSkillFilters] = useState<Record<string, boolean>>({})
-  const [selectedRoleSkill, setSelectedRoleSkill] = useState<string | null>(null)
-  const [selectedRoleSkillTop, setSelectedRoleSkillTop] = useState<number>(10)
+  // Per-skill picker + top-N selector state removed — those controls
+  // moved into the RoleApplicantFilters strip as the Capabilities tab.
   /** Filter state for the role-detail applicant pipeline. Reset to defaults
    *  whenever the partner enters a different role. */
   const [applicantFilters, setApplicantFilters] = useState<ApplicantFilters>(DEFAULT_FILTERS)
@@ -180,39 +186,23 @@ export default function Page() {
   // Filter students based on selections
   const filteredStudents: Student[] = useMemo(() => {
     let students = [...MOCK_STUDENTS]
-
-    // Apply tool-based filtering
-    if (selectedTool) {
-      const { tool, option } = selectedTool
-      
-      if (tool === 'topCandidates') {
-        // Extract number from option like "Top 10" -> 10
-        const count = parseInt(option.match(/\d+/)?.[0] || '10')
-        students = students.slice(0, count)
-      } else if (tool === 'topByCapability') {
-        // Filter to candidates who have this capability, then rank by their
-        // level on it. Property is `level`, not `score` — the previous code
-        // read .score which is undefined on the topCapabilities entry, so
-        // the sort was effectively a no-op (every candidate scored 0).
-        students = students.filter((student) =>
-          student.topCapabilities.some((cap) => cap.name === option)
-        ).sort((a, b) => {
-          const capA = a.topCapabilities.find((c) => c.name === option)?.level || 0
-          const capB = b.topCapabilities.find((c) => c.name === option)?.level || 0
-          return capB - capA
+    // 1. Capability filter — narrow to candidates who have this capability,
+    //    sorted by their level on it (desc).
+    if (selectedStandoutCap) {
+      students = students
+        .filter((s) => s.topCapabilities.some((c) => c.name === selectedStandoutCap))
+        .sort((a, b) => {
+          const aL = a.topCapabilities.find((c) => c.name === selectedStandoutCap)?.level || 0
+          const bL = b.topCapabilities.find((c) => c.name === selectedStandoutCap)?.level || 0
+          return bL - aL
         })
-      } else if (tool === 'topByIndustry') {
-        // Students don't carry an `industry` field on the type, so the
-        // industry chip filter falls back to matching against the
-        // candidate's listed interests.
-        students = students.filter((student) =>
-          student.interests?.includes(option)
-        )
-      }
     }
-
+    // 2. Top-N — slice the (possibly capability-ranked) list to the chosen
+    //    count. Composes naturally: "Top 10 by Problem Solving" = capability
+    //    filter + sort, then take the first 10.
+    if (selectedTopN !== null) students = students.slice(0, selectedTopN)
     return students
-  }, [selectedTool])
+  }, [selectedTopN, selectedStandoutCap])
 
   // Get selected student profile.
   //   1) Static catalogue (MOCK_STUDENTS top-3 — Sarah / James / Maya)
@@ -479,15 +469,7 @@ export default function Page() {
       const roleApplicants = roleSubmissions.length > 0
         ? submissionsToStudents(roleSubmissions, selectedRole?.skills)
         : MOCK_STUDENTS  // fallback for sample data / quick-play scenarios
-      
-      // Initialize role skill filters on first load
-      if (selectedRole?.skills && Object.keys(roleSkillFilters).length === 0) {
-        setRoleSkillFilters(selectedRole.skills.reduce((acc: Record<string, boolean>, skill: string) => ({
-          ...acc,
-          [skill]: true
-        }), {}))
-      }
-      
+
       return (
         <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
           <PartnerLogoTag />
@@ -495,10 +477,7 @@ export default function Page() {
             eyebrow="· corporate · role"
             actions={
               <button
-                onClick={() => {
-                  setSelectedRoleView(null)
-                  setRoleSkillFilters({})
-                }}
+                onClick={() => setSelectedRoleView(null)}
                 className="corp-btn corp-btn-ghost"
               >
                 ← Back to roles
@@ -558,6 +537,7 @@ export default function Page() {
                 students={roleApplicants}
                 filters={applicantFilters}
                 setFilters={setApplicantFilters}
+                scenarioCapabilities={selectedRole?.skills}
               />
             </section>
 
@@ -636,73 +616,6 @@ export default function Page() {
               })()}
             </section>
 
-            {/* Role Standouts Section with Skill Filters */}
-            <section className="py-4 px-4">
-              <div className="w-full max-w-6xl mx-auto">
-                {/* Skill Filters with Top N Dropdowns */}
-                {selectedRole?.skills && selectedRole.skills.length > 0 && (
-                  <div className="corp-card mb-8 p-6">
-                    <p className="editorial-mono mb-4" style={{ color: 'var(--lq-ink-3)' }}>Assess skill</p>
-                    <div className="space-y-3">
-                      {selectedRole.skills.map((skill: string) => (
-                        <div key={skill} className="flex items-center gap-4">
-                          <button
-                            onClick={() => {
-                              setSelectedRoleSkill(selectedRoleSkill === skill ? null : skill)
-                              setSelectedRoleSkillTop(10)
-                            }}
-                            className="px-4 py-2 rounded-lg font-medium transition-all text-sm flex-1 text-left"
-                            style={
-                              selectedRoleSkill === skill
-                                ? { background: 'var(--launch-navy)', color: 'var(--lq-cream)', border: '1px solid var(--launch-navy)' }
-                                : { background: '#fff', color: 'var(--lq-ink-2)', border: '1px solid var(--lq-line-2)' }
-                            }
-                          >
-                            {skill}
-                          </button>
-                          {selectedRoleSkill === skill && (
-                            <select
-                              value={selectedRoleSkillTop}
-                              onChange={(e) => setSelectedRoleSkillTop(parseInt(e.target.value))}
-                              className="px-3 py-2 rounded-lg text-sm font-medium"
-                              style={{ border: '1px solid var(--lq-line-2)', background: '#fff', color: 'var(--lq-ink)' }}
-                            >
-                              <option value={10}>Top 10</option>
-                              <option value={20}>Top 20</option>
-                              <option value={30}>Top 30</option>
-                              <option value={50}>Top 50</option>
-                            </select>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Role Standouts Grid - filtered by skill and top N */}
-                {selectedRoleSkill && selectedRole?.skills ? (
-                  <div>
-                    <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-lg" style={{ fontFamily: 'var(--font-display)', fontWeight: 500, color: 'var(--lq-ink)' }}>Top Performers</h3>
-                      <button
-                        onClick={() => router.push(`/role-applicants/${selectedRoleView}`)}
-                        className="corp-btn corp-btn-ghost"
-                      >
-                        View All →
-                      </button>
-                    </div>
-                    <LaunchStandouts
-                      students={applyApplicantFilters(roleApplicants, applicantFilters).slice(0, selectedRoleSkillTop)}
-                      onSelectStudent={setSelectedStudentId}
-                    />
-                  </div>
-                ) : (
-                  <div className="corp-card p-12 text-center">
-                    <p style={{ color: 'var(--lq-ink-3)' }}>Select a skill to view top performers for this role.</p>
-                  </div>
-                )}
-              </div>
-            </section>
           </div>
         </main>
       )
@@ -1325,14 +1238,14 @@ export default function Page() {
             <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-2">
               <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>Narrow standouts by</div>
               <div className="flex flex-wrap items-center gap-2">
-                {/* Top-N chips */}
+                {/* Top-N chips — independent toggle, composes with capability */}
                 {[10, 25, 50, 100].map((n) => {
-                  const active = selectedTool?.tool === 'topCandidates' && selectedTool.option === `Top ${n}`
+                  const active = selectedTopN === n
                   return (
                     <button
                       key={`top-${n}`}
                       type="button"
-                      onClick={() => setSelectedTool(active ? null : { tool: 'topCandidates', option: `Top ${n}` })}
+                      onClick={() => setSelectedTopN(active ? null : n)}
                       className={`sd-chip ${active ? 'is-on' : ''}`}
                     >
                       Top {n}
@@ -1340,17 +1253,15 @@ export default function Page() {
                   )
                 })}
                 <span className="sd-sep" />
-                {/* Capabilities dropdown — single button that opens a list of
-                    the 10 Launch capabilities. Picking one ranks the
-                    standouts by that capability's score. */}
+                {/* Capabilities dropdown — independent toggle, composes with Top-N */}
                 <CapabilityDropdown
-                  selected={selectedTool?.tool === 'topByCapability' ? selectedTool.option : null}
-                  onSelect={(cap) => setSelectedTool(cap ? { tool: 'topByCapability', option: cap } : null)}
+                  selected={selectedStandoutCap}
+                  onSelect={setSelectedStandoutCap}
                 />
-                {selectedTool && (
+                {(selectedTopN !== null || selectedStandoutCap) && (
                   <button
                     type="button"
-                    onClick={() => setSelectedTool(null)}
+                    onClick={() => { setSelectedTopN(null); setSelectedStandoutCap(null) }}
                     className="sd-clear"
                   >
                     Clear ×
@@ -1403,8 +1314,9 @@ export default function Page() {
             </div>
           )}
 
-          {/* Filter summary banner — kept for compat with the chip strip */}
-          {selectedTool && corporateNav === 'standouts' && (
+          {/* Filter summary banner — reflects whichever of Top-N / Capability
+              is active. Both can be set at once ("Top 10 by Problem Solving"). */}
+          {(selectedTopN !== null || selectedStandoutCap) && corporateNav === 'standouts' && (
             <div className="max-w-7xl mx-auto px-4 sm:px-8">
               <div
                 className="rounded-md px-4 py-3 mb-4 flex items-center justify-between flex-wrap gap-2"
@@ -1419,14 +1331,14 @@ export default function Page() {
                     {filteredStudents.length} candidates
                   </span>
                   <span className="ml-2" style={{ color: 'var(--lq-ink-2)' }}>
-                    {selectedTool.tool === 'topCandidates' && ` matching top ${selectedTool.option.match(/\d+/)?.[0]}`}
-                    {selectedTool.tool === 'topByCapability' && ` with ${selectedTool.option}`}
-                    {selectedTool.tool === 'topByIndustry' && ` in ${selectedTool.option}`}
+                    {selectedTopN !== null && selectedStandoutCap && ` — top ${selectedTopN} by ${selectedStandoutCap}`}
+                    {selectedTopN !== null && !selectedStandoutCap && ` — top ${selectedTopN}`}
+                    {selectedTopN === null && selectedStandoutCap && ` — ranked by ${selectedStandoutCap}`}
                   </span>
                 </p>
                 <button
                   type="button"
-                  onClick={() => setSelectedTool(null)}
+                  onClick={() => { setSelectedTopN(null); setSelectedStandoutCap(null) }}
                   className="editorial-mono"
                   style={{ color: 'var(--launch-navy)' }}
                 >
