@@ -25,23 +25,6 @@
 import { useState, useMemo } from 'react'
 import type { Student } from '@/components/student-list'
 
-/** The 10 Launch capability names — used as the floor for the Capabilities
- *  filter tab so it always renders even when the scenario didn't declare
- *  any specific skills and the candidate pool is small / empty. Kept in
- *  sync with CAPABILITIES in lib/builderData.ts. */
-const LAUNCH_CAPABILITY_NAMES = [
-  'Judgement & Decision-Making',
-  'Reasoning & Critical Thinking',
-  'Problem Solving',
-  'Leadership & Influence',
-  'Adaptability & Cognitive Flexibility',
-  'Emotional Intelligence',
-  'Execution & Ownership',
-  'Integrity & Ethics',
-  'Collaboration',
-  'Situational Awareness & Systems Thinking',
-]
-
 const SALARY_LABELS: Record<string, string> = {
   'under-60': '< $60k',
   '60-75': '$60–75k',
@@ -86,12 +69,6 @@ export interface ApplicantFilters {
   prequalStatus: 'all' | 'passed' | 'flagged'
   /** Minimum overall scenario score. */
   minOverall: number
-  /** Per-capability minimum-score gate. Keys are Launch capability names
-   *  (e.g. "Problem Solving"); values are 0-100 thresholds. A candidate is
-   *  dropped if their level on a gated capability is below the threshold,
-   *  OR if they don't have that capability scored at all. Capabilities not
-   *  in the map are unfiltered. */
-  minByCapability: Record<string, number>
   /** Free-text keyword (matches name / university / degree). */
   keyword: string
 }
@@ -107,7 +84,6 @@ export const DEFAULT_FILTERS: ApplicantFilters = {
   relocate: [],
   prequalStatus: 'all',
   minOverall: 0,
-  minByCapability: {},
   keyword: '',
 }
 
@@ -128,15 +104,6 @@ export function applyApplicantFilters(students: Student[], f: ApplicantFilters):
     if (f.relocate.length > 0 && (!s.willingRelocate || !f.relocate.includes(s.willingRelocate))) return false
     if (f.prequalStatus !== 'all' && s.prequalStatus && s.prequalStatus !== f.prequalStatus) return false
     if (s.overallScore < f.minOverall) return false
-    // Per-capability min-score gates. Defensive on the map so old saved
-    // views without the field still load without crashing the page.
-    const capMins = f.minByCapability || {}
-    for (const capName of Object.keys(capMins)) {
-      const min = capMins[capName]
-      if (!min || min <= 0) continue
-      const hit = s.topCapabilities.find((c) => c.name === capName)
-      if (!hit || hit.level < min) return false
-    }
     if (kw) {
       const hay = `${s.name} ${s.degree || ''} ${s.university || ''}`.toLowerCase()
       if (!hay.includes(kw)) return false
@@ -152,13 +119,9 @@ interface Props {
   topDegrees?: number
   filters: ApplicantFilters
   setFilters: (f: ApplicantFilters) => void
-  /** Names of the capabilities this scenario was authored to measure
-   *  (read from role.skills). Drives the Capabilities tab — only these
-   *  axes get a slider because they're the only ones with real data. */
-  scenarioCapabilities?: string[]
 }
 
-export function RoleApplicantFilters({ students, filters, setFilters, topDegrees = 12, scenarioCapabilities }: Props) {
+export function RoleApplicantFilters({ students, filters, setFilters, topDegrees = 12 }: Props) {
   const totalCount = students.length
   const filteredCount = useMemo(() => applyApplicantFilters(students, filters).length, [students, filters])
 
@@ -177,27 +140,7 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
   const minGradYear = Math.min(...students.map((s) => s.graduationYear ?? 2099), 2099)
   const maxGradYear = Math.max(...students.map((s) => s.graduationYear ?? 0), 0)
 
-  const [expanded, setExpanded] = useState<'profile' | 'eligibility' | 'looking' | 'capabilities' | null>(null)
-
-  // Capabilities to show in the Capabilities tab. Priority:
-  //   1. The scenario's explicitly authored skills (the partner narrowed in)
-  //   2. The union of capabilities scored on the candidates in this pool
-  //   3. The full 10 Launch axes as a hard floor
-  // The floor is what guarantees the tab always renders — older scenarios
-  // / Quick-Play roles don't set `skills`, but candidates are still scored
-  // against all 10 Launch axes so the filter is still meaningful.
-  const capabilityList = useMemo(() => {
-    if (scenarioCapabilities && scenarioCapabilities.length > 0) return scenarioCapabilities
-    const seen = new Set<string>()
-    for (const s of students) for (const c of s.topCapabilities) seen.add(c.name)
-    if (seen.size > 0) return Array.from(seen).sort()
-    return LAUNCH_CAPABILITY_NAMES
-  }, [scenarioCapabilities, students])
-
-  // Active capability gates — only the ones the partner has actually
-  // pushed above 0 count toward the badge.
-  const activeCapCount = Object.values(filters.minByCapability || {})
-    .filter((v) => v > 0).length
+  const [expanded, setExpanded] = useState<'profile' | 'eligibility' | 'looking' | null>(null)
 
   const patch = (p: Partial<ApplicantFilters>) => setFilters({ ...filters, ...p })
   const toggleInList = (list: string[], v: string) =>
@@ -227,8 +170,7 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
     (filters.prequalStatus !== 'all' ? 1 : 0) +
     (filters.minOverall > 0 ? 1 : 0) +
     (filters.keyword.trim().length > 0 ? 1 : 0) +
-    (filters.atarRange[0] > 0 ? 1 : 0) +
-    activeCapCount
+    (filters.atarRange[0] > 0 ? 1 : 0)
 
   return (
     <div className="raf-root">
@@ -284,14 +226,6 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
         } />
         <FilterGroupTab name="Eligibility" active={expanded === 'eligibility'} onToggle={() => setExpanded(expanded === 'eligibility' ? null : 'eligibility')} count={filters.workRights.length + filters.industries.length} />
         <FilterGroupTab name="Looking for" active={expanded === 'looking'} onToggle={() => setExpanded(expanded === 'looking' ? null : 'looking')} count={filters.salaryBands.length + filters.relocate.length} />
-        {capabilityList.length > 0 && (
-          <FilterGroupTab
-            name="Capabilities"
-            active={expanded === 'capabilities'}
-            onToggle={() => setExpanded(expanded === 'capabilities' ? null : 'capabilities')}
-            count={activeCapCount}
-          />
-        )}
       </div>
 
       {expanded === 'profile' && (
@@ -382,51 +316,6 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
             value={filters.relocate}
             onToggle={(v) => patch({ relocate: toggleInList(filters.relocate, v) })}
           />
-        </div>
-      )}
-
-      {/* Capabilities panel — one min-score slider per Launch capability the
-          scenario was authored to test. The partner drags any combination
-          up to gate the candidate list ("show me only people who scored
-          ≥ 70 on Problem Solving AND ≥ 80 on Integrity"). Identical
-          interaction model to the ATAR slider, just scaled to N axes. */}
-      {expanded === 'capabilities' && capabilityList.length > 0 && (
-        <div className="raf-panel">
-          <div className="raf-cap-intro">
-            <span className="raf-cap-intro-mark" />
-            <p className="raf-cap-intro-text">
-              These are the Launch capabilities this scenario was scored against.
-              Drag any slider to set a minimum &mdash; candidates below the floor
-              on a gated capability won&rsquo;t appear in the list.
-            </p>
-          </div>
-          {capabilityList.map((capName) => (
-            <MinField
-              key={capName}
-              label={capName}
-              min={0}
-              max={100}
-              step={5}
-              value={filters.minByCapability?.[capName] || 0}
-              onChange={(v) => {
-                const next = { ...(filters.minByCapability || {}) }
-                if (v <= 0) delete next[capName]
-                else next[capName] = v
-                patch({ minByCapability: next })
-              }}
-              format={(n) => String(Math.round(n))}
-            />
-          ))}
-          {activeCapCount > 0 && (
-            <button
-              type="button"
-              className="raf-clear"
-              style={{ marginTop: 8 }}
-              onClick={() => patch({ minByCapability: {} })}
-            >
-              Reset capability filters
-            </button>
-          )}
         </div>
       )}
 
@@ -528,31 +417,6 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
           display: flex;
           flex-direction: column;
           gap: 14px;
-        }
-        /* Capability-tab intro — small inline note so the partner knows
-           why these specific sliders are showing (this scenario's axes). */
-        .raf-cap-intro {
-          display: flex;
-          gap: 10px;
-          align-items: flex-start;
-          padding: 10px 12px;
-          background: rgba(10, 42, 107, 0.04);
-          border: 1px solid rgba(10, 42, 107, 0.08);
-          border-radius: 8px;
-        }
-        .raf-cap-intro-mark {
-          width: 4px;
-          align-self: stretch;
-          background: var(--launch-navy);
-          border-radius: 2px;
-          flex-shrink: 0;
-        }
-        .raf-cap-intro-text {
-          margin: 0;
-          font-size: 12px;
-          line-height: 1.55;
-          color: var(--lq-ink-2);
-          max-width: 60ch;
         }
         .raf-panel-grid {
           display: grid;
