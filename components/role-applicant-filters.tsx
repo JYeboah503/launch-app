@@ -25,6 +25,23 @@
 import { useState, useMemo } from 'react'
 import type { Student } from '@/components/student-list'
 
+/** The 10 Launch capability names — used as the floor for the Capabilities
+ *  filter tab so it always renders even when the scenario didn't declare
+ *  any specific skills and the candidate pool is small / empty. Kept in
+ *  sync with CAPABILITIES in lib/builderData.ts. */
+const LAUNCH_CAPABILITY_NAMES = [
+  'Judgement & Decision-Making',
+  'Reasoning & Critical Thinking',
+  'Problem Solving',
+  'Leadership & Influence',
+  'Adaptability & Cognitive Flexibility',
+  'Emotional Intelligence',
+  'Execution & Ownership',
+  'Integrity & Ethics',
+  'Collaboration',
+  'Situational Awareness & Systems Thinking',
+]
+
 const SALARY_LABELS: Record<string, string> = {
   'under-60': '< $60k',
   '60-75': '$60–75k',
@@ -162,15 +179,19 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
 
   const [expanded, setExpanded] = useState<'profile' | 'eligibility' | 'looking' | 'capabilities' | null>(null)
 
-  // Capabilities to show in the Capabilities tab — driven by the
-  // scenario's authored skills. If the scenario didn't declare any
-  // (Quick-Play / sample data), fall back to the union of capabilities
-  // present in this candidate pool so the tab still works.
+  // Capabilities to show in the Capabilities tab. Priority:
+  //   1. The scenario's explicitly authored skills (the partner narrowed in)
+  //   2. The union of capabilities scored on the candidates in this pool
+  //   3. The full 10 Launch axes as a hard floor
+  // The floor is what guarantees the tab always renders — older scenarios
+  // / Quick-Play roles don't set `skills`, but candidates are still scored
+  // against all 10 Launch axes so the filter is still meaningful.
   const capabilityList = useMemo(() => {
     if (scenarioCapabilities && scenarioCapabilities.length > 0) return scenarioCapabilities
     const seen = new Set<string>()
     for (const s of students) for (const c of s.topCapabilities) seen.add(c.name)
-    return Array.from(seen).sort()
+    if (seen.size > 0) return Array.from(seen).sort()
+    return LAUNCH_CAPABILITY_NAMES
   }, [scenarioCapabilities, students])
 
   // Active capability gates — only the ones the partner has actually

@@ -105,9 +105,26 @@ export function submissionsToStudents(subs: Submission[], roleSkills?: string[])
     const completionTimeMs = s.startedAt
       ? Math.max(0, new Date(s.submittedAt).getTime() - new Date(s.startedAt).getTime())
       : undefined
-    // Per-role-skill score derived deterministically from the submission id +
-    // skill name. Lets the capability picker sort applicants reliably.
-    const topCapabilities = (roleSkills || []).map((name) => ({
+    // Every candidate carries a deterministic score on all 10 Launch
+    // capabilities, regardless of which axes this particular scenario
+    // explicitly tests. Lets the partner filter by any capability on the
+    // role detail page without leaving holes in the data. (The original
+    // scenario-tested axes still get surfaced separately wherever the UI
+    // wants to lead with "scenario-specific" capabilities.)
+    const LAUNCH_CAP_NAMES = [
+      'Judgement & Decision-Making',
+      'Reasoning & Critical Thinking',
+      'Problem Solving',
+      'Leadership & Influence',
+      'Adaptability & Cognitive Flexibility',
+      'Emotional Intelligence',
+      'Execution & Ownership',
+      'Integrity & Ethics',
+      'Collaboration',
+      'Situational Awareness & Systems Thinking',
+    ]
+    void roleSkills // arg kept for backwards-compat; scoring is now Launch-wide
+    const topCapabilities = LAUNCH_CAP_NAMES.map((name) => ({
       name,
       level: seededSkillScore(s.id, name),
     }))
