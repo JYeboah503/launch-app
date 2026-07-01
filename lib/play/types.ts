@@ -153,6 +153,10 @@ export interface HistoryEntry {
     choiceId: string
     text: string
     leaning: 'support' | 'neutral' | 'challenge'
+    /** Candidate's own words explaining the pick — optional, recommended.
+     *  Displayed to the partner on the review surface alongside the picked
+     *  choice; this is the free-text they can score against. */
+    reasoning?: string
   }
 }
 

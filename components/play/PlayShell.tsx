@@ -428,11 +428,16 @@ export function ScenarioPlay({
   /** Candidate's follow-up choice inside an option's branch — capture it on
    *  the parent decision entry and then proceed as if we'd taken the normal
    *  afterPick path. */
-  const handleFollowUpPick = (choice: { id: string; text: string; leaning: 'support' | 'neutral' | 'challenge' }) => {
+  const handleFollowUpPick = (choice: { id: string; text: string; leaning: 'support' | 'neutral' | 'challenge'; reasoning?: string }) => {
     if (typeof phase !== 'object' || phase.type !== 'option-followup') return
     const enrichedEntry: HistoryEntry = {
       ...phase.entry,
-      followUp: { choiceId: choice.id, text: choice.text, leaning: choice.leaning },
+      followUp: {
+        choiceId: choice.id,
+        text: choice.text,
+        leaning: choice.leaning,
+        reasoning: choice.reasoning,
+      },
     } as HistoryEntry
     afterPick(enrichedEntry, phase.stepIdx, phase.lastLabel || '')
   }
