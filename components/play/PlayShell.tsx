@@ -529,10 +529,15 @@ export function ScenarioPlay({
       data-theme={tweaks.theme}
       data-screen-label={screenKey}
     >
-      {/* Partner branding banner — only for scenarios generated via a
-          partner access code (professional variant). Hangs from the
-          top-right, reads the partner's logo + name from localStorage. */}
-      {isProfessional && <PlayPartnerBanner />}
+      {/* Partner branding banner — hangs from the top-right, reads the
+          partner's logo + name from localStorage. The component itself
+          returns null when neither is set, so mounting it unconditionally
+          is safe: it just becomes a no-op for Quick-Play / teacher flows
+          where the demo user hasn't set up partner branding. Previously
+          gated on `isProfessional` but that check missed real partner-
+          built scenarios where the variant hadn't been propagated
+          through the play prop chain. */}
+      <PlayPartnerBanner />
       <TransitionStack keyName={screenKey}>
         {phase === 'intake' && <IntakeScreen onContinue={handleIntakeDone} />}
         {phase === 'profile' && (
