@@ -65,33 +65,36 @@ export function PlayPartnerBanner() {
       </div>
 
       <style>{`
-        /* Pinned to the TOP-RIGHT of the play screen, hanging down from the
-           very top edge. Small + translucent so it never crowds the
-           scenario content (typing area, HUD chrome, headers). Floats
-           above the layout with pointer-events off — decorative only. */
+        /* Pinned to the TOP-CENTRE of the play screen, hanging down like a
+           price tag from the very top edge — matches the dashboard's
+           PartnerLogoTag treatment. Full-size (not shrunk) so the brand
+           reads properly, but sits above any body text or input area,
+           so it never crowds the "writing" surfaces (reasoning textarea,
+           write-in field, etc.). pointer-events off so clicks pass
+           through to whatever's underneath. */
         .ppb-root {
           position: fixed;
           top: 0;
-          right: 20px;
+          left: 50%;
+          transform: translateX(-50%);
           z-index: 60;
           pointer-events: none;
-          opacity: 0.92;
         }
         .ppb-tag {
           background: #fff;
           border: 1px solid rgba(255, 255, 255, 0.14);
           border-top: none;
           /* Rounded only at BOTTOM corners so it reads as hanging down. */
-          border-bottom-left-radius: 10px;
-          border-bottom-right-radius: 10px;
+          border-bottom-left-radius: 16px;
+          border-bottom-right-radius: 16px;
           padding: 0;
-          width: 68px;
-          height: 56px;
+          width: 140px;
+          height: 118px;
           display: flex;
           align-items: center;
           justify-content: center;
           overflow: hidden;
-          box-shadow: 0 8px 16px -12px rgba(0, 0, 0, 0.40);
+          box-shadow: 0 12px 24px -14px rgba(0, 0, 0, 0.45);
         }
         .ppb-img {
           width: 100%;
@@ -101,19 +104,19 @@ export function PlayPartnerBanner() {
           display: block;
         }
         .ppb-fallback {
-          padding: 8px 10px;
-          font-size: 10px;
-          letter-spacing: 0.12em;
+          padding: 14px 18px;
+          font-size: 13px;
+          letter-spacing: 0.14em;
           text-transform: uppercase;
           font-weight: 700;
           color: var(--launch-navy, #0a2a6b);
           text-align: center;
           line-height: 1.15;
         }
-        /* Even tighter on narrow screens. */
+        /* Trim on narrow screens so it doesn't dominate. */
         @media (max-width: 720px) {
-          .ppb-root { right: 10px; }
-          .ppb-tag { width: 54px; height: 46px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
+          .ppb-tag { width: 108px; height: 92px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
+          .ppb-fallback { padding: 10px 12px; font-size: 11px; }
         }
       `}</style>
     </div>
