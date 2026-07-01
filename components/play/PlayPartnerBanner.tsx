@@ -66,29 +66,32 @@ export function PlayPartnerBanner() {
 
       <style>{`
         /* Pinned to the TOP-RIGHT of the play screen, hanging down from the
-           very top edge. Floats above the layout — never pushes content. */
+           very top edge. Small + translucent so it never crowds the
+           scenario content (typing area, HUD chrome, headers). Floats
+           above the layout with pointer-events off — decorative only. */
         .ppb-root {
           position: fixed;
           top: 0;
-          right: 24px;
+          right: 20px;
           z-index: 60;
-          pointer-events: none;  /* purely decorative — no interactions */
+          pointer-events: none;
+          opacity: 0.92;
         }
         .ppb-tag {
           background: #fff;
           border: 1px solid rgba(255, 255, 255, 0.14);
           border-top: none;
           /* Rounded only at BOTTOM corners so it reads as hanging down. */
-          border-bottom-left-radius: 14px;
-          border-bottom-right-radius: 14px;
+          border-bottom-left-radius: 10px;
+          border-bottom-right-radius: 10px;
           padding: 0;
-          width: 110px;
-          height: 96px;
+          width: 68px;
+          height: 56px;
           display: flex;
           align-items: center;
           justify-content: center;
           overflow: hidden;
-          box-shadow: 0 12px 24px -14px rgba(0, 0, 0, 0.45);
+          box-shadow: 0 8px 16px -12px rgba(0, 0, 0, 0.40);
         }
         .ppb-img {
           width: 100%;
@@ -98,19 +101,19 @@ export function PlayPartnerBanner() {
           display: block;
         }
         .ppb-fallback {
-          padding: 12px 14px;
-          font-size: 12px;
-          letter-spacing: 0.14em;
+          padding: 8px 10px;
+          font-size: 10px;
+          letter-spacing: 0.12em;
           text-transform: uppercase;
           font-weight: 700;
           color: var(--launch-navy, #0a2a6b);
           text-align: center;
           line-height: 1.15;
         }
-        /* Tighter on small screens so it doesn't dominate. */
+        /* Even tighter on narrow screens. */
         @media (max-width: 720px) {
-          .ppb-root { right: 12px; }
-          .ppb-tag { width: 88px; height: 76px; }
+          .ppb-root { right: 10px; }
+          .ppb-tag { width: 54px; height: 46px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
         }
       `}</style>
     </div>
