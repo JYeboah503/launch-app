@@ -249,12 +249,12 @@ function EditorialWriteIn({
   return (
     <div className={`opt opt-writein opt-${state}`} style={{ animationDelay: `${animDelay}ms` }}>
       <div className="opt-inner">
-        <div className="writein-label mono">Say it your way</div>
+        <div className="writein-label mono">Your own answer</div>
         <textarea
           className="writein-text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Write your own decision…"
+          placeholder="Type your answer here — only if you don't want to pick an option above."
           rows={2}
           disabled={disabled}
           onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -498,6 +498,19 @@ export function DecisionScreen({
               animDelay={900 + i * 110}
             />
           ))}
+          {/* Small divider so candidates read the two input modes as
+              alternatives ("pick one OR write your own") rather than as
+              a sequence. Savills feedback: candidates were clicking an
+              option then feeling like they still needed to fill the box. */}
+          <div
+            className="edit-or"
+            style={{ animationDelay: `${900 + step.options.length * 110 - 40}ms` }}
+            aria-hidden
+          >
+            <span className="edit-or-line" />
+            <span className="edit-or-label mono">or write your own</span>
+            <span className="edit-or-line" />
+          </div>
           <EditorialWriteIn
             value={custom}
             onChange={setCustom}
@@ -903,6 +916,15 @@ export function ReflectScreen({
               animDelay={700 + i * 110}
             />
           ))}
+          <div
+            className="edit-or"
+            style={{ animationDelay: `${700 + step.options.length * 110 - 40}ms` }}
+            aria-hidden
+          >
+            <span className="edit-or-line" />
+            <span className="edit-or-label mono">or write your own</span>
+            <span className="edit-or-line" />
+          </div>
           <EditorialWriteIn
             value={custom}
             onChange={setCustom}

@@ -17,6 +17,7 @@ import './styles/play.css'
 import { IntakeQuestionsScreen } from '@/components/play/IntakeQuestionsScreen'
 import { CandidateProfileScreen } from '@/components/play/CandidateProfileScreen'
 import { OptionFollowUpScreen } from '@/components/play/OptionFollowUpScreen'
+import { PlayPartnerBanner } from '@/components/play/PlayPartnerBanner'
 import {
   DecisionScreen,
   IntakeScreen,
@@ -523,6 +524,10 @@ export function ScenarioPlay({
       data-theme={tweaks.theme}
       data-screen-label={screenKey}
     >
+      {/* Partner branding banner — only for scenarios generated via a
+          partner access code (professional variant). Hangs from the
+          top-right, reads the partner's logo + name from localStorage. */}
+      {isProfessional && <PlayPartnerBanner />}
       <TransitionStack keyName={screenKey}>
         {phase === 'intake' && <IntakeScreen onContinue={handleIntakeDone} />}
         {phase === 'profile' && (
