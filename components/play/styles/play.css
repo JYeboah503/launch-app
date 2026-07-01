@@ -2812,34 +2812,6 @@ body[data-transition="slow-zoom"] .screen-wrap.exit  { animation: szOut 800ms ea
   grid-column: 1 / -1;
   min-height: 84px !important;
 }
-/* "— or write your own —" divider between the 3 options and the free-text
-   box. Purely visual; communicates that the two input modes are
-   ALTERNATIVES, not a sequence. */
-.edit-or {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 6px 2px 2px;
-  opacity: 0;
-  animation: eo-fade 500ms ease-out forwards;
-}
-.edit-or-line {
-  flex: 1;
-  height: 1px;
-  background: currentColor;
-  opacity: 0.20;
-}
-.edit-or-label {
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: currentColor;
-  opacity: 0.55;
-  font-weight: 600;
-  white-space: nowrap;
-}
-@keyframes eo-fade { to { opacity: 1; } }
 .opt {
   all: unset;
   position: relative;
