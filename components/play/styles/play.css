@@ -399,6 +399,21 @@
 .brand-name { color: var(--ink); font-weight: 600; letter-spacing: 0.22em; }
 .brand-sep, .brand-sub { color: var(--ink-3); }
 
+/* PARTNER-BRANDING OVERRIDE — on every play surface the LAUNCH wordmark,
+   the pulsing dot, and the "·" separator are hidden because the
+   PlayPartnerBanner (top-left) is now the brand identity. The screen-
+   name text (.brand-sub, e.g. "intake", "opening", "follow-up") stays,
+   but the whole .top-bar shifts right so the banner (~140px wide + a
+   little breathing room) doesn't overlap the remaining content on
+   either side. */
+.lq-play-root .brand-mark,
+.lq-play-root .brand-name,
+.lq-play-root .brand-sep { display: none; }
+.lq-play-root .top-bar { padding-left: 172px; }
+@media (max-width: 720px) {
+  .lq-play-root .top-bar { padding-left: 132px; }
+}
+
 .meta-line .mono, .top-bar .meta {
   font-family: var(--f-mono);
   font-size: 11px;

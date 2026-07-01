@@ -65,18 +65,16 @@ export function PlayPartnerBanner() {
       </div>
 
       <style>{`
-        /* Pinned to the TOP-CENTRE of the play screen, hanging down like a
-           price tag from the very top edge — matches the dashboard's
-           PartnerLogoTag treatment. Full-size (not shrunk) so the brand
-           reads properly, but sits above any body text or input area,
-           so it never crowds the "writing" surfaces (reasoning textarea,
-           write-in field, etc.). pointer-events off so clicks pass
-           through to whatever's underneath. */
+        /* Pinned to the TOP-LEFT of the play screen — replaces the LAUNCH
+           wordmark that used to sit here as the brand identity on every
+           play surface. Hangs down from the very top edge like a price
+           tag. pointer-events off so clicks pass through to whatever's
+           underneath. The LAUNCH text + dot are hidden in play.css so
+           the two brand marks don't collide. */
         .ppb-root {
           position: fixed;
           top: 0;
-          left: 50%;
-          transform: translateX(-50%);
+          left: 24px;
           z-index: 60;
           pointer-events: none;
         }
