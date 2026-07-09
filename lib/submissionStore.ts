@@ -87,7 +87,20 @@ export function listSubmissions(): Submission[] {
   return read()
 }
 
-export function listSubmissionsForCode(code: string): Submission[] {
+export function listSubmissionsForCode(code: string | undefined | null): Submission[] {
+  // Defensive: legacy role entries could reach here without an access code
+  // (pre-normalisation stubs). An empty pool is the right answer, not a crash.
+  if (!code || !code.trim()) return []
   const needle = code.trim().toUpperCase()
-  return read().filter((s) => s.scenarioCode.toUpperCase() === needle)
+  return read().filter((s) => (s.scenarioCode || '').toUpperCase() === needle)
+}
+
+/** Case-insensitive "submissions for this role" — the ONE way to count or
+ *  collect a role's submissions. The dashboard previously had three inline
+ *  case-SENSITIVE copies of this filter that disagreed with the role-detail
+ *  pool; use this everywhere instead. */
+export function submissionsForRole(all: Submission[], accessCode: string | undefined): Submission[] {
+  if (!accessCode || !accessCode.trim()) return []
+  const needle = accessCode.trim().toUpperCase()
+  return all.filter((s) => (s.scenarioCode || '').toUpperCase() === needle)
 }

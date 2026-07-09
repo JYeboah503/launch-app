@@ -9,6 +9,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type JSX,
 } from 'react'
 
 interface RevealTextProps {

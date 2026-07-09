@@ -49,7 +49,7 @@ type Phase =
   | 'outcome'
   | 'report'
 
-function useParallax(enabled: boolean, rootRef: React.RefObject<HTMLDivElement>) {
+function useParallax(enabled: boolean, rootRef: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     if (!enabled) return
     const root = rootRef.current

@@ -23,6 +23,9 @@ function writeLogo(url: string | null): void {
   try {
     if (url) window.localStorage.setItem(STORAGE_KEY, url)
     else window.localStorage.removeItem(STORAGE_KEY)
+    // Synthetic StorageEvent so SAME-TAB listeners (account page, play
+    // banner) update live — the native event only fires in other tabs.
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY }))
   } catch { /* ignore */ }
 }
 

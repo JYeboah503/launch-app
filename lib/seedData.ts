@@ -33,12 +33,24 @@ export function seedIfNeeded(): { rolesSeeded: number; submissionsSeeded: number
     if (window.localStorage.getItem(SEED_FLAG) === '1') {
       return { rolesSeeded: 0, submissionsSeeded: 0 }
     }
-    // Wipe any prior-version seed data so re-seed lands cleanly with the
-    // newer shape (decisions[], etc.). Real partner-built submissions
-    // survive via id mismatch with seed-sub-* prefix.
+    // Migrate v1 → v2 seed data: strip ONLY the old seed entries (seed-*
+    // id prefix) so they re-seed in the newer shape. Real partner-built
+    // scenarios and submissions survive the migration.
     if (window.localStorage.getItem('launch.seedData.v1.applied') === '1') {
-      window.localStorage.removeItem('launch.submissions.v1')
-      window.localStorage.removeItem('launch.scenarioStore.v1')
+      const stripSeeds = (key: string, isSeed: (entry: { id?: string }) => boolean) => {
+        try {
+          const raw = window.localStorage.getItem(key)
+          if (!raw) return
+          const list = JSON.parse(raw)
+          if (Array.isArray(list)) {
+            window.localStorage.setItem(key, JSON.stringify(list.filter((e) => !isSeed(e))))
+          }
+        } catch {
+          window.localStorage.removeItem(key)
+        }
+      }
+      stripSeeds('launch.submissions.v1', (e) => String(e?.id || '').startsWith('seed-sub-'))
+      stripSeeds('launch.scenarioStore.v1', (e) => String(e?.id || '').startsWith('seed-'))
       window.localStorage.removeItem('launch.seedData.v1.applied')
     }
   } catch { /* ignore */ }
@@ -60,13 +72,20 @@ export function seedIfNeeded(): { rolesSeeded: number; submissionsSeeded: number
 export type SeedRole = CustomScenarioStub & {
   /** Full activeRoles entry uses 'name' instead of 'title' in the dashboard. */
   name: string
+  /** Dashboard-side alias for `code`. The store persists `code` only;
+   *  loadActiveRoles() guarantees this field on every hydrated role, so
+   *  the dashboard never sees a role without it. (Partner-built roles used
+   *  to come back from a reload with accessCode === undefined, which
+   *  crashed the role-detail page.) */
+  accessCode: string
 }
 
 /** Hydrate activeRoles state from the scenarioStore at mount. */
 export function loadActiveRoles(): SeedRole[] {
   return listCustomScenarios().map((stub) => ({
     ...stub,
-    name: stub.title,
+    name: (stub as Partial<SeedRole>).name ?? stub.title,
+    accessCode: (stub as Partial<SeedRole>).accessCode ?? stub.code,
   }))
 }
 
@@ -122,12 +141,16 @@ export function submissionsToStudents(subs: Submission[], roleSkills?: string[])
       university: p?.university,
       graduationYear: p?.graduationYear,
       location: p?.location,
-      workRights: p?.workRights as Student['workRights'],
+      // CandidateProfile unions include '' ("not answered"); Student's
+      // don't. Map '' → undefined at the boundary instead of force-casting
+      // an impossible value through — the filters already treat undefined
+      // as "no data".
+      workRights: (p?.workRights || undefined) as Student['workRights'],
       industries: p?.industries,
       selfRatedStrengths: p?.selfRatedStrengths,
       availableFrom: p?.availableFrom,
-      expectedSalary: p?.expectedSalary as Student['expectedSalary'],
-      willingRelocate: p?.willingRelocate as Student['willingRelocate'],
+      expectedSalary: (p?.expectedSalary || undefined) as Student['expectedSalary'],
+      willingRelocate: (p?.willingRelocate || undefined) as Student['willingRelocate'],
       prequalStatus: s.notQualified ? 'flagged' : 'passed',
       completionTimeMs,
     }
@@ -379,21 +402,27 @@ export function SEED_SUBMISSIONS(roles: SeedRole[]): Submission[] {
     for (let i = 0; i < cfg.count; i++) {
       const shouldPass = Math.random() < cfg.passRate
       const profile = genCandidateProfile(cfg)
-      // Generate verdicts for every intake question on the role
-      const intake: QuestionVerdict[] = (role.genericQuestions || []).map((q) => {
-        // For pass: every question scores at-or-above benchmark
-        // For fail: at least ONE question scores below
-        const oneFails = i % 3 === 0 // every third failure is single-question fail
-        const passThisQ = shouldPass ? true : (oneFails ? Math.random() < 0.5 : true)
-        const finalPass = shouldPass || passThisQ
-        return genVerdict(q, finalPass)
-      })
-      // Recompute notQualified from verdicts so it's authoritative
-      const notQualified = intake.some((v) => v.belowBenchmark === true) || !shouldPass
-      // Final fix: if shouldPass but notQualified came out true (some non-passing verdict slipped through), force one to pass
-      const finalNotQ = shouldPass
-        ? intake.every((v) => v.belowBenchmark !== true) ? false : true
-        : true
+      // Generate verdicts for every intake question on the role. A failing
+      // candidate deterministically fails 1–2 of the BENCHMARKED questions
+      // (hard-filter or minScore > 0) so their "Flagged" badge always has
+      // visible red verdicts behind it. (The old randomised logic could
+      // flag a candidate whose every verdict rendered green — the partner
+      // would drill in and find nothing wrong.)
+      const qs = role.genericQuestions || []
+      const benchmarkedIdx = qs
+        .map((q, idx) => ((q.kind || 'open-text') === 'hard-filter' || (q.minScore ?? 0) > 0) ? idx : -1)
+        .filter((idx) => idx >= 0)
+      const failIdx = new Set<number>()
+      if (!shouldPass && benchmarkedIdx.length > 0) {
+        failIdx.add(benchmarkedIdx[i % benchmarkedIdx.length])
+        if (i % 3 === 0 && benchmarkedIdx.length > 1) {
+          failIdx.add(benchmarkedIdx[(i + 1) % benchmarkedIdx.length])
+        }
+      }
+      const intake: QuestionVerdict[] = qs.map((q, qIdx) => genVerdict(q, !failIdx.has(qIdx)))
+      // The flag IS the verdicts — a candidate is flagged exactly when at
+      // least one verdict landed below benchmark, never independently.
+      const finalNotQ = intake.some((v) => v.belowBenchmark === true)
       // Submitted somewhere in the last 30 days, weighted to recent
       const ageDays = Math.floor(Math.random() * Math.random() * 30)
       const submittedAt = new Date(Date.now() - ageDays * ONE_DAY - Math.floor(Math.random() * ONE_DAY)).toISOString()

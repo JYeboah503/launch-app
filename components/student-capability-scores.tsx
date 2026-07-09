@@ -211,13 +211,13 @@ export function StudentCapabilityScores({ student, roleSkills, allStudentsData }
                     totalChange > 0
                       ? 'rgba(27, 158, 143, 0.14)'
                       : totalChange < 0
-                        ? 'rgba(122, 14, 42, 0.10)'
+                        ? 'var(--launch-danger-soft)'
                         : 'rgba(10, 42, 107, 0.06)',
                   color:
                     totalChange > 0
                       ? 'var(--launch-teal-3)'
                       : totalChange < 0
-                        ? '#7a0e2a'
+                        ? 'var(--launch-danger)'
                         : 'var(--lq-ink-2)',
                   fontFamily: 'var(--font-mono)',
                   fontSize: 11,
@@ -338,7 +338,7 @@ export function StudentCapabilityScores({ student, roleSkills, allStudentsData }
                       (data.change || 0) > 0
                         ? 'var(--launch-teal-3)'
                         : (data.change || 0) < 0
-                          ? '#7a0e2a'
+                          ? 'var(--launch-danger)'
                           : 'var(--lq-ink-3)',
                     fontFamily: 'var(--font-mono)',
                     fontSize: 10,

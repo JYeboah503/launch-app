@@ -96,8 +96,9 @@ export const DEFAULT_FILTERS: ApplicantFilters = {
 export function applyApplicantFilters(students: Student[], f: ApplicantFilters): Student[] {
   const kw = f.keyword.trim().toLowerCase()
   return students.filter((s) => {
-    // Defensive on new fields — saved-view localStorage may still carry
-    // the older filter shape without these arrays defined.
+    // Defensive on new fields — ApplicantFilters is never persisted, but
+    // in-memory state created before these arrays were added (e.g. across a
+    // hot reload) may still lack them.
     const gradYears = f.gradYears || []
     const universities = f.universities || []
     if (s.atar !== undefined && (s.atar < f.atarRange[0] || s.atar > f.atarRange[1])) return false
@@ -110,9 +111,9 @@ export function applyApplicantFilters(students: Student[], f: ApplicantFilters):
     if (f.relocate.length > 0 && (!s.willingRelocate || !f.relocate.includes(s.willingRelocate))) return false
     if (f.prequalStatus !== 'all' && s.prequalStatus && s.prequalStatus !== f.prequalStatus) return false
     if (s.overallScore < f.minOverall) return false
-    // Per-capability gates. Defensive on missing field so older saved
-    // views still load. A candidate is dropped if any gated capability
-    // they don't have OR have below threshold.
+    // Per-capability gates. Defensive on the field missing from legacy
+    // in-memory state (filters are never persisted). A candidate is dropped
+    // if any gated capability they don't have OR have below threshold.
     const caps = f.minByCapability || {}
     for (const capName of Object.keys(caps)) {
       const min = caps[capName]
@@ -157,8 +158,6 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
     for (const s of students) for (const i of s.industries || []) tally[i] = (tally[i] || 0) + 1
     return Object.entries(tally).sort((a, b) => b[1] - a[1]).map(([i]) => i)
   }, [students])
-  const minGradYear = Math.min(...students.map((s) => s.graduationYear ?? 2099), 2099)
-  const maxGradYear = Math.max(...students.map((s) => s.graduationYear ?? 0), 0)
 
   const [expanded, setExpanded] = useState<'profile' | 'eligibility' | 'looking' | 'capabilities' | null>(null)
 
@@ -416,8 +415,8 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
         }
         .raf-clear {
           appearance: none;
-          background: rgba(122, 14, 42, 0.10);
-          color: #7a0e2a;
+          background: var(--launch-danger-soft);
+          color: var(--launch-danger);
           border: 1px solid rgba(122, 14, 42, 0.24);
           border-radius: 999px;
           padding: 6px 14px;
@@ -473,12 +472,6 @@ export function RoleApplicantFilters({ students, filters, setFilters, topDegrees
           flex-direction: column;
           gap: 14px;
         }
-        .raf-panel-grid {
-          display: grid;
-          gap: 14px;
-          grid-template-columns: 1fr 1fr;
-        }
-        @media (max-width: 540px) { .raf-panel-grid { grid-template-columns: 1fr; } }
       `}</style>
     </div>
   )

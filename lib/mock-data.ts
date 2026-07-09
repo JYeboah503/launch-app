@@ -3,8 +3,27 @@ import { StudentProfile } from '@/components/student-profile-view'
 import { Student } from '@/components/student-list'
 import type { Challenge } from '@/components/challenges-view'
 
-// Helper function to generate realistic student data
+// Helper function to generate realistic student data.
+//
+// DETERMINISTIC: uses a seeded PRNG (mulberry32) instead of Math.random so
+// the same 1,200 candidates exist on every page load AND on the server —
+// unseeded module-scope randomness meant student "m42" was a different
+// person each visit (and each SSR pass), which quietly corrupted anything
+// that persisted student ids (teacher classrooms) and risked hydration
+// mismatches. Same reason the "available from" dates key off a fixed base
+// date rather than Date.now().
+function mulberry32(seed: number) {
+  let a = seed >>> 0
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 function generateStudents(count: number): Student[] {
+  const rand = mulberry32(20260101)
   const firstNames = ['Sarah', 'James', 'Maya', 'Alex', 'Emma', 'David', 'Sophie', 'Michael', 'Jessica', 'Daniel', 'Olivia', 'Christopher', 'Isabella', 'Matthew', 'Ava', 'Andrew', 'Mia', 'Joshua', 'Emily', 'Ryan', 'Charlotte', 'Jacob', 'Amelia', 'William', 'Harper', 'Benjamin', 'Evelyn', 'Lucas', 'Abigail', 'Henry', 'Elizabeth', 'Alexander', 'Ella', 'Mason', 'Scarlett', 'Michael', 'Victoria', 'Ethan', 'Grace', 'Daniel', 'Chloe', 'Jacob', 'Camila', 'Logan', 'Penelope', 'Jackson', 'Riley', 'Aiden', 'Layla', 'Samuel', 'Lily']
   const lastNames = ['Chen', 'Riley', 'Patel', 'Kim', 'Rodriguez', 'Thompson', 'Garcia', 'Martinez', 'Johnson', 'Brown', 'Davis', 'Wilson', 'Anderson', 'Taylor', 'Thomas', 'Moore', 'Jackson', 'Martin', 'Lee', 'Harris', 'Clark', 'Lewis', 'Walker', 'Hall', 'Young', 'Allen', 'King', 'Wright', 'Lopez', 'Hill', 'Scott', 'Green', 'Adams', 'Nelson', 'Baker', 'Carter', 'Roberts', 'Phillips', 'Evans', 'Turner', 'Diaz', 'Parker', 'Osborne', 'Sanchez', 'Morris', 'Mendez', 'Murphy', 'Cook', 'Rogers', 'Gutierrez', 'Ortiz']
   const interests = [
@@ -90,48 +109,52 @@ function generateStudents(count: number): Student[] {
   const students: Student[] = []
 
   for (let i = 1; i <= count; i++) {
-    const firstName = firstNames[Math.floor(Math.random() * firstNames.length)]
-    const lastName = lastNames[Math.floor(Math.random() * lastNames.length)]
-    const studentInterests = interests[Math.floor(Math.random() * interests.length)]
-    const degree = degrees[Math.floor(Math.random() * degrees.length)]
-    const atar = 88 + Math.random() * 11.9  // broader 88–99.95 range
+    const firstName = firstNames[Math.floor(rand() * firstNames.length)]
+    const lastName = lastNames[Math.floor(rand() * lastNames.length)]
+    const studentInterests = interests[Math.floor(rand() * interests.length)]
+    const degree = degrees[Math.floor(rand() * degrees.length)]
+    const atar = 88 + rand() * 11.9  // broader 88–99.95 range
 
     // Select 3 random capabilities with scores
     const selectedCapabilities = []
-    const shuffledCapabilities = [...capabilities].sort(() => Math.random() - 0.5)
+    const shuffledCapabilities = [...capabilities].sort(() => rand() - 0.5)
     for (let j = 0; j < 3; j++) {
       selectedCapabilities.push({
         name: shuffledCapabilities[j],
-        level: 75 + Math.floor(Math.random() * 20)
+        level: 75 + Math.floor(rand() * 20)
       })
     }
 
     // Profile extras — realistic distributions
-    const indPick = [...industriesPool].sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * 3))
-    const strengthsPick = [...capabilities].sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * 3))
-    const gradYear = 2024 + Math.floor(Math.random() * 4)  // 2024..2027
-    const availDays = Math.floor(Math.random() * 120)  // 0..120 days out
-    const availDate = new Date(Date.now() + availDays * 86400000).toISOString().slice(0, 10)
-    const prequalPassed = Math.random() < 0.72  // ~72% pass benchmarks by default
-    const completionTimeMs = (4 + Math.random() * 22) * 60 * 1000  // 4–26 min
+    const indPick = [...industriesPool].sort(() => rand() - 0.5).slice(0, 1 + Math.floor(rand() * 3))
+    const strengthsPick = [...capabilities].sort(() => rand() - 0.5).slice(0, 1 + Math.floor(rand() * 3))
+    const gradYear = 2024 + Math.floor(rand() * 4)  // 2024..2027
+    const availDays = Math.floor(rand() * 120)  // 0..120 days out
+    // Fixed base date (not Date.now) so server + client generate identical data
+    const availDate = new Date(Date.UTC(2026, 5, 1) + availDays * 86400000).toISOString().slice(0, 10)
+    const prequalPassed = rand() < 0.72  // ~72% pass benchmarks by default
+    const completionTimeMs = (4 + rand() * 22) * 60 * 1000  // 4–26 min
 
     students.push({
-      id: String(i),
+      // 'm' prefix: generated ids must never collide with the six static
+      // STUDENT_PROFILES ids ('1'..'6') — a collision opened the WRONG
+      // person's profile (card said Logan Hill, profile said Sarah Chen).
+      id: `m${i}`,
       name: `${firstName} ${lastName}`,
       interests: studentInterests,
       topCapabilities: selectedCapabilities,
-      overallScore: 70 + Math.floor(Math.random() * 28),
+      overallScore: 70 + Math.floor(rand() * 28),
       degree,
       atar: Math.round(atar * 10) / 10,
-      university: universities[Math.floor(Math.random() * universities.length)],
+      university: universities[Math.floor(rand() * universities.length)],
       graduationYear: gradYear,
-      location: locations[Math.floor(Math.random() * locations.length)],
-      workRights: workRightsDist[Math.floor(Math.random() * workRightsDist.length)],
+      location: locations[Math.floor(rand() * locations.length)],
+      workRights: workRightsDist[Math.floor(rand() * workRightsDist.length)],
       industries: indPick,
       selfRatedStrengths: strengthsPick,
       availableFrom: availDate,
-      expectedSalary: salaryDist[Math.floor(Math.random() * salaryDist.length)],
-      willingRelocate: relocateDist[Math.floor(Math.random() * relocateDist.length)],
+      expectedSalary: salaryDist[Math.floor(rand() * salaryDist.length)],
+      willingRelocate: relocateDist[Math.floor(rand() * relocateDist.length)],
       prequalStatus: prequalPassed ? 'passed' : 'flagged',
       completionTimeMs: Math.round(completionTimeMs),
     })

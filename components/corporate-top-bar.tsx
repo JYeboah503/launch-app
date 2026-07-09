@@ -14,9 +14,9 @@ import { PartnerAccountMenu } from '@/components/partner-account-menu'
  * challenge) the LAUNCH brand mark disappeared. That inconsistency is the
  * thing this exists to fix.
  *
- * Layout: left = LAUNCH wordmark in `--launch-navy` + "· corporate" eyebrow.
+ * Layout: left = LAUNCH wordmark in `--launch-navy`.
  * Right = `actions` slot (Back, Build a scenario, etc — each route decides
- * what belongs there). Body slides under it; height ~64px.
+ * what belongs there). Body slides under it; height 128px (h-32).
  *
  * Contrast: navy wordmark on a frosted-white bar over the cream `--corp-canvas`
  * floor — the highest-contrast pairing in the LAUNCH palette on light surfaces.
@@ -28,10 +28,6 @@ interface CorporateTopBarProps {
   onSignOut?: () => void
   /** Called when the partner picks "Account settings" from the menu. */
   onOpenAccount?: () => void
-  /** No longer rendered — kept on the type for back-compat with existing
-   *  callers passing eyebrow strings; the contextual trail words have
-   *  been dropped in favour of a cleaner just-the-logo top bar. */
-  eyebrow?: string
 }
 
 export function CorporateTopBar({ actions, onSignOut, onOpenAccount }: CorporateTopBarProps) {

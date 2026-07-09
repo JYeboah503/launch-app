@@ -4,17 +4,14 @@
  * PartnerAccountPage — full-page settings surface for the partner.
  *
  * Replaces the old account modal (which had overlap issues + limited space).
- * Left sub-nav lists 8 sections; the right pane renders the active section.
+ * Left sub-nav lists 5 sections; the right pane renders the active section.
  *
  * Sections:
  *   1. Company profile        — org name, logo, tagline, industry, website, HQ, size
  *   2. Contact & security     — email, phone, password, 2FA, recent logins
- *   3. Team & permissions     — invite, roles, revoke
- *   4. Notifications          — per-event email + in-app preferences
- *   5. Integrations           — Slack, ATS, Calendar (mock OAuth for demo)
- *   6. Billing & plan         — current plan, usage, invoices, payment method
- *   7. Data & privacy         — retention, CSV export, GDPR deletion
- *   8. Workspace defaults     — default difficulty / register / capabilities
+ *   3. Team & permissions     — invite (mock), roles, revoke
+ *   4. Notifications          — per-event email preferences
+ *   5. Workspace defaults     — default difficulty / register / pre-qualifiers
  *
  * Logo upload here writes to launch.partnerLogo.v1 — the centre PartnerLogoTag
  * + the top-right account menu both listen for that storage event and update
@@ -188,7 +185,6 @@ function CompanyProfileSection({
   onChangeProfile: (p: ExtendedProfile) => void;
   onChangeLogo: (url: string | null) => void;
 }) {
-  const fileRef = useState<HTMLInputElement | null>(null)
   const handleFile = (file: File | null) => {
     if (!file) return
     const reader = new FileReader()
@@ -274,6 +270,14 @@ function CompanyProfileSection({
 function SecuritySection({ branding, onChangeBranding }: { branding: Branding; onChangeBranding: (b: Branding) => void }) {
   const [pw1, setPw1] = useState(''); const [pw2, setPw2] = useState('')
   const [twoFA, setTwoFA] = useState(false)
+  /** Mock success state — this is a design prototype, so "updating" the
+   *  password just clears the fields and flashes a confirmation. */
+  const [pwSaved, setPwSaved] = useState(false)
+  const handleUpdatePassword = () => {
+    setPw1(''); setPw2('')
+    setPwSaved(true)
+    setTimeout(() => setPwSaved(false), 3500)
+  }
   return (
     <SectionShell title="Contact & security" subtitle="How we reach you, and how you stay signed in safely.">
       <Field label="Contact email" helper="Where applicant alerts + system mail land.">
@@ -295,8 +299,16 @@ function SecuritySection({ branding, onChangeBranding }: { branding: Branding; o
           <input type="password" className="ap-input" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="••••••••" />
         </Field>
       </div>
-      <button type="button" className="corp-btn corp-btn-primary" style={{ marginTop: 8 }} disabled={!pw1 || pw1 !== pw2}>
-        <KeyRound className="w-4 h-4" /> Update password
+      <button
+        type="button"
+        className="corp-btn corp-btn-primary"
+        style={{ marginTop: 8 }}
+        disabled={!pwSaved && (!pw1 || pw1 !== pw2)}
+        onClick={handleUpdatePassword}
+      >
+        {pwSaved
+          ? <><Check className="w-4 h-4" /> Password updated</>
+          : <><KeyRound className="w-4 h-4" /> Update password</>}
       </button>
 
       <div className="ap-divider" />
@@ -325,9 +337,10 @@ function SecuritySection({ branding, onChangeBranding }: { branding: Branding; o
    SECTION 3 — Team & permissions
    ─────────────────────────────────────────────────────────────────── */
 function TeamSection() {
-  // Empty-state team: just the owner (read from saved branding so the row
-  // matches whatever name/email the partner saved in Company profile), plus
-  // a clean "invite teammates" empty-state card below. No mock teammates.
+  // The owner row reads from saved branding so it matches whatever
+  // name/email the partner saved in Company profile. Invites are mock —
+  // they add a "Pending" row in local state (design prototype; no email
+  // is actually sent).
   const [branding, setBranding] = useState<Branding>(DEFAULT_BRANDING)
   useEffect(() => {
     setBranding(readJSON(BRANDING_KEY, DEFAULT_BRANDING))
@@ -336,16 +349,33 @@ function TeamSection() {
   const ownerEmail = branding.email
   const initials = ownerName.split(/\s+/).map((p: string) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 
+  const [invited, setInvited] = useState<string[]>([])
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const inviteValid = /.+@.+\..+/.test(inviteEmail.trim())
+  const sendInvite = () => {
+    if (!inviteValid) return
+    setInvited((prev) => [...prev, inviteEmail.trim()])
+    setInviteEmail('')
+    setShowInvite(false)
+  }
+  /** "Sarah Chen" from sarah.chen@savills.com.au — purely cosmetic. */
+  const nameFromEmail = (email: string) =>
+    email.split('@')[0].split(/[._-]+/).filter(Boolean)
+      .map((w) => w[0].toUpperCase() + w.slice(1)).join(' ') || email
+
   return (
     <SectionShell title="Team & permissions" subtitle="Bring your recruiters in. Roles control what they can see + change.">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>1 member · 0 pending</span>
-        <button type="button" className="corp-btn corp-btn-primary">
+        <span className="editorial-mono" style={{ color: 'var(--lq-ink-3)' }}>
+          {1 + invited.length} member{invited.length === 0 ? '' : 's'} · {invited.length} pending
+        </span>
+        <button type="button" className="corp-btn corp-btn-primary" onClick={() => setShowInvite(true)}>
           <Plus className="w-4 h-4" /> Invite teammate
         </button>
       </div>
 
-      {/* Owner row — only real member */}
+      {/* Owner row + any pending invites */}
       <div className="ap-table">
         <div className="ap-table-row">
           <div className="flex items-center gap-3">
@@ -360,9 +390,34 @@ function TeamSection() {
             <span className="ap-table-cell-sub" style={{ color: 'var(--lq-ink-3)' }}>Owner</span>
           </div>
         </div>
+        {invited.map((email) => (
+          <div key={email} className="ap-table-row">
+            <div className="flex items-center gap-3">
+              <span className="ap-avatar-sm" style={{ opacity: 0.55 }}>
+                {nameFromEmail(email).split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+              </span>
+              <div>
+                <div className="ap-table-cell-bold">{nameFromEmail(email)}</div>
+                <div className="ap-table-cell-sub">{email}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="ap-role-pill ap-role-recruiter">Recruiter</span>
+              <span className="ap-status-pending">Invite pending</span>
+              <button
+                type="button"
+                className="ap-table-action"
+                onClick={() => setInvited((prev) => prev.filter((e) => e !== email))}
+              >
+                Revoke
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Empty-state card — communicates "this is where teammates appear" */}
+      {/* Empty-state card — only until the first invite goes out */}
+      {invited.length === 0 && (
       <div className="ap-empty-card" style={{
         marginTop: 18,
         padding: '22px 22px',
@@ -393,14 +448,49 @@ function TeamSection() {
             Invite teammates so they can build scenarios, review applicants, and share shortlists. They'll appear here once they accept.
           </div>
         </div>
-        <button type="button" className="corp-btn corp-btn-ghost" style={{ flexShrink: 0 }}>
+        <button type="button" className="corp-btn corp-btn-ghost" style={{ flexShrink: 0 }} onClick={() => setShowInvite(true)}>
           <Plus className="w-4 h-4" /> Invite teammate
         </button>
       </div>
+      )}
 
       <div className="ap-helper-block">
         <strong>Roles:</strong> Admin (everything) · Recruiter (build scenarios, review applicants) · Viewer (read-only).
       </div>
+
+      {/* Invite modal — reuses the ap-mini-modal styles */}
+      {showInvite && (
+        <div className="ap-mini-modal-root" role="dialog" aria-modal="true" aria-label="Invite teammate">
+          <div className="ap-mini-modal-backdrop" onClick={() => setShowInvite(false)} />
+          <div className="ap-mini-modal-card">
+            <div className="ap-mini-modal-head">
+              <div className="ap-mini-modal-title">Invite teammate</div>
+              <button type="button" className="ap-mini-modal-close" aria-label="Close" onClick={() => setShowInvite(false)}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="ap-mini-modal-body">
+              <Field label="Work email" helper="They'll get a link to join your workspace as a Recruiter. You can change their role once they accept.">
+                <input
+                  type="email"
+                  className="ap-input"
+                  value={inviteEmail}
+                  autoFocus
+                  placeholder="name@savills.com.au"
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') sendInvite() }}
+                />
+              </Field>
+            </div>
+            <div className="ap-mini-modal-foot">
+              <button type="button" className="corp-btn corp-btn-ghost" onClick={() => setShowInvite(false)}>Cancel</button>
+              <button type="button" className="corp-btn corp-btn-primary" disabled={!inviteValid} onClick={sendInvite}>
+                Send invite
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </SectionShell>
   )
 }
@@ -423,7 +513,7 @@ function NotificationsSection({ prefs, onChange }: { prefs: Prefs; onChange: (p:
 
 
 /* ──────────────────────────────────────────────────────────────────
-   SECTION 8 — Workspace defaults
+   SECTION 5 — Workspace defaults
    ─────────────────────────────────────────────────────────────────── */
 function WorkspaceDefaultsSection({ prefs, onChange }: { prefs: Prefs; onChange: (p: Prefs) => void }) {
   const t = (patch: Partial<Prefs>) => onChange({ ...prefs, ...patch })
@@ -508,7 +598,7 @@ const accountPageStyles = `
   .ap-root {
     display: grid;
     grid-template-columns: 240px 1fr;
-    min-height: calc(100vh - 96px);
+    min-height: calc(100vh - 128px);
     background: var(--corp-canvas);
   }
   @media (max-width: 880px) { .ap-root { grid-template-columns: 1fr; } }
@@ -519,9 +609,9 @@ const accountPageStyles = `
     border-right: 1px solid var(--lq-line);
     padding: 28px 16px;
     position: sticky;
-    top: 96px;
+    top: 128px;
     align-self: start;
-    max-height: calc(100vh - 96px);
+    max-height: calc(100vh - 128px);
     overflow-y: auto;
   }
   @media (max-width: 880px) {

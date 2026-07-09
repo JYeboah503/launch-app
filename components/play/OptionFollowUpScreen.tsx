@@ -23,7 +23,7 @@
  */
 
 import { useState } from 'react'
-import type { HistoryEntry } from '@/components/play/screens'
+import type { HistoryEntry } from '@/lib/play/types'
 
 type Leaning = 'support' | 'neutral' | 'challenge'
 

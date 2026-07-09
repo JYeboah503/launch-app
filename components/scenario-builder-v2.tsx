@@ -21,7 +21,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { X, ChevronLeft, ChevronRight, Plus, Trash2, Copy, Check, Info, Sparkles, RefreshCcw, Pin, ChevronDown } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, Plus, Trash2, Copy, Check, Sparkles, RefreshCcw, Pin, ChevronDown } from 'lucide-react'
 import { LaunchWordmark } from '@/components/launch-wordmark'
 import type { CreatorType, ScenarioLevel, ScenarioVariant } from '@/lib/roles'
 import { levelToVariant, defaultLevelForCreator, levelLabel } from '@/lib/roles'
@@ -80,17 +80,9 @@ interface ScenarioDecision {
   pinned?: boolean
 }
 
-type Leaning = 'support' | 'neutral' | 'challenge'
-
 interface DecisionOption {
   id: string
   text: string
-  /** Optional per-option follow-up tree — each option gets its own
-   *  "why did you pick THIS?" prompt + 3 leaning-tagged sub-choices. */
-  followUp?: {
-    prompt: string
-    choices: { id: string; text: string; leaning: Leaning; reasoning?: string }[]
-  }
 }
 
 const DEFAULT_DECISION = (capKey = 'judgement', difficulty: Difficulty = 'medium'): ScenarioDecision => ({
@@ -102,16 +94,6 @@ const DEFAULT_DECISION = (capKey = 'judgement', difficulty: Difficulty = 'medium
     { id: 'a', text: '' },
     { id: 'b', text: '' },
     { id: 'c', text: '' },
-  ],
-})
-
-/** Empty follow-up template for partners authoring a tree branch manually. */
-const EMPTY_OPTION_FOLLOWUP = (optIdx: number): DecisionOption['followUp'] => ({
-  prompt: 'Why did you go with that?',
-  choices: [
-    { id: `fu-${optIdx}-0`, text: '', leaning: 'support' },
-    { id: `fu-${optIdx}-1`, text: '', leaning: 'neutral' },
-    { id: `fu-${optIdx}-2`, text: '', leaning: 'challenge' },
   ],
 })
 
@@ -265,6 +247,7 @@ export function ScenarioBuilderV2({
   /* ------------------------------- */
   const generatorInput = (): GeneratorInput => ({
     roleTitle,
+    audienceNote: audienceNote || undefined,
     variant: levelToVariant(level),
     questionCount,
     difficulty,
@@ -350,7 +333,14 @@ export function ScenarioBuilderV2({
     setRoleTitle('')
     setAudienceNote('')
     setLevel(lockLevel ?? defaultLevelForCreator(creatorType))
-    setGenericQs([DEFAULT_GENERIC(GENERIC_QUESTION_SUGGESTIONS[0])])
+    // Reset the pre-qualifier section to its initial seeding: opt-in state
+    // back to its default (OFF for corporate, ON otherwise when the section
+    // is shown), then the same list the component mounts with — empty when
+    // the section is hidden or the partner hasn't opted in, one starter
+    // question otherwise. (Corporate re-seeds via the usePrequal effect.)
+    const initialUsePrequal = creatorType !== 'corporate' && showGenericQuestions
+    setUsePrequal(initialUsePrequal)
+    setGenericQs(initialUsePrequal ? [DEFAULT_GENERIC(GENERIC_QUESTION_SUGGESTIONS[0])] : [])
     setDecisions([
       DEFAULT_DECISION('judgement'),
       DEFAULT_DECISION('integrity'),
@@ -708,13 +698,11 @@ export function ScenarioBuilderV2({
         }
         .b2-panel-head h2.b2-h2 {
           line-height: 1.2;
+          margin: 0;
         }
-        /* Push the "required/optional" hint chip down to align with the h2 baseline */
+        /* "required/optional" hint chip — nudged down to align with the h2 baseline */
         .b2-panel-hint {
           margin-top: 6px;
-        }
-        .b2-panel-head h2.b2-h2 { margin: 0; }
-        .b2-panel-hint {
           font-family: var(--font-mono);
           font-size: 10px;
           letter-spacing: 0.16em;
@@ -835,23 +823,7 @@ export function ScenarioBuilderV2({
         }
         .b2-level button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* Collapsible section head */
-        .b2-collapsible-head {
-          appearance: none;
-          background: transparent;
-          border: 1px solid var(--lq-line);
-          border-radius: 12px;
-          padding: 14px 16px;
-          width: 100%;
-          margin: 28px 0 8px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          cursor: pointer;
-          text-align: left;
-          transition: background 160ms ease, border-color 160ms ease;
-        }
-        .b2-collapsible-head:hover { background: rgba(10, 42, 107, 0.03); border-color: var(--lq-line-2); }
+        /* Collapsible section */
         .b2-collapsible-caret {
           font-family: var(--font-mono);
           color: var(--lq-ink-3);
@@ -1153,8 +1125,8 @@ export function ScenarioBuilderV2({
         .b2-passrate-standard .b2-passrate-bar-fill { background: var(--launch-navy); }
         .b2-passrate-tight .b2-passrate-pct { color: #a8521a; }
         .b2-passrate-tight .b2-passrate-bar-fill { background: #a8521a; }
-        .b2-passrate-extreme .b2-passrate-pct { color: #7a0e2a; }
-        .b2-passrate-extreme .b2-passrate-bar-fill { background: #7a0e2a; }
+        .b2-passrate-extreme .b2-passrate-pct { color: var(--launch-danger); }
+        .b2-passrate-extreme .b2-passrate-bar-fill { background: var(--launch-danger); }
 
         /* Review-screen benchmark summary line — shown inline under each
            pre-qualifier in Step 3 so the partner gets a confirmation pass
@@ -1414,35 +1386,6 @@ export function ScenarioBuilderV2({
           color: var(--lq-cream);
         }
 
-        /* Why probe collapsible */
-        .b2-probe {
-          margin-top: 6px;
-          border-top: 1px solid var(--lq-line);
-          padding-top: 12px;
-        }
-        .b2-probe-head {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 8px;
-        }
-        .b2-probe-tag {
-          display: inline-flex;
-          align-items: center;
-          padding: 2px 8px;
-          border-radius: 999px;
-          font-family: var(--font-mono);
-          font-size: 10px;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          margin-right: 8px;
-          font-weight: 600;
-        }
-        .b2-probe-tag-support  { background: rgba(27, 158, 143, 0.16); color: var(--launch-teal-3); }
-        .b2-probe-tag-neutral  { background: rgba(10, 42, 107, 0.08);   color: var(--launch-navy); }
-        .b2-probe-tag-challenge{ background: rgba(122, 14, 42, 0.10);   color: #7a0e2a; }
-
         @keyframes b2spin { to { transform: rotate(360deg); } }
         .b2-spin {
           display: inline-flex;
@@ -1463,22 +1406,6 @@ export function ScenarioBuilderV2({
           color: var(--launch-teal-3);
           font-weight: 600;
         }
-        .b2-tests-tap {
-          font-size: 11px;
-          font-family: var(--font-mono);
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: var(--lq-ink-3);
-          background: none;
-          border: none;
-          cursor: pointer;
-          padding: 4px 0 0;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .b2-tests-tap:hover { color: var(--lq-ink); }
-
         .b2-criterion {
           display: inline-flex;
           align-items: center;
@@ -2610,7 +2537,7 @@ function Step3Review({
                   ) : (
                     <span className="b2-review-bench-value">
                       {passing.length === 0
-                        ? <strong style={{ color: '#7a0e2a' }}>⚠ no passing answers — every candidate gets flagged</strong>
+                        ? <strong style={{ color: 'var(--launch-danger)' }}>⚠ no passing answers — every candidate gets flagged</strong>
                         : <>Pass if picked: <strong>{passing.join(' · ')}</strong></>}
                     </span>
                   )}
@@ -2676,9 +2603,10 @@ function Step3Review({
 
 
 /* -------------------------------------------------------- */
-/* DynamicQuestionsExplainer — friendly card explaining the   */
-/* "questions adapt to candidate answers" model so the per-   */
-/* option follow-up buttons don't read as random extra work.  */
+/* DynamicQuestionsExplainer — friendly card at the top of    */
+/* the questions list explaining that Launch adapts the next  */
+/* questions to each candidate's answers, so the authored     */
+/* list reads as a starting point rather than the full path.  */
 /* Dismissible; the dismissal sticks via localStorage.        */
 /* -------------------------------------------------------- */
 
@@ -2789,7 +2717,7 @@ function DynamicQuestionsExplainer() {
 }
 
 /* -------------------------------------------------------- */
-/* Inline helpers: difficulty pill + why-probe collapsible  */
+/* Inline helpers: difficulty pill                          */
 /* -------------------------------------------------------- */
 
 function DifficultyPill({ value, onChange }: { value: Difficulty; onChange: (v: Difficulty) => void }) {

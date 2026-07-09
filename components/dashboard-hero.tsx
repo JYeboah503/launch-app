@@ -5,7 +5,6 @@ import { TrendingUp, Minus, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface DashboardHeroProps {
-  onStudentClick?: (studentId: string) => void
   onCapabilityClick?: (capabilityKey: string, capabilityName: string) => void
   /** Optional. When provided, the chart REFLECTS YOUR PIPELINE — bars are
    *  weighted by how many of your active scenarios test each capability
@@ -34,44 +33,44 @@ const BASE_CAPABILITIES = [
 const SCORES_DATA = {
   Weekly: {
     scores: [
-      { score: 72, change: 2, topPercent: 22, candidatesImproved: 12, improvementPercent: 3 },
-      { score: 76, change: -1, topPercent: 28, candidatesImproved: 15, improvementPercent: 2 },
-      { score: 79, change: 2, topPercent: 32, candidatesImproved: 18, improvementPercent: 4 },
-      { score: 65, change: 1, topPercent: 12, candidatesImproved: 8, improvementPercent: 2 },
-      { score: 70, change: 2, topPercent: 24, candidatesImproved: 14, improvementPercent: 3 },
-      { score: 75, change: 0, topPercent: 30, candidatesImproved: 10, improvementPercent: 2 },
-      { score: 78, change: 2, topPercent: 33, candidatesImproved: 16, improvementPercent: 3 },
-      { score: 82, change: 1, topPercent: 44, candidatesImproved: 22, improvementPercent: 5 },
-      { score: 74, change: 2, topPercent: 28, candidatesImproved: 13, improvementPercent: 2 },
-      { score: 71, change: -1, topPercent: 21, candidatesImproved: 9, improvementPercent: 2 },
+      { score: 72, change: 2, candidatesImproved: 12, improvementPercent: 3 },
+      { score: 76, change: -1, candidatesImproved: 15, improvementPercent: 2 },
+      { score: 79, change: 2, candidatesImproved: 18, improvementPercent: 4 },
+      { score: 65, change: 1, candidatesImproved: 8, improvementPercent: 2 },
+      { score: 70, change: 2, candidatesImproved: 14, improvementPercent: 3 },
+      { score: 75, change: 0, candidatesImproved: 10, improvementPercent: 2 },
+      { score: 78, change: 2, candidatesImproved: 16, improvementPercent: 3 },
+      { score: 82, change: 1, candidatesImproved: 22, improvementPercent: 5 },
+      { score: 74, change: 2, candidatesImproved: 13, improvementPercent: 2 },
+      { score: 71, change: -1, candidatesImproved: 9, improvementPercent: 2 },
     ],
   },
   Monthly: {
     scores: [
-      { score: 78, change: 2, topPercent: 28, candidatesImproved: 18, improvementPercent: 4 },
-      { score: 82, change: -1, topPercent: 35, candidatesImproved: 20, improvementPercent: 5 },
-      { score: 85, change: 3, topPercent: 42, candidatesImproved: 25, improvementPercent: 6 },
-      { score: 71, change: 1, topPercent: 18, candidatesImproved: 11, improvementPercent: 3 },
-      { score: 76, change: 2, topPercent: 31, candidatesImproved: 19, improvementPercent: 4 },
-      { score: 81, change: 0, topPercent: 38, candidatesImproved: 14, improvementPercent: 3 },
-      { score: 84, change: 3, topPercent: 40, candidatesImproved: 23, improvementPercent: 5 },
-      { score: 89, change: 1, topPercent: 52, candidatesImproved: 28, improvementPercent: 6 },
-      { score: 80, change: 2, topPercent: 36, candidatesImproved: 21, improvementPercent: 4 },
-      { score: 77, change: -1, topPercent: 29, candidatesImproved: 12, improvementPercent: 3 },
+      { score: 78, change: 2, candidatesImproved: 18, improvementPercent: 4 },
+      { score: 82, change: -1, candidatesImproved: 20, improvementPercent: 5 },
+      { score: 85, change: 3, candidatesImproved: 25, improvementPercent: 6 },
+      { score: 71, change: 1, candidatesImproved: 11, improvementPercent: 3 },
+      { score: 76, change: 2, candidatesImproved: 19, improvementPercent: 4 },
+      { score: 81, change: 0, candidatesImproved: 14, improvementPercent: 3 },
+      { score: 84, change: 3, candidatesImproved: 23, improvementPercent: 5 },
+      { score: 89, change: 1, candidatesImproved: 28, improvementPercent: 6 },
+      { score: 80, change: 2, candidatesImproved: 21, improvementPercent: 4 },
+      { score: 77, change: -1, candidatesImproved: 12, improvementPercent: 3 },
     ],
   },
   Yearly: {
     scores: [
-      { score: 85, change: 3, topPercent: 38, candidatesImproved: 32, improvementPercent: 8 },
-      { score: 89, change: 2, topPercent: 45, candidatesImproved: 35, improvementPercent: 9 },
-      { score: 92, change: 4, topPercent: 52, candidatesImproved: 42, improvementPercent: 10 },
-      { score: 78, change: 2, topPercent: 28, candidatesImproved: 22, improvementPercent: 6 },
-      { score: 83, change: 3, topPercent: 42, candidatesImproved: 34, improvementPercent: 8 },
-      { score: 88, change: 2, topPercent: 48, candidatesImproved: 38, improvementPercent: 9 },
-      { score: 91, change: 3, topPercent: 50, candidatesImproved: 41, improvementPercent: 10 },
-      { score: 96, change: 2, topPercent: 62, candidatesImproved: 48, improvementPercent: 11 },
-      { score: 87, change: 3, topPercent: 44, candidatesImproved: 36, improvementPercent: 9 },
-      { score: 84, change: 2, topPercent: 38, candidatesImproved: 30, improvementPercent: 8 },
+      { score: 85, change: 3, candidatesImproved: 32, improvementPercent: 8 },
+      { score: 89, change: 2, candidatesImproved: 35, improvementPercent: 9 },
+      { score: 92, change: 4, candidatesImproved: 42, improvementPercent: 10 },
+      { score: 78, change: 2, candidatesImproved: 22, improvementPercent: 6 },
+      { score: 83, change: 3, candidatesImproved: 34, improvementPercent: 8 },
+      { score: 88, change: 2, candidatesImproved: 38, improvementPercent: 9 },
+      { score: 91, change: 3, candidatesImproved: 41, improvementPercent: 10 },
+      { score: 96, change: 2, candidatesImproved: 48, improvementPercent: 11 },
+      { score: 87, change: 3, candidatesImproved: 36, improvementPercent: 9 },
+      { score: 84, change: 2, candidatesImproved: 30, improvementPercent: 8 },
     ],
   },
 }
@@ -95,7 +94,6 @@ export function DashboardHero({ onCapabilityClick, roleWeights, customTitle, cus
         return {
           score: Math.min(100, 40 + Math.round(weight * 60)),  // 40..100 scaled by weight 0..1
           change: 0,
-          topPercent: 0,
           candidatesImproved: 0,
           improvementPercent: 0,
         }
@@ -179,7 +177,7 @@ export function DashboardHero({ onCapabilityClick, roleWeights, customTitle, cus
                   )}
                   style={
                     totalChange < 0
-                      ? { background: 'rgba(220,20,60,0.10)', color: '#7a0e2a' }
+                      ? { background: 'var(--launch-danger-soft)', color: 'var(--launch-danger)' }
                       : undefined
                   }
                 >
@@ -272,7 +270,7 @@ export function DashboardHero({ onCapabilityClick, roleWeights, customTitle, cus
                           data.change > 0
                             ? 'var(--launch-navy)'
                             : data.change < 0
-                            ? '#7a0e2a'
+                            ? 'var(--launch-danger)'
                             : 'var(--lq-ink-3)',
                       }}
                     >

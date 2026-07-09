@@ -39,9 +39,18 @@ interface Props {
   onOpenAccount?: () => void
 }
 
+/** Mock notifications — enough for the badge + panel to feel real in the
+ *  prototype; the production build wires these to real events. */
+const NOTIFICATIONS = [
+  { title: '3 new applicants on Graduate Analyst — Property', meta: 'Today · 09:14' },
+  { title: 'Weekly funnel summary is ready', meta: 'Monday · 08:00' },
+  { title: '1 candidate flagged below benchmark', meta: 'Yesterday · 16:42' },
+]
+
 export function PartnerAccountMenu({ onSignOut, onOpenAccount }: Props) {
   const [open, setOpen] = useState(false)
   const [showForgot, setShowForgot] = useState(false)
+  const [showNotifs, setShowNotifs] = useState(false)
   const [branding, setBranding] = useState<Branding>(DEFAULT_BRANDING)
 
   // Hydrate + listen for live updates (so renaming the org in Account
@@ -110,12 +119,35 @@ export function PartnerAccountMenu({ onSignOut, onOpenAccount }: Props) {
             >
               <KeyRound className="w-4 h-4" /> Reset password
             </button>
-            <button type="button" className="pam-menu-item pam-menu-item-disabled" aria-disabled>
+            <button
+              type="button"
+              className="pam-menu-item"
+              aria-expanded={showNotifs}
+              onClick={() => setShowNotifs((v) => !v)}
+            >
               <Bell className="w-4 h-4" /> Notifications
-              <span className="pam-badge">3</span>
+              <span className="pam-badge">{NOTIFICATIONS.length}</span>
             </button>
-            <button type="button" className="pam-menu-item pam-menu-item-disabled" aria-disabled>
+            {/* Inline notification list — mock content so the badge has
+                something real behind it (design prototype). */}
+            {showNotifs && (
+              <div className="pam-notifs">
+                {NOTIFICATIONS.map((n) => (
+                  <div key={n.title} className="pam-notif">
+                    <span className="pam-notif-dot" aria-hidden />
+                    <div>
+                      <div className="pam-notif-title">{n.title}</div>
+                      <div className="pam-notif-meta">{n.meta}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Real disabled control (not clickable-but-dead): docs ship
+                with the production build, not the prototype. */}
+            <button type="button" className="pam-menu-item pam-menu-item-disabled" disabled>
               <HelpCircle className="w-4 h-4" /> Help &amp; docs
+              <span className="pam-soon">Soon</span>
             </button>
             <div className="pam-menu-sep" />
             <button
@@ -230,7 +262,7 @@ export function PartnerAccountMenu({ onSignOut, onOpenAccount }: Props) {
           cursor: not-allowed;
         }
         .pam-menu-item-disabled:hover { background: transparent; }
-        .pam-menu-item-danger { color: #7a0e2a; }
+        .pam-menu-item-danger { color: var(--launch-danger); }
         .pam-menu-item-danger:hover { background: rgba(122, 14, 42, 0.06); }
         .pam-badge {
           margin-left: auto;
@@ -242,6 +274,50 @@ export function PartnerAccountMenu({ onSignOut, onOpenAccount }: Props) {
           font-size: 9px;
           font-weight: 700;
           letter-spacing: 0.06em;
+        }
+        .pam-soon {
+          margin-left: auto;
+          font-family: var(--font-mono);
+          font-size: 9px;
+          font-weight: 600;
+          letter-spacing: 0.10em;
+          text-transform: uppercase;
+          color: var(--lq-ink-3);
+          border: 1px solid var(--lq-line-2);
+          border-radius: 999px;
+          padding: 1px 7px;
+        }
+        .pam-notifs {
+          margin: 2px 8px 6px 8px;
+          border-left: 2px solid var(--lq-line);
+          padding: 2px 0 2px 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .pam-notif {
+          display: flex;
+          gap: 8px;
+          align-items: flex-start;
+        }
+        .pam-notif-dot {
+          width: 6px; height: 6px;
+          border-radius: 999px;
+          background: var(--launch-navy);
+          margin-top: 5px;
+          flex-shrink: 0;
+        }
+        .pam-notif-title {
+          font-size: 12px;
+          color: var(--lq-ink);
+          line-height: 1.4;
+        }
+        .pam-notif-meta {
+          font-family: var(--font-mono);
+          font-size: 9px;
+          letter-spacing: 0.10em;
+          color: var(--lq-ink-3);
+          margin-top: 1px;
         }
       `}</style>
     </>

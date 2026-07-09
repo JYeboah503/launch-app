@@ -42,13 +42,17 @@ interface IntakeScreenProps {
 }
 
 export function IntakeScreen({ onContinue }: IntakeScreenProps) {
-  const [name, setName] = useState<string>(() => {
+  // Start empty and hydrate the remembered name in an effect — reading
+  // localStorage inside the useState initializer runs during render, so the
+  // server ('') and a returning visitor's browser would hydrate different
+  // input values. (Also: the old fallback was a hardcoded personal name.)
+  const [name, setName] = useState<string>('')
+  useEffect(() => {
     try {
-      return localStorage.getItem('launch.name') || 'Jojo'
-    } catch (e) {
-      return 'Jojo'
-    }
-  })
+      const saved = localStorage.getItem('launch.name')
+      if (saved) setName(saved)
+    } catch { /* ignore */ }
+  }, [])
   const submit = () => {
     const n = name.trim()
     try {

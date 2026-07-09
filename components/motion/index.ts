@@ -1,6 +1,4 @@
 export { RevealOnScroll } from './RevealOnScroll'
 export { AnimatedCounter } from './AnimatedCounter'
 export { ScrollIndicator } from './ScrollIndicator'
-export { MouseSpotlight } from './MouseSpotlight'
-export { FloatingShapes } from './FloatingShapes'
 export { Sparkline } from './Sparkline'

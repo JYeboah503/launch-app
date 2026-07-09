@@ -1,68 +1,48 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { HeroSection } from '@/components/hero-section'
-import { StudentAuthView } from '@/components/student-auth-view'
 import { StudentDashboard } from '@/components/student-dashboard'
-import { PartnerAuthView } from '@/components/partner-auth-view'
 import { TeacherDashboard } from '@/components/teacher-dashboard'
-import { LaunchWordmark } from '@/components/launch-wordmark'
 import { CorporateTopBar } from '@/components/corporate-top-bar'
 import { PartnerLogoTag } from '@/components/partner-logo-tag'
 import { PartnerAccountPage } from '@/components/partner-account-page'
 import { RoleApplicantFilters, applyApplicantFilters, DEFAULT_FILTERS, type ApplicantFilters } from '@/components/role-applicant-filters'
 import type { AppMode } from '@/lib/roles'
 import { addCustomScenarioStub, setScenarioStatus, deleteCustomScenario } from '@/lib/scenarioStore'
-import { listSubmissions, type Submission } from '@/lib/submissionStore'
-import { seedIfNeeded, loadActiveRoles, submissionsToStudents } from '@/lib/seedData'
-import { listSubmissionsForCode } from '@/lib/submissionStore'
-import { Header } from '@/components/header'
+import { listSubmissions, listSubmissionsForCode, submissionsForRole, type Submission } from '@/lib/submissionStore'
+import { seedIfNeeded, loadActiveRoles, submissionsToStudents, type SeedRole } from '@/lib/seedData'
 import { CapabilitiesSection } from '@/components/capabilities-section'
 import { ResultsSection } from '@/components/results-section'
 import { CTASection } from '@/components/cta-section'
 import { DashboardHero } from '@/components/dashboard-hero'
-import { DashboardFilter } from '@/components/dashboard-filter'
 import { LaunchStandouts } from '@/components/launch-standouts'
 import { CandidateName } from '@/components/candidate-name'
-import { PartnerTools } from '@/components/partner-tools'
-import { ScenarioBuilder } from '@/components/scenario-builder'
 import { ScenarioBuilderV2 } from '@/components/scenario-builder-v2'
-import { SubmissionsView } from '@/components/submissions-view'
 import { StudentProfileView } from '@/components/student-profile-view'
 import { CapabilityDetailView } from '@/components/capability-detail-view'
 import { ChallengesView } from '@/components/challenges-view'
-import { ApplicantCurator } from '@/components/applicant-curator'
-import { CreateChallenge } from '@/components/create-challenge'
-import { ApplicantPerformance } from '@/components/applicant-performance'
 import { MOCK_STUDENTS, STUDENT_PROFILES, CHALLENGES } from '@/lib/mock-data'
-import { Plus, MoreHorizontal, Lock, Unlock, Trash2, X } from 'lucide-react'
+import { MoreHorizontal, Lock, Unlock, Trash2, X, Copy } from 'lucide-react'
 import type { Student } from '@/components/student-list'
-import { AnimatedCounter, Sparkline } from '@/components/motion'
+import { AnimatedCounter } from '@/components/motion'
 
 export default function Page() {
-  const router = useRouter()
   // Three-door entry: 'landing' shows Scenario / Partner access / Educator
   // access. Each door routes directly to its surface — there is no
   // intermediate selector. The legacy isStudent/isPartner flags still gate
   // the existing dashboards; appMode is a thin layer on top.
   const [appMode, setAppMode] = useState<AppMode>('landing')
-  const [authView, setAuthView] = useState<'none' | 'student' | 'partner'>('none')
   const [isPartnerLoggedIn, setIsPartnerLoggedIn] = useState(false)
   const [isStudentLoggedIn, setIsStudentLoggedIn] = useState(false)
   const [studentName, setStudentName] = useState('')
-  const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([])
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([])
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [selectedCapability, setSelectedCapability] = useState<{ key: string; name: string } | null>(null)
   const [showChallenges, setShowChallenges] = useState(false)
-  const [partnerView, setPartnerView] = useState<'dashboard' | 'curator' | 'createChallenge' | 'performance'>('dashboard')
   // Left-rail nav for the corporate dashboard. Each item swaps the
-  // centre work area; persisted in localStorage so refresh keeps your view.
+  // centre work area. In-memory only — a refresh returns to Overview.
   const [corporateNav, setCorporateNav] = useState<'overview' | 'roles' | 'standouts' | 'builder'>('overview')
   const [showBuilderV2, setShowBuilderV2] = useState(false)
-  const [curatedList, setCuratedList] = useState<{ students: Student[], name: string } | null>(null)
-  const [createdChallenges, setCreatedChallenges] = useState<any[]>([])
   // Standouts filter — Top-N and capability work INDEPENDENTLY and COMPOSE.
   // Partner can pick "Top 10" alone, "Problem Solving" alone, or combine
   // them as "Top 10 by Problem Solving". Each chip toggles its own state;
@@ -71,7 +51,7 @@ export default function Page() {
   // `selectedCapability` state higher up in this component.)
   const [selectedTopN, setSelectedTopN] = useState<number | null>(null)
   const [selectedStandoutCap, setSelectedStandoutCap] = useState<string | null>(null)
-  const [activeRoles, setActiveRoles] = useState<any[]>([])
+  const [activeRoles, setActiveRoles] = useState<SeedRole[]>([])
   const [selectedRoleView, setSelectedRoleView] = useState<string | null>(null)
   /** Which role is currently being asked "delete this?" Used to gate the
    *  destructive action behind an explicit confirm modal — never one click. */
@@ -142,7 +122,30 @@ export default function Page() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-  }, [corporateNav, selectedRoleView, selectedStudentId, selectedCapability])
+  }, [corporateNav, selectedRoleView, selectedStudentId, selectedCapability,
+      showAccountPage, showChallenges, isPartnerLoggedIn, isStudentLoggedIn, appMode])
+
+  /** THE sign-out. Every sign-out path goes through here so the next
+   *  session starts clean — previously three drifted copies each reset a
+   *  different subset, and re-entering resumed the old session's nav,
+   *  filters, and scroll position. */
+  const signOut = () => {
+    setIsPartnerLoggedIn(false)
+    setIsStudentLoggedIn(false)
+    setAppMode('landing')
+    setShowAccountPage(false)
+    setCorporateNav('overview')
+    setSelectedRoleView(null)
+    setSelectedStudentId(null)
+    setSelectedCapability(null)
+    setShowChallenges(false)
+    setShowBuilderV2(false)
+    setSelectedTopN(null)
+    setSelectedStandoutCap(null)
+    setApplicantFilters(DEFAULT_FILTERS)
+    setJustCreatedRoleId(null)
+    setStudentName('')
+  }
 
   // Scenario builder: ready-to-go entry. Every entry point (sidebar, CTAs,
   // "+ New scenario") opens the takeover directly via `openBuilder`. No
@@ -214,23 +217,16 @@ export default function Page() {
     const fromStatic = STUDENT_PROFILES[selectedStudentId]
     if (fromStatic) return fromStatic
     // Shared deterministic-hash → capability levels so each candidate
-    // ALWAYS lands with the same numbers across re-renders.
-    const ALL_CAPS = [
-      'Judgement & Decision-Making', 'Reasoning & Critical Thinking',
-      'Problem Solving', 'Leadership & Influence',
-      'Adaptability & Cognitive Flexibility', 'Emotional Intelligence',
-      'Execution & Ownership', 'Integrity & Ethics',
-      'Collaboration', 'Situational Awareness & Systems Thinking',
-    ]
+    // ALWAYS lands with the same numbers across re-renders. Uses the
+    // module-level LAUNCH_CAPABILITIES_10 (single source for the 10 axes).
     const seededCaps = (seedId: string) => {
       let h = 0
       for (let i = 0; i < seedId.length; i++) h = ((h << 5) - h) + seedId.charCodeAt(i) | 0
-      return ALL_CAPS.map((name, i) => ({ name, level: 60 + (Math.abs(h + i * 7) % 36) }))
+      return LAUNCH_CAPABILITIES_10.map((name, i) => ({ name, level: 60 + (Math.abs(h + i * 7) % 36) }))
     }
 
     // Fallback 2 — Submission-derived profile (seeded role applicants + real plays).
-    const subs = listSubmissions()
-    const sub = subs.find((s) => s.id === selectedStudentId)
+    const sub = submissions.find((s) => s.id === selectedStudentId)
     if (sub && sub.profile) {
       const p = sub.profile
       return {
@@ -258,7 +254,7 @@ export default function Page() {
       // out across the full 10-capability shape so the StudentCapability-
       // Scores chart has every axis to plot.
       const topMap = new Map(mock.topCapabilities.map((c) => [c.name, c.level]))
-      const caps = ALL_CAPS.map((name) => ({
+      const caps = LAUNCH_CAPABILITIES_10.map((name) => ({
         name,
         level: topMap.get(name) ?? 60 + ((mock.overallScore + name.length) % 30),
       }))
@@ -275,38 +271,16 @@ export default function Page() {
     }
 
     return null
-  }, [selectedStudentId])
+  }, [selectedStudentId, submissions])
 
   const studentChallenges = selectedStudentId ? CHALLENGES[selectedStudentId] || [] : []
-
-  // If student auth view is open
-  if (authView === 'student') {
-    return (
-      <main className="min-h-screen bg-background">
-        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-12 sm:py-16">
-          <StudentAuthView
-            onSignup={(data) => {
-              setAuthView('none')
-              setStudentName(data.name)
-              setIsStudentLoggedIn(true)
-            }}
-            onBack={() => setAuthView('none')}
-          />
-        </div>
-      </main>
-    )
-  }
 
   // If student is logged in, show their dashboard
   if (isStudentLoggedIn) {
     return (
       <StudentDashboard
         studentName={studentName}
-        onLogout={() => {
-          setIsStudentLoggedIn(false)
-          setStudentName('')
-          setAppMode('landing')
-        }}
+        onLogout={signOut}
       />
     )
   }
@@ -316,30 +290,12 @@ export default function Page() {
     return <TeacherDashboard onBack={() => setAppMode('landing')} />
   }
 
-  // If partner auth view is open
-  if (authView === 'partner') {
-    return (
-      <main className="min-h-screen bg-background">
-        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-12 sm:py-16">
-          <PartnerAuthView
-            onSignup={() => {
-              setAuthView('none')
-              setIsPartnerLoggedIn(true)
-            }}
-            onBack={() => setAuthView('none')}
-          />
-        </div>
-      </main>
-    )
-  }
-
   // If capability selected, show capability detail view
   if (selectedCapability) {
     return (
       <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
         <PartnerLogoTag />
         <CorporateTopBar
-          eyebrow={`· corporate · capability`}
           actions={
             <button
               onClick={() => setSelectedCapability(null)}
@@ -353,7 +309,9 @@ export default function Page() {
           <CapabilityDetailView
             capabilityName={selectedCapability.name}
             capabilityKey={selectedCapability.key}
-            students={filteredStudents}
+            /* Always the FULL pool — the Standouts page's Top-N / capability
+               chips must not silently narrow this unrelated surface. */
+            students={MOCK_STUDENTS}
             onSelectStudent={(studentId) => {
               setSelectedStudentId(studentId)
               setSelectedCapability(null)
@@ -370,7 +328,6 @@ export default function Page() {
       <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
         <PartnerLogoTag />
         <CorporateTopBar
-          eyebrow={`· corporate · ${selectedStudent.name} · challenges`}
           actions={
             <button
               onClick={() => setShowChallenges(false)}
@@ -396,13 +353,15 @@ export default function Page() {
       <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
         <PartnerLogoTag />
         <CorporateTopBar
-          eyebrow={`· corporate · candidate`}
           actions={
             <button
               onClick={() => setSelectedStudentId(null)}
               className="corp-btn corp-btn-ghost"
             >
-              ← Back to dashboard
+              {/* Label matches where the click actually returns to: the role
+                  detail when the candidate was opened from one, otherwise
+                  the dashboard. */}
+              {selectedRoleView ? '← Back to role' : '← Back to dashboard'}
             </button>
           }
         />
@@ -413,19 +372,20 @@ export default function Page() {
             /* When the candidate landed via a real (or seeded) submission,
                pass it through so the profile shows their raw pre-qualifier
                answers + AI verdict per question. */
-            submission={(() => {
-              if (!selectedStudentId) return null
-              return listSubmissions().find((s) => s.id === selectedStudentId) || null
-            })()}
+            submission={selectedStudentId ? submissions.find((s) => s.id === selectedStudentId) || null : null}
             onChallengesClick={() => setShowChallenges(true)}
             onContactClick={() => {
               alert(`Contact request for ${selectedStudent.name} submitted through LAUNCH platform`)
             }}
             roleSkills={selectedRoleView ? activeRoles.find(r => r.id === selectedRoleView)?.skills : undefined}
+            /* Benchmark pool: each candidate's own capability scores. (The
+               old version looked ids up in the 6-entry STUDENT_PROFILES
+               catalogue, so 1,194 of 1,200 entries were empty arrays and
+               any percentile math ran on garbage.) */
             allStudentsData={selectedRoleView ? MOCK_STUDENTS.map(s => ({
               id: s.id,
               name: s.name,
-              capabilities: STUDENT_PROFILES[s.id]?.capabilities || []
+              capabilities: s.topCapabilities,
             })) : undefined}
           />
         </div>
@@ -441,11 +401,7 @@ export default function Page() {
         <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
           <PartnerLogoTag />
           <CorporateTopBar
-            onSignOut={() => {
-              setIsPartnerLoggedIn(false)
-              setShowAccountPage(false)
-              setAppMode('landing')
-            }}
+            onSignOut={signOut}
             actions={
               <button onClick={() => setShowAccountPage(false)} className="corp-btn corp-btn-ghost">
                 ← Back to dashboard
@@ -466,15 +422,17 @@ export default function Page() {
       const roleSubmissions = selectedRole
         ? listSubmissionsForCode(selectedRole.accessCode)
         : []
+      // Zero submissions = an honestly empty pool. (This used to fall back
+      // to the 1,200-strong MOCK_STUDENTS, so a brand-new role's card said
+      // "0 applicants" while its detail page showed 1,200 fake ones.)
       const roleApplicants = roleSubmissions.length > 0
         ? submissionsToStudents(roleSubmissions, selectedRole?.skills)
-        : MOCK_STUDENTS  // fallback for sample data / quick-play scenarios
+        : []
 
       return (
         <main className="min-h-screen" style={{ background: 'var(--corp-canvas)' }}>
           <PartnerLogoTag />
           <CorporateTopBar
-            eyebrow="· corporate · role"
             actions={
               <button
                 onClick={() => setSelectedRoleView(null)}
@@ -530,8 +488,50 @@ export default function Page() {
               </p>
             </div>
 
+            {/* Zero applicants — honest empty state instead of the filter
+                pipeline. Front-and-centre: the access code + copy, because
+                sharing the code IS the next action for a fresh role. */}
+            {roleApplicants.length === 0 && (
+              <section className="px-3 sm:px-4 py-8">
+                <div className="corp-card p-12 text-center">
+                  <div className="editorial-mono mb-3" style={{ color: 'var(--lq-ink-3)' }}>
+                    No applicants yet
+                  </div>
+                  <p className="mb-6 mx-auto max-w-[46ch]" style={{ color: 'var(--lq-ink-2)', lineHeight: 1.6 }}>
+                    Share the access code with candidates — they enter it on the
+                    Scenario door and their submissions will appear here live.
+                  </p>
+                  <div className="inline-flex items-center gap-3">
+                    <span
+                      className="rounded-md px-4 py-2"
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 600,
+                        fontSize: 18,
+                        letterSpacing: '0.06em',
+                        color: 'var(--launch-navy)',
+                        background: 'rgba(10, 42, 107, 0.06)',
+                        border: '1px solid rgba(10, 42, 107, 0.18)',
+                      }}
+                    >
+                      {selectedRole?.accessCode}
+                    </span>
+                    <button
+                      type="button"
+                      className="corp-btn corp-btn-primary"
+                      onClick={() => { navigator.clipboard?.writeText(selectedRole?.accessCode || '') }}
+                    >
+                      <Copy className="w-4 h-4" /> Copy code
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
+
             {/* Applicant filter pipeline — profile + eligibility + looking-for
-                filters at the top of the role detail page. */}
+                filters at the top of the role detail page. Only rendered once
+                there is a pool to filter. */}
+            {roleApplicants.length > 0 && (
             <section className="px-3 sm:px-4 py-8">
               <RoleApplicantFilters
                 students={roleApplicants}
@@ -540,9 +540,11 @@ export default function Page() {
                 scenarioCapabilities={selectedRole?.skills}
               />
             </section>
+            )}
 
             {/* Filtered applicant cards — the main candidate list under the
                 filter strip. Partner clicks through to the student profile. */}
+            {roleApplicants.length > 0 && (
             <section className="px-3 sm:px-4 pb-8">
               {(() => {
                 const filtered = applyApplicantFilters(roleApplicants, applicantFilters)
@@ -586,7 +588,7 @@ export default function Page() {
                             {a.prequalStatus === 'flagged' && (
                               <span
                                 className="editorial-mono px-1.5 py-0.5 rounded-full"
-                                style={{ background: 'rgba(122, 14, 42, 0.10)', color: '#7a0e2a', fontSize: 9, letterSpacing: '0.12em' }}
+                                style={{ background: 'var(--launch-danger-soft)', color: 'var(--launch-danger)', fontSize: 9, letterSpacing: '0.12em' }}
                               >
                                 Flagged
                               </span>
@@ -615,6 +617,7 @@ export default function Page() {
                 )
               })()}
             </section>
+            )}
 
           </div>
         </main>
@@ -633,30 +636,21 @@ export default function Page() {
           <CorporateTopBar
             onOpenAccount={() => setShowAccountPage(true)}
             onSignOut={() => {
-              setIsPartnerLoggedIn(false)
-              setSelectedCapabilities([])
-              setSelectedInterests([])
-              setSelectedStudentId(null)
-              setSelectedCapability(null)
-              setAppMode('landing')
+              signOut()
             }}
             actions={
               <>
+                {/* Opens the builder takeover directly — this used to
+                    smooth-scroll to an invisible anchor from a long-dead
+                    layout, so the button silently did nothing. */}
                 <button
-                  onClick={() => { document.getElementById('scenario-builder-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
+                  onClick={openBuilder}
                   className="corp-btn corp-btn-primary"
                 >
                   Build a scenario
                 </button>
                 <button
-                  onClick={() => {
-                    setIsPartnerLoggedIn(false)
-                    setSelectedCapabilities([])
-                    setSelectedInterests([])
-                    setSelectedStudentId(null)
-                    setSelectedCapability(null)
-                    setAppMode('landing')
-                  }}
+                  onClick={signOut}
                   className="corp-btn corp-btn-ghost"
                 >
                   ← Back
@@ -858,7 +852,7 @@ export default function Page() {
                           {sub.notQualified && (
                             <span
                               className="editorial-mono px-1.5 py-0.5 rounded-full"
-                              style={{ background: 'rgba(122, 14, 42, 0.10)', color: '#7a0e2a', fontSize: 10 }}
+                              style={{ background: 'var(--launch-danger-soft)', color: 'var(--launch-danger)', fontSize: 10 }}
                             >
                               Not qualified
                             </span>
@@ -870,7 +864,15 @@ export default function Page() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setCorporateNav('roles')}
+                        onClick={() => {
+                          // Deep-link into the submission's OWN role detail
+                          // when we can resolve it; the generic roles list is
+                          // only the fallback.
+                          const role = activeRoles.find((r) =>
+                            (r.accessCode || '').toUpperCase() === (sub.scenarioCode || '').toUpperCase())
+                          if (role) setSelectedRoleView(role.id)
+                          else setCorporateNav('roles')
+                        }}
                         className="editorial-mono text-xs"
                         style={{ color: 'var(--launch-navy)', flexShrink: 0 }}
                       >
@@ -951,7 +953,7 @@ export default function Page() {
                 {activeRoles.slice(0, 3).map((role) => {
                   // Glanceable per-role funnel — partner sees applicant count
                   // + flagged count + qualified % at a glance without drilling in.
-                  const roleSubs = submissions.filter(s => s.scenarioCode === role.accessCode)
+                  const roleSubs = submissionsForRole(submissions, role.accessCode)
                   const roleFlagged = roleSubs.filter(s => s.notQualified).length
                   return (
                   <article
@@ -979,7 +981,7 @@ export default function Page() {
                         </span>
                       </div>
                       {roleFlagged > 0 && (
-                        <span className="editorial-mono" style={{ color: '#7a0e2a', fontSize: 10, letterSpacing: '0.14em' }}>
+                        <span className="editorial-mono" style={{ color: 'var(--launch-danger)', fontSize: 10, letterSpacing: '0.14em' }}>
                           {roleFlagged} flagged
                         </span>
                       )}
@@ -1119,7 +1121,7 @@ export default function Page() {
                               className="editorial-mono"
                               style={{
                                 background: 'rgba(122, 14, 42, 0.08)',
-                                color: '#7a0e2a',
+                                color: 'var(--launch-danger)',
                                 padding: '2px 8px',
                                 borderRadius: 999,
                                 fontSize: 9,
@@ -1149,7 +1151,7 @@ export default function Page() {
                       </div>
                       {/* Funnel summary — applicants + flagged at a glance */}
                       {(() => {
-                        const roleSubs = submissions.filter(s => s.scenarioCode === role.accessCode)
+                        const roleSubs = submissionsForRole(submissions, role.accessCode)
                         const roleFlagged = roleSubs.filter(s => s.notQualified).length
                         const passRate = roleSubs.length === 0 ? 0 : Math.round(((roleSubs.length - roleFlagged) / roleSubs.length) * 100)
                         return (
@@ -1171,7 +1173,7 @@ export default function Page() {
                             </div>
                             {/* Pass/flag bar */}
                             {roleSubs.length > 0 && (
-                              <div className="flex h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(122, 14, 42, 0.10)' }}>
+                              <div className="flex h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--launch-danger-soft)' }}>
                                 <div style={{ width: `${passRate}%`, background: 'var(--launch-teal)' }} />
                               </div>
                             )}
@@ -1202,7 +1204,7 @@ export default function Page() {
                 const tally: Record<string, number> = {}
                 let total = 0
                 for (const role of activeRoles) {
-                  const subs = submissions.filter(s => s.scenarioCode === role.accessCode).length || 1
+                  const subs = submissionsForRole(submissions, role.accessCode).length || 1
                   for (const skill of (role.skills || [])) {
                     tally[skill] = (tally[skill] || 0) + subs
                     total += subs
@@ -1297,7 +1299,7 @@ export default function Page() {
                 .sd-clear {
                   appearance: none;
                   background: rgba(122, 14, 42, 0.08);
-                  color: #7a0e2a;
+                  color: var(--launch-danger);
                   border: 1px solid rgba(122, 14, 42, 0.20);
                   border-radius: 999px;
                   padding: 5px 12px;
@@ -1395,7 +1397,7 @@ export default function Page() {
               </button>
             </div>
             {/* Workspace hint card — clear next step when nothing exists */}
-            {activeRoles.length === 0 && createdChallenges.length === 0 && (
+            {activeRoles.length === 0 && (
               <div className="corp-card p-6">
                 <div className="editorial-mono mb-2" style={{ color: 'var(--lq-ink-3)' }}>3-step flow</div>
                 <ol className="space-y-2 text-sm" style={{ color: 'var(--lq-ink-2)', lineHeight: 1.6 }}>
@@ -1418,100 +1420,35 @@ export default function Page() {
             }}
             creatorType="corporate"
             onRoleCreated={(roleData) => {
-              // Newest scenario first so the partner sees their fresh work
-              // at the top of Active Scenarios (above the seeded ones).
-              setActiveRoles([roleData, ...activeRoles])
-              addCustomScenarioStub({
+              // One canonical role shape (SeedRole) for both the in-memory
+              // list and the persisted stub — this is what guarantees the
+              // role survives a reload with its access code intact.
+              const newRole: SeedRole = {
                 id: roleData.id,
                 code: roleData.accessCode,
+                accessCode: roleData.accessCode,
                 title: roleData.name,
+                name: roleData.name,
                 skills: roleData.skills,
                 questionsCount: roleData.questionsCount,
                 creatorType: roleData.creatorType,
                 variant: roleData.variant,
                 createdAt: new Date(roleData.createdAt).toISOString(),
                 genericQuestions: roleData.genericQuestions,
-              })
+              }
+              // Newest scenario first so the partner sees their fresh work
+              // at the top of Active Scenarios (above the seeded ones).
+              setActiveRoles([newRole, ...activeRoles])
+              addCustomScenarioStub(newRole)
               // Flag the new role for the highlight strip; also pre-route to
               // Scenarios so the moment the partner closes the builder modal
               // they land on their work — not back on an empty Builder shell.
-              setJustCreatedRoleId(roleData.id)
+              setJustCreatedRoleId(newRole.id)
               setCorporateNav('roles')
             }}
           />
           </>)}
 
-          {/* Submissions sidebar removed — overlapped with the role-detail
-              filter pipeline. Cross-scenario "what's new" still lives on
-              the Overview's Recent submissions panel. */}
-
-          {/* Capability chart removed from sidebar — now mounts at the top
-              of Active roles so it serves as the overview of what's being
-              measured before the role cards. */}
-
-          {/* Created Challenges */}
-          {corporateNav === 'builder' && createdChallenges.length > 0 && (
-            <div className="border-t border-[var(--lq-line)]">
-              <div className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
-                <div className="flex items-baseline justify-between mb-6">
-                <h2 className="editorial-display-sm" style={{ fontSize: 'clamp(22px, 2.6vw, 32px)' }}>
-                  Active challenges
-                </h2>
-                <span className="editorial-mono">{createdChallenges.length} running</span>
-              </div>
-              <div className="space-y-4">
-                {createdChallenges.map((challenge, idx) => (
-                  <article key={idx} className="editorial-card p-6 transition-colors hover:border-[var(--launch-navy)]">
-                    <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
-                      <div>
-                        <div className="editorial-mono mb-2">Challenge</div>
-                        <h3
-                          className="text-2xl"
-                          style={{ fontFamily: 'var(--font-display)', fontWeight: 500, letterSpacing: '-0.015em' }}
-                        >
-                          {challenge.title}
-                        </h3>
-                        <p className="text-sm mt-1" style={{ color: 'var(--lq-ink-2)' }}>
-                          {challenge.applicantList}
-                        </p>
-                      </div>
-                      <span className="editorial-chip editorial-chip-lime">
-                        {challenge.applicantCount} applicants
-                      </span>
-                    </div>
-                    <p className="text-sm mb-5 max-w-[68ch]" style={{ color: 'var(--lq-ink-2)' }}>
-                      {challenge.description}
-                    </p>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-3 pt-4 border-t border-[var(--lq-line)]">
-                      {[
-                        ['Industry', challenge.industry],
-                        ['Difficulty', challenge.difficulty],
-                        ['Time', `${challenge.timeLimit} min`],
-                        ['Questions', challenge.questionCount],
-                        ['Access code', challenge.accessCode],
-                      ].map(([label, value]) => (
-                        <div key={label as string}>
-                          <div className="editorial-mono">{label as string}</div>
-                          <div
-                            className="text-base mt-1"
-                            style={{
-                              fontFamily: label === 'Access code' ? 'var(--font-mono)' : 'var(--font-display)',
-                              fontWeight: label === 'Access code' ? 600 : 500,
-                              color: label === 'Access code' ? 'var(--launch-navy)' : 'var(--lq-ink)',
-                              letterSpacing: label === 'Access code' ? '0.05em' : '-0.01em',
-                            }}
-                          >
-                            {value as React.ReactNode}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-              </div>
-            </div>
-          )}
             </div>{/* /corp-work */}
           </div>{/* /corp-body */}
 
@@ -1687,7 +1624,7 @@ function RoleActionsMenu({
           border-radius: 6px;
         }
         .ram-item:hover { background: rgba(10, 42, 107, 0.05); }
-        .ram-item-danger { color: #7a0e2a; }
+        .ram-item-danger { color: var(--launch-danger); }
         .ram-item-danger:hover { background: rgba(122, 14, 42, 0.06); }
         .ram-sep { height: 1px; background: var(--lq-line); margin: 4px 6px; }
       `}</style>
@@ -1762,7 +1699,7 @@ function DeleteScenarioModal({
           .dsm-eyebrow {
             font-family: var(--font-mono); font-size: 10px;
             letter-spacing: 0.18em; text-transform: uppercase;
-            color: #7a0e2a; font-weight: 700; margin-bottom: 4px;
+            color: var(--launch-danger); font-weight: 700; margin-bottom: 4px;
           }
           .dsm-title {
             margin: 0; font-family: var(--font-display); font-weight: 500;
@@ -1791,8 +1728,8 @@ function DeleteScenarioModal({
             appearance: none; cursor: pointer;
             display: inline-flex; align-items: center; gap: 8px;
             padding: 8px 16px; border-radius: 999px;
-            background: #7a0e2a; color: var(--lq-cream);
-            border: 1px solid #7a0e2a;
+            background: var(--launch-danger); color: var(--lq-cream);
+            border: 1px solid var(--launch-danger);
             font-family: var(--font-body); font-weight: 600; font-size: 13px;
             transition: background 140ms ease, border-color 140ms ease;
           }

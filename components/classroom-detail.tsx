@@ -139,7 +139,7 @@ export function ClassroomDetail({ classroom, onBack, onUpdate, onDelete, onBuild
                 if (confirm(`Delete "${classroom.name}"? This can't be undone.`)) onDelete()
               }}
               className="teacher-btn teacher-btn-ghost"
-              style={{ color: '#7a0e2a' }}
+              style={{ color: 'var(--launch-danger)' }}
             >
               Delete class
             </button>

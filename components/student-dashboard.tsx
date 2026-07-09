@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AISummary } from '@/components/ai-summary'
-import { Statsboard } from '@/components/statsboard'
 import { LaunchTransition } from '@/components/launch-transition'
 import { ScenarioPlay } from '@/components/play'
 import { pickScenarioForTitle } from '@/lib/play/sampleScenarios'
@@ -67,11 +66,6 @@ function useTypewriter(text: string, speed: number = 100) {
   }, [text, speed])
 
   return { displayedText, isComplete }
-}
-
-interface StudentDashboardProps {
-  studentName: string
-  onLogout: () => void
 }
 
 export function StudentDashboard({ studentName, onLogout }: StudentDashboardProps) {
@@ -373,8 +367,8 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
   // Show project overview if a project is selected
   if (selectedProject && selectedProject.missions && selectedProject.missions.length > 0) {
     return (
-      <ProjectOverviewPage 
-        project={selectedProject} 
+      <ProjectOverviewPage
+        project={{ ...selectedProject, missions: selectedProject.missions }}
         onBack={() => setSelectedProject(null)}
         onResumeMission={() => {
           // Start the launch transition sequence
@@ -788,7 +782,7 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
             font-size: 11px;
             letter-spacing: 0.14em;
             text-transform: uppercase;
-            color: #7a0e2a;
+            color: var(--launch-danger);
           }
 
           /* Scroll cue — navy ink on the cream band, gently bobbing */

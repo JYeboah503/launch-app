@@ -1,5 +1,5 @@
 import React from "react"
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Poppins, Crimson_Text, Newsreader, Geist, Geist_Mono } from 'next/font/google'
 
 import './globals.css'
@@ -20,15 +20,16 @@ export const metadata: Metadata = {
   title: 'LAUNCH Employer Dashboard',
   description: 'Filter and explore student capability profiles powered by LAUNCH',
   generator: 'v0.app',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    minimumScale: 1,
-    maximumScale: 5,
-    userScalable: true,
-    themeColor: '#ffffff',
-    viewportFit: 'cover',
-  },
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  minimumScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  themeColor: '#ffffff',
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({

@@ -21,6 +21,8 @@ export type Difficulty = 'easy' | 'medium' | 'hard'
 
 export interface GeneratorInput {
   roleTitle: string
+  /** Optional "who is this for" note collected in Step 1 of the builder. */
+  audienceNote?: string
   variant: ScenarioVariant       // playful / professional
   questionCount: number          // 3 / 6 / 9
   difficulty: Difficulty

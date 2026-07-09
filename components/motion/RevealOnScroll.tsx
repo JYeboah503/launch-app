@@ -15,7 +15,7 @@
  *   </RevealOnScroll>
  */
 
-import { ReactNode, useEffect, useRef, useState, CSSProperties } from 'react'
+import { ReactNode, useEffect, useRef, useState, CSSProperties, type JSX } from 'react'
 
 interface RevealOnScrollProps {
   children: ReactNode

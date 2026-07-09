@@ -179,7 +179,7 @@ function IntakeAnswersCard({ submission }: { submission: Submission }) {
               {submission.intake.length} question{submission.intake.length === 1 ? '' : 's'} answered
             </span>
             {flaggedCount > 0 && (
-              <span className="editorial-mono" style={{ color: '#7a0e2a', fontSize: 11, letterSpacing: '0.14em' }}>
+              <span className="editorial-mono" style={{ color: 'var(--launch-danger)', fontSize: 11, letterSpacing: '0.14em' }}>
                 {flaggedCount} flagged
               </span>
             )}
@@ -189,8 +189,8 @@ function IntakeAnswersCard({ submission }: { submission: Submission }) {
           <span
             className="editorial-mono px-3 py-1 rounded-full"
             style={{
-              background: submission.notQualified ? 'rgba(122, 14, 42, 0.10)' : 'rgba(27, 158, 143, 0.14)',
-              color: submission.notQualified ? '#7a0e2a' : 'var(--launch-teal-3)',
+              background: submission.notQualified ? 'var(--launch-danger-soft)' : 'rgba(27, 158, 143, 0.14)',
+              color: submission.notQualified ? 'var(--launch-danger)' : 'var(--launch-teal-3)',
               fontSize: 10,
               letterSpacing: '0.14em',
               fontWeight: 700,
@@ -234,14 +234,14 @@ function IntakeAnswersCard({ submission }: { submission: Submission }) {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span
                       className="editorial-mono"
-                      style={{ color: flagged ? '#7a0e2a' : 'var(--launch-navy)', fontWeight: 700, fontSize: 12 }}
+                      style={{ color: flagged ? 'var(--launch-danger)' : 'var(--launch-navy)', fontWeight: 700, fontSize: 12 }}
                     >
                       {v.overall}/10
                     </span>
                     {flagged && (
                       <span
                         className="editorial-mono px-2 py-0.5 rounded-full"
-                        style={{ background: 'rgba(122, 14, 42, 0.10)', color: '#7a0e2a', fontSize: 9, letterSpacing: '0.14em', fontWeight: 700 }}
+                        style={{ background: 'var(--launch-danger-soft)', color: 'var(--launch-danger)', fontSize: 9, letterSpacing: '0.14em', fontWeight: 700 }}
                       >
                         Flagged
                       </span>

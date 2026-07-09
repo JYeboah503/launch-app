@@ -1,9 +1,9 @@
 'use client'
 
 /**
- * PlayPartnerBanner — hangs from the top-right of the play screen, showing
- * the partner's logo (and name as accessible fallback). Only rendered when
- * the scenario came from a corporate partner (variant === 'professional')
+ * PlayPartnerBanner — hangs from the top-left of the play screen (where the
+ * LAUNCH wordmark used to sit), showing the partner's logo (and name as
+ * accessible fallback). Renders nothing when no partner branding is set,
  * so Quick-Play / teacher scenarios stay clean.
  *
  * Read-only: unlike the dashboard's PartnerLogoTag, this component doesn't

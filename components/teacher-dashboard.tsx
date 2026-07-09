@@ -19,7 +19,7 @@ const SEED_CLASSROOMS: Classroom[] = [
     code: 'CLASS-RV4PB7',
     name: 'Year 11 Business',
     subject: 'Period 3 · Tuesdays + Thursdays',
-    studentIds: ['1', '2', '3', '4', '5', '6'],
+    studentIds: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6'],
     scenarioIds: ['lakers-coach', 'sephora-lead'],
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
   },
@@ -28,7 +28,7 @@ const SEED_CLASSROOMS: Classroom[] = [
     code: 'CLASS-MK29HT',
     name: 'Year 12 Leadership',
     subject: 'Tuesdays · 10:00',
-    studentIds: ['7', '8', '9'],
+    studentIds: ['m7', 'm8', 'm9'],
     scenarioIds: ['startup-founder'],
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
   },
@@ -65,27 +65,35 @@ export function TeacherDashboard({ onBack }: TeacherDashboardProps) {
   // the detail view. Opening targets a specific classroom for auto-assignment.
   const [builderForClassroom, setBuilderForClassroom] = useState<string | null>(null)
 
-  // Hydrate from localStorage on mount (front-end persistence).
+  // Hydrate from localStorage on mount (front-end persistence). The
+  // hydrated flag stops the persist effect below from firing with the
+  // in-code SEED_CLASSROOMS before the saved state has landed — that
+  // race meant "delete all classrooms" never stuck (seeds overwrote the
+  // save on the next mount). An empty saved array is respected too.
+  const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw) as Classroom[]
-        if (Array.isArray(parsed) && parsed.length > 0) setClassrooms(parsed)
+        if (Array.isArray(parsed)) setClassrooms(parsed)
       }
     } catch {
       /* ignore */
     }
+    setHydrated(true)
   }, [])
 
-  // Persist on change.
+  // Persist on change — only after hydration so we never clobber the
+  // saved state with the seeds.
   useEffect(() => {
+    if (!hydrated) return
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(classrooms))
     } catch {
       /* ignore */
     }
-  }, [classrooms])
+  }, [classrooms, hydrated])
 
   const handleCreate = () => {
     const name = newName.trim()
