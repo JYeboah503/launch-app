@@ -73,13 +73,13 @@ function csvEscape(v: string | number | undefined): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
-function buildCsv(role: SeedRole, students: Student[], filters: ApplicantFilters): string {
+function buildCsv(role: SeedRole, students: Student[], summary: string): string {
   const skills = role.skills || []
   const meta = [
     ['Role', role.name],
     ['Access code', role.accessCode],
     ['Exported', new Date().toLocaleString()],
-    ['Filters', describeFilters(filters)],
+    ['View', summary],
     ['Candidates', String(students.length)],
   ].map((r) => r.map(csvEscape).join(',')).join('\n')
   const header = [
@@ -97,12 +97,12 @@ function buildCsv(role: SeedRole, students: Student[], filters: ApplicantFilters
   return `${meta}\n\n${header}\n${rows}\n`
 }
 
-function downloadCsv(role: SeedRole, students: Student[], filters: ApplicantFilters): void {
-  const blob = new Blob([buildCsv(role, students, filters)], { type: 'text/csv;charset=utf-8' })
+function downloadCsv(role: SeedRole, students: Student[], summary: string, suffix = 'shortlist'): void {
+  const blob = new Blob([buildCsv(role, students, summary)], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${role.accessCode.toLowerCase()}-shortlist.csv`
+  a.download = `${role.accessCode.toLowerCase()}-${suffix}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -236,7 +236,7 @@ export function RoleShortlistTools({ role, filtered, allApplicants, filters, set
             </button>
             {exportOpen && (
               <div className="rst-export-menu" role="menu">
-                <button type="button" className="rst-export-item" onClick={() => { downloadCsv(role, filtered, filters); setExportOpen(false) }}>
+                <button type="button" className="rst-export-item" onClick={() => { downloadCsv(role, filtered, describeFilters(filters)); setExportOpen(false) }}>
                   <FileSpreadsheet className="w-4 h-4" />
                   <span>Excel / CSV<em>One row per candidate, filters stamped on top</em></span>
                 </button>
@@ -313,26 +313,28 @@ export function RoleShortlistTools({ role, filtered, allApplicants, filters, set
           {result && (
             <div className="rst-buckets">
               {/* The money bucket — what Launch found that their screen missed */}
-              <div className="rst-bucket rst-bucket-launch">
-                <div className="rst-bucket-num">{result.onlyLaunch.length}</div>
-                <div className="rst-bucket-label">Launch surfaced — your screen missed</div>
-                <BucketList students={result.onlyLaunch} />
-              </div>
-              <div className="rst-bucket">
-                <div className="rst-bucket-num">{result.both.length}</div>
-                <div className="rst-bucket-label">Both lists agree</div>
-                <BucketList students={result.both} />
-              </div>
-              <div className="rst-bucket">
-                <div className="rst-bucket-num">{result.onlyTheirs.length}</div>
-                <div className="rst-bucket-label">Your picks below the Launch bar</div>
-                <BucketList students={result.onlyTheirs} />
-                {result.unmatched.length > 0 && (
-                  <div className="rst-unmatched editorial-mono">
-                    +{result.unmatched.length} entr{result.unmatched.length === 1 ? 'y' : 'ies'} not found among applicants
-                  </div>
-                )}
-              </div>
+              <Bucket
+                role={role}
+                label="Launch surfaced — your screen missed"
+                suffix="launch-surfaced"
+                students={result.onlyLaunch}
+                highlight
+              />
+              <Bucket
+                role={role}
+                label="Both lists agree"
+                suffix="both-agree"
+                students={result.both}
+              />
+              <Bucket
+                role={role}
+                label="Your picks below the Launch bar"
+                suffix="below-launch-bar"
+                students={result.onlyTheirs}
+                footnote={result.unmatched.length > 0
+                  ? `+${result.unmatched.length} entr${result.unmatched.length === 1 ? 'y' : 'ies'} not found among applicants`
+                  : undefined}
+              />
             </div>
           )}
         </div>
@@ -411,6 +413,37 @@ export function RoleShortlistTools({ role, filtered, allApplicants, filters, set
       )}
 
       <style>{rstStyles}</style>
+    </div>
+  )
+}
+
+function Bucket({ role, label, suffix, students, highlight, footnote }: {
+  role: SeedRole
+  label: string
+  /** Filename suffix for this bucket's CSV, e.g. "launch-surfaced". */
+  suffix: string
+  students: Student[]
+  highlight?: boolean
+  footnote?: string
+}) {
+  return (
+    <div className={`rst-bucket ${highlight ? 'rst-bucket-launch' : ''}`}>
+      <div className="rst-bucket-top">
+        <div className="rst-bucket-num">{students.length}</div>
+        {students.length > 0 && (
+          <button
+            type="button"
+            className="rst-bucket-dl"
+            title={`Download "${label}" as CSV`}
+            onClick={() => downloadCsv(role, students, `Shortlist comparison — ${label}`, suffix)}
+          >
+            <Download className="w-3.5 h-3.5" /> CSV
+          </button>
+        )}
+      </div>
+      <div className="rst-bucket-label">{label}</div>
+      <BucketList students={students} />
+      {footnote && <div className="rst-unmatched editorial-mono">{footnote}</div>}
     </div>
   )
 }
@@ -557,9 +590,28 @@ const rstStyles = `
     background: rgba(10, 42, 107, 0.04);
     box-shadow: 0 0 0 3px rgba(10, 42, 107, 0.08);
   }
+  .rst-bucket-top {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+  }
   .rst-bucket-num {
     font-family: var(--font-mono); font-weight: 600; font-size: 30px;
     color: var(--launch-navy); line-height: 1;
+  }
+  .rst-bucket-dl {
+    appearance: none; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #fff;
+    border: 1px solid var(--lq-line-2);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--launch-navy);
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+  }
+  .rst-bucket-dl:hover {
+    border-color: var(--launch-navy);
+    box-shadow: 0 6px 14px -10px rgba(10, 42, 107, 0.20);
   }
   .rst-bucket-label {
     font-family: var(--font-mono); font-size: 10px;
