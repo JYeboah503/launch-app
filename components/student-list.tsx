@@ -22,4 +22,9 @@ export interface Student {
   prequalStatus?: 'passed' | 'flagged'
   /** ms to complete the scenario — used as a confidence proxy. */
   completionTimeMs?: number
+  /** Contact email from the candidate's intake profile. Blurred surfaces
+   *  never render it; exports + the shortlist-compare join on it. */
+  email?: string
+  /** ISO timestamp the candidate submitted — stamped onto exports. */
+  submittedAt?: string
 }

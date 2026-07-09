@@ -8,6 +8,7 @@ import { CorporateTopBar } from '@/components/corporate-top-bar'
 import { PartnerLogoTag } from '@/components/partner-logo-tag'
 import { PartnerAccountPage } from '@/components/partner-account-page'
 import { RoleApplicantFilters, applyApplicantFilters, DEFAULT_FILTERS, type ApplicantFilters } from '@/components/role-applicant-filters'
+import { RoleShortlistTools } from '@/components/role-shortlist-tools'
 import type { AppMode } from '@/lib/roles'
 import { addCustomScenarioStub, setScenarioStatus, deleteCustomScenario } from '@/lib/scenarioStore'
 import { listSubmissions, listSubmissionsForCode, submissionsForRole, type Submission } from '@/lib/submissionStore'
@@ -539,6 +540,17 @@ export default function Page() {
                 setFilters={setApplicantFilters}
                 scenarioCapabilities={selectedRole?.skills}
               />
+              {/* Export / saved views / shortlist-compare — the partner's
+                  bridge between Launch and their traditional screening. */}
+              {selectedRole && (
+                <RoleShortlistTools
+                  role={selectedRole}
+                  filtered={applyApplicantFilters(roleApplicants, applicantFilters)}
+                  allApplicants={roleApplicants}
+                  filters={applicantFilters}
+                  setFilters={setApplicantFilters}
+                />
+              )}
             </section>
             )}
 

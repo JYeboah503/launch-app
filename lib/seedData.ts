@@ -153,6 +153,8 @@ export function submissionsToStudents(subs: Submission[], roleSkills?: string[])
       willingRelocate: (p?.willingRelocate || undefined) as Student['willingRelocate'],
       prequalStatus: s.notQualified ? 'flagged' : 'passed',
       completionTimeMs,
+      email: p?.email || undefined,
+      submittedAt: s.submittedAt,
     }
   })
 }
