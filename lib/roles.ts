@@ -71,26 +71,5 @@ export function defaultLevelForCreator(c: CreatorType): ScenarioLevel {
   return 'early'
 }
 
-/**
- * A teacher's classroom. Holds enrolled students + assigned scenarios.
- * Front-end-only for now; lives in component state with optional
- * localStorage persistence.
- */
-export interface Classroom {
-  id: string
-  code: string              // shareable join code, e.g. "CLASS-AB12CD"
-  name: string
-  subject?: string          // optional, e.g. "Year 11 Business"
-  studentIds: string[]      // refs into MOCK_STUDENTS
-  scenarioIds: string[]     // refs into the sample library OR builder-emitted ids
-  createdAt: string         // ISO timestamp
-}
-
-/** Generate a shareable, memorable class code. */
-export function generateClassCode(): string {
-  // 6 chars, no ambiguous 0/O/1/I
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let out = ''
-  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)]
-  return `CLASS-${out}`
-}
+// (The old teacher `Classroom` type + generateClassCode moved into the
+//  educator module — see lib/educator.ts, which owns cohorts now.)

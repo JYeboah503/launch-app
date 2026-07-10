@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { HeroSection } from '@/components/hero-section'
 import { StudentDashboard } from '@/components/student-dashboard'
-import { TeacherDashboard } from '@/components/teacher-dashboard'
+import { EducatorDashboard } from '@/components/educator/EducatorDashboard'
 import { CorporateTopBar } from '@/components/corporate-top-bar'
 import { PartnerLogoTag } from '@/components/partner-logo-tag'
 import { PartnerAccountPage } from '@/components/partner-account-page'
@@ -286,9 +286,10 @@ export default function Page() {
     )
   }
 
-  // Teacher dashboard (stub for now — real classrooms land in Section C)
+  // Educator dashboard — the careers-advisor workspace (cohorts, heatmap,
+  // subject-fit, per-student guidance).
   if (appMode === 'teacher') {
-    return <TeacherDashboard onBack={() => setAppMode('landing')} />
+    return <EducatorDashboard onBack={() => setAppMode('landing')} />
   }
 
   // If capability selected, show capability detail view
