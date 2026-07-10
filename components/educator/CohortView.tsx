@@ -10,7 +10,7 @@ import {
   isForStudent, assignmentStateFor,
   type Cohort, type EdStudent, type EdAssignment, type SubjectProfile, type AssignmentState,
 } from '@/lib/educator'
-import { ED_NOW, type EdWorkspace } from '@/components/educator/types'
+import { ED_NOW, type EdWorkspace, type EdScenario } from '@/components/educator/types'
 import { CapabilityHeatmap, ProgressRing } from '@/components/educator/charts'
 import { InsightsTab } from '@/components/educator/InsightsTab'
 import { ModalShell, fmtDate, dueLabel } from '@/components/educator/ui'
@@ -206,6 +206,8 @@ export function CohortView({
         <AssignModal
           cohort={cohort}
           students={students}
+          /* Teacher-authored scenarios lead the list, then the pre-built library. */
+          scenarios={[...ws.customScenarios, ...ASSIGNABLE_SCENARIOS]}
           onClose={() => setAssignOpen(false)}
           onAssign={(a) => { addAssignment(a); setAssignOpen(false); setTab('assignments') }}
         />
@@ -515,13 +517,13 @@ function EnrolModal({ cohort, poolStudents, onClose, onEnrolExisting, onImport }
 
 /* ── Assign modal ─────────────────────────────────────────────────── */
 
-function AssignModal({ cohort, students, onClose, onAssign }: { cohort: Cohort; students: EdStudent[]; onClose: () => void; onAssign: (a: EdAssignment) => void }) {
-  const [scenId, setScenId] = useState(ASSIGNABLE_SCENARIOS[0].id)
+function AssignModal({ cohort, students, scenarios, onClose, onAssign }: { cohort: Cohort; students: EdStudent[]; scenarios: EdScenario[]; onClose: () => void; onAssign: (a: EdAssignment) => void }) {
+  const [scenId, setScenId] = useState(scenarios[0].id)
   const [to, setTo] = useState<'cohort' | 'pick'>('cohort')
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [due, setDue] = useState('')
   const [opens, setOpens] = useState('')
-  const scen = ASSIGNABLE_SCENARIOS.find((s) => s.id === scenId)!
+  const scen = scenarios.find((s) => s.id === scenId)!
 
   const create = () => {
     const ids = to === 'cohort' ? cohort.studentIds : [...picked]
@@ -543,11 +545,11 @@ function AssignModal({ cohort, students, onClose, onAssign }: { cohort: Cohort; 
     <ModalShell title="Assign a scenario" onClose={onClose} wide>
       <label className="ed-label">Scenario</label>
       <div className="ed-scen-grid">
-        {ASSIGNABLE_SCENARIOS.map((s) => (
+        {scenarios.map((s) => (
           <button key={s.id} type="button" className={`ed-scen ${scenId === s.id ? 'is-on' : ''}`} onClick={() => setScenId(s.id)}>
-            <div className="ed-scen-top"><span className="ed-scen-emoji">{s.emoji}</span><span className="ed-scen-name">{s.title}</span></div>
+            <div className="ed-scen-top"><span className="ed-scen-emoji">{s.emoji}</span><span className="ed-scen-name">{s.title}</span>{s.isCustom && <span className="ed-lib-yours" style={{ marginLeft: 'auto' }}>Yours</span>}</div>
             <p className="ed-scen-blurb">{s.blurb}</p>
-            <div className="ed-scen-meta">{s.decisions} decisions · ~{s.mins} min · {s.capabilities.map((c) => CAPABILITY_SHORT[c]).join(', ')}</div>
+            <div className="ed-scen-meta">{s.decisions} decisions · ~{s.mins} min · {s.capabilities.map((c) => CAPABILITY_SHORT[c] || c).join(', ')}</div>
           </button>
         ))}
       </div>
@@ -705,6 +707,7 @@ const cohortStyles = `
   .ed-pick-name { display: block; font-size: 13px; font-weight: 600; color: var(--lq-ink); }
   .ed-pick-email { display: block; font-size: 11px; color: var(--lq-ink-3); }
 
+  .ed-lib-yours { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ed-accent); background: var(--ed-accent-soft); border-radius: 999px; padding: 3px 9px; }
   .ed-scen-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
   @media (max-width: 620px) { .ed-scen-grid { grid-template-columns: 1fr; } }
   .ed-scen { text-align: left; padding: 14px 16px; border-radius: 14px; background: #fff; border: 1.5px solid var(--lq-line); cursor: pointer; transition: border-color 160ms ease; }

@@ -176,7 +176,18 @@ const studentStyles = `
   .ed-sstat-lbl { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-3); margin-top: 5px; }
 
   .ed-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
-  .ed-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--lq-line); font-size: 12px; font-weight: 600; color: var(--lq-ink); }
+  .ed-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--lq-line); font-size: 12px; font-weight: 600; color: var(--lq-ink); animation: ed-badge-glow 1.6s ease-out both; }
+  .ed-badges .ed-badge:nth-child(2) { animation-delay: 120ms; }
+  .ed-badges .ed-badge:nth-child(3) { animation-delay: 240ms; }
+  .ed-badges .ed-badge:nth-child(4) { animation-delay: 360ms; }
+  .ed-badges .ed-badge:nth-child(5) { animation-delay: 480ms; }
+  /* The "delight" moment — one soft glow pulse as badges land, then calm. */
+  @keyframes ed-badge-glow {
+    0% { box-shadow: 0 0 0 0 transparent; border-color: var(--lq-line); }
+    35% { box-shadow: 0 0 0 6px var(--ed-accent-soft); border-color: var(--ed-accent); }
+    100% { box-shadow: 0 0 0 0 transparent; border-color: var(--lq-line); }
+  }
+  .ed-badge:hover { border-color: var(--ed-accent); }
   .ed-badge-emoji { font-size: 14px; }
 
   .ed-sgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

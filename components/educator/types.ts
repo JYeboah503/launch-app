@@ -11,12 +11,30 @@ export interface EdBranding {
   coverUrl: string | null
 }
 
+/** A scenario the educator can browse / preview / assign. Pre-built ones
+ *  ship in ASSIGNABLE_SCENARIOS; teacher-authored ones are added here with
+ *  isCustom + their classroom lens (subject + brief). */
+export interface EdScenario {
+  id: string
+  title: string
+  emoji: string
+  capabilities: string[]
+  blurb: string
+  decisions: number
+  mins: number
+  isCustom?: boolean
+  /** The classroom lens it was authored through, e.g. "Economics". */
+  subjectName?: string
+}
+
 export interface EdWorkspace {
   branding: EdBranding
   students: EdStudent[]
   cohorts: Cohort[]
   assignments: EdAssignment[]
   subjects: SubjectProfile[]
+  /** Teacher-authored scenarios (via the builder). */
+  customScenarios: EdScenario[]
 }
 
 /** Advisor's per-student overrides for career / subject guidance. */

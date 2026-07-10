@@ -25,10 +25,16 @@ import { ModalShell, fmtDate } from '@/components/educator/ui'
 import { CohortView } from '@/components/educator/CohortView'
 import { StudentView } from '@/components/educator/StudentView'
 import { CohortCompare } from '@/components/educator/CohortCompare'
+import { ScenarioLibrary } from '@/components/educator/ScenarioLibrary'
+import { CommandPalette } from '@/components/educator/CommandPalette'
+import { ScenarioBuilderV2 } from '@/components/scenario-builder-v2'
+import { addCustomScenarioStub } from '@/lib/scenarioStore'
+import { AnimatedCounter } from '@/components/motion'
 import {
   Image as ImageIcon, Settings, Plus, ArrowLeft, Upload,
-  AlertTriangle, Star, CalendarClock, GitCompare,
+  AlertTriangle, Star, CalendarClock, GitCompare, Command,
 } from 'lucide-react'
+import type { EdScenario } from '@/components/educator/types'
 
 const KEY = 'launch.educator.v1'
 
@@ -50,6 +56,8 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
   const [showSettings, setShowSettings] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showCompare, setShowCompare] = useState(false)
+  const [showPalette, setShowPalette] = useState(false)
+  const [builderLens, setBuilderLens] = useState<{ subjectName?: string; brief?: string } | null>(null)
   const [hydrated, setHydrated] = useState(false)
 
   // Hydrate / persist the whole workspace.
@@ -58,10 +66,25 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
       const raw = localStorage.getItem(KEY)
       if (raw) {
         const parsed = JSON.parse(raw)
-        if (parsed && Array.isArray(parsed.cohorts)) setWs(parsed)
+        if (parsed && Array.isArray(parsed.cohorts)) {
+          // Older saves may predate customScenarios — default it in.
+          setWs({ customScenarios: [], ...parsed })
+        }
       }
     } catch { /* ignore */ }
     setHydrated(true)
+  }, [])
+
+  // ⌘K / Ctrl+K opens the command palette from anywhere in the workspace.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setShowPalette((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
   useEffect(() => {
     if (!hydrated) return
@@ -93,6 +116,9 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
             <span className="ed-brand-tag">Careers</span>
           </div>
           <div className="ed-topbar-actions">
+            <button type="button" className="ed-kbd-hint" onClick={() => setShowPalette(true)} title="Command palette">
+              <Command className="w-3.5 h-3.5" /> K
+            </button>
             <button type="button" className="ed-btn ed-btn-ghost" onClick={() => setShowSettings(true)}>
               <Settings className="w-4 h-4" /> School settings
             </button>
@@ -111,6 +137,8 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
           onCompare={() => setShowCompare(true)}
           onReplaceCover={(url) => setBranding({ coverUrl: url })}
           onRegenerateCover={() => setBranding({ coverUrl: null })}
+          onAssign={(a) => patch({ assignments: [a, ...ws.assignments] })}
+          onOpenBuilder={(lens) => setBuilderLens(lens)}
         />
       )}
 
@@ -145,6 +173,56 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
         <CohortCompare ws={ws} onClose={() => setShowCompare(false)} />
       )}
 
+      {showPalette && (
+        <CommandPalette
+          ws={ws}
+          onClose={() => setShowPalette(false)}
+          onOpenCohort={(cohortId) => setRoute({ view: 'cohort', cohortId })}
+          onOpenStudent={(cohortId, studentId) => setRoute({ view: 'student', cohortId, studentId })}
+          onNewCohort={() => setShowCreate(true)}
+          onCompare={() => setShowCompare(true)}
+          onSettings={() => setShowSettings(true)}
+          onBuild={() => setBuilderLens({})}
+        />
+      )}
+
+      {/* Teacher scenario builder — the same authoring power the corporates
+          get, teacher register (playful, early-career). Entered through the
+          library's classroom-lens dialog or ⌘K. */}
+      <ScenarioBuilderV2
+        externalOpen={builderLens !== null}
+        creatorType="teacher"
+        lockLevel="early"
+        onClose={() => setBuilderLens(null)}
+        onRoleCreated={(role) => {
+          // Persist the play-side stub so students can resolve the code…
+          addCustomScenarioStub({
+            id: role.id,
+            code: role.accessCode,
+            title: role.name,
+            skills: role.skills,
+            questionsCount: role.questionsCount,
+            creatorType: 'teacher',
+            variant: 'playful',
+            createdAt: new Date(role.createdAt).toISOString(),
+            genericQuestions: role.genericQuestions,
+          })
+          // …and surface it in the educator's library, marked "Yours".
+          const scen: EdScenario = {
+            id: role.id,
+            title: role.name,
+            emoji: '🧑‍🏫',
+            capabilities: role.skills,
+            blurb: builderLens?.brief || 'Authored for your classroom.',
+            decisions: role.questionsCount,
+            mins: Math.max(6, role.questionsCount * 2),
+            isCustom: true,
+            subjectName: builderLens?.subjectName,
+          }
+          patch({ customScenarios: [scen, ...ws.customScenarios] })
+        }}
+      />
+
       {showCreate && (
         <CreateCohortModal
           onClose={() => setShowCreate(false)}
@@ -171,7 +249,7 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
 
 function seedWorkspace() {
   const s = buildEducatorSeed()
-  return { students: s.students, cohorts: s.cohorts, assignments: s.assignments, subjects: s.subjects }
+  return { students: s.students, cohorts: s.cohorts, assignments: s.assignments, subjects: s.subjects, customScenarios: [] as EdScenario[] }
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -179,7 +257,7 @@ function seedWorkspace() {
    ══════════════════════════════════════════════════════════════════ */
 
 function HomeView({
-  ws, onOpenCohort, onCreate, onCompare, onReplaceCover, onRegenerateCover,
+  ws, onOpenCohort, onCreate, onCompare, onReplaceCover, onRegenerateCover, onAssign, onOpenBuilder,
 }: {
   ws: EdWorkspace
   onOpenCohort: (id: string) => void
@@ -187,6 +265,8 @@ function HomeView({
   onCompare: () => void
   onReplaceCover: (url: string) => void
   onRegenerateCover: () => void
+  onAssign: (a: import('@/lib/educator').EdAssignment) => void
+  onOpenBuilder: (lens: { subjectName?: string; brief?: string }) => void
 }) {
   const totalStudents = ws.students.length
   const attention = needsAttention(ws.students, ws.assignments, ED_NOW)
@@ -232,7 +312,7 @@ function HomeView({
           <div className="ed-snap-card ed-snap-ring">
             <ProgressRing pct={completion} label="Completed" />
             <div>
-              <div className="ed-snap-num">{completion}%</div>
+              <div className="ed-snap-num"><AnimatedCounter value={completion} suffix="%" duration={900} /></div>
               <div className="ed-snap-lbl">of assigned scenarios done</div>
             </div>
           </div>
@@ -298,6 +378,10 @@ function HomeView({
             ))}
           </div>
         )}
+
+        {/* Scenario library — the educator's window into what students play,
+            plus the "author for your classroom" entry to the builder. */}
+        <ScenarioLibrary ws={ws} onAssign={onAssign} onOpenBuilder={onOpenBuilder} />
       </div>
     </>
   )
@@ -474,7 +558,19 @@ const edStyles = `
   .ed-brand-sep { width: 1px; height: 20px; background: var(--lq-line-2); }
   .ed-brand-name { font-family: var(--font-display); font-weight: 500; font-size: 15px; color: var(--lq-ink); }
   .ed-brand-tag { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ed-accent); border: 1px solid var(--ed-accent); border-radius: 999px; padding: 2px 8px; }
-  .ed-topbar-actions { display: flex; gap: 8px; }
+  .ed-topbar-actions { display: flex; gap: 8px; align-items: center; }
+  .ed-kbd-hint { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--lq-line-2); background: #fff; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--lq-ink-3); cursor: pointer; transition: border-color 140ms ease, color 140ms ease; }
+  .ed-kbd-hint:hover { border-color: var(--ed-accent); color: var(--ed-accent); }
+
+  /* Light motion — gentle rise on the main blocks, staggered a touch. */
+  @keyframes ed-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .ed-snap-card, .ed-cblock, .ed-lib-card, .ed-lib-build { animation: ed-rise 440ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .ed-snapshot .ed-snap-card:nth-child(2) { animation-delay: 60ms; }
+  .ed-snapshot .ed-snap-card:nth-child(3) { animation-delay: 120ms; }
+  .ed-snapshot .ed-snap-card:nth-child(4) { animation-delay: 180ms; }
+  .ed-cohort-grid .ed-cblock:nth-child(2) { animation-delay: 60ms; }
+  .ed-cohort-grid .ed-cblock:nth-child(3) { animation-delay: 120ms; }
+  .ed-cohort-grid .ed-cblock:nth-child(4) { animation-delay: 180ms; }
 
   .ed-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px; border-radius: 999px; font-family: var(--font-body); font-weight: 600; font-size: 13px; border: 1px solid transparent; cursor: pointer; transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
   .ed-btn-primary { background: var(--ed-accent); color: #fff; box-shadow: 0 6px 16px -6px var(--ed-accent); }
