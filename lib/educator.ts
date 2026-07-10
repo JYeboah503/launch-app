@@ -243,6 +243,60 @@ export function growthSince(student: EdStudent): number {
   return Math.round(delta / CAPABILITIES.length)
 }
 
+/** Cohort capability averages per weekly snapshot, aligned from the most
+ *  recent (so mixed-length histories still line up). Drives trend lines. */
+export function cohortTrend(students: EdStudent[]): GrowthSnapshot[] {
+  const withHist = students.filter((s) => s.history.length >= 2)
+  if (withHist.length === 0) return []
+  const len = Math.min(...withHist.map((s) => s.history.length))
+  const out: GrowthSnapshot[] = []
+  for (let i = 0; i < len; i++) {
+    const scores: CapabilityScores = {}
+    for (const c of CAPABILITIES) {
+      let sum = 0
+      for (const s of withHist) sum += s.history[s.history.length - len + i].scores[c] ?? 0
+      scores[c] = Math.round(sum / withHist.length)
+    }
+    const ref = withHist[0].history[withHist[0].history.length - len + i]
+    out.push({ date: ref.date, scores })
+  }
+  return out
+}
+
+export const SCORE_BANDS: { label: string; min: number; max: number }[] = [
+  { label: '<40', min: 0, max: 40 },
+  { label: '40–55', min: 40, max: 55 },
+  { label: '55–70', min: 55, max: 70 },
+  { label: '70–85', min: 70, max: 85 },
+  { label: '85+', min: 85, max: 101 },
+]
+
+/** Count of students falling in each score band, for a capability or overall. */
+export function distribution(students: EdStudent[], capability?: string): number[] {
+  const counts = SCORE_BANDS.map(() => 0)
+  for (const s of students) {
+    const v = capability ? (s.scores[capability] ?? 0) : overallScore(s.scores)
+    const idx = SCORE_BANDS.findIndex((b) => v >= b.min && v < b.max)
+    if (idx >= 0) counts[idx]++
+  }
+  return counts
+}
+
+export function biggestMovers(students: EdStudent[], n = 5): { student: EdStudent; growth: number }[] {
+  return students
+    .map((s) => ({ student: s, growth: growthSince(s) }))
+    .sort((a, b) => b.growth - a.growth)
+    .slice(0, n)
+}
+
+/** The cohort's weakest capabilities — where to point the next assignment. */
+export function weakestCapabilities(average: CapabilityScores, n = 3): CapabilityRank[] {
+  return [...CAPABILITIES]
+    .map((name) => ({ name, score: average[name] ?? 0 }))
+    .sort((a, b) => a.score - b.score)
+    .slice(0, n)
+}
+
 export function cohortAverageScores(students: EdStudent[]): CapabilityScores {
   const out: CapabilityScores = {}
   for (const c of CAPABILITIES) {

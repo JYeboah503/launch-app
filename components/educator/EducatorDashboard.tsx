@@ -24,9 +24,10 @@ import { ProgressRing } from '@/components/educator/charts'
 import { ModalShell, fmtDate } from '@/components/educator/ui'
 import { CohortView } from '@/components/educator/CohortView'
 import { StudentView } from '@/components/educator/StudentView'
+import { CohortCompare } from '@/components/educator/CohortCompare'
 import {
   Image as ImageIcon, Settings, Plus, ArrowLeft, Upload,
-  AlertTriangle, Star, CalendarClock,
+  AlertTriangle, Star, CalendarClock, GitCompare,
 } from 'lucide-react'
 
 const KEY = 'launch.educator.v1'
@@ -48,6 +49,7 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
   const [route, setRoute] = useState<Route>({ view: 'home' })
   const [showSettings, setShowSettings] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [showCompare, setShowCompare] = useState(false)
   const [hydrated, setHydrated] = useState(false)
 
   // Hydrate / persist the whole workspace.
@@ -106,6 +108,7 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
           ws={ws}
           onOpenCohort={(cohortId) => setRoute({ view: 'cohort', cohortId })}
           onCreate={() => setShowCreate(true)}
+          onCompare={() => setShowCompare(true)}
           onReplaceCover={(url) => setBranding({ coverUrl: url })}
           onRegenerateCover={() => setBranding({ coverUrl: null })}
         />
@@ -136,6 +139,10 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
           onClose={() => setShowSettings(false)}
           onChange={setBranding}
         />
+      )}
+
+      {showCompare && ws.cohorts.length > 0 && (
+        <CohortCompare ws={ws} onClose={() => setShowCompare(false)} />
       )}
 
       {showCreate && (
@@ -172,11 +179,12 @@ function seedWorkspace() {
    ══════════════════════════════════════════════════════════════════ */
 
 function HomeView({
-  ws, onOpenCohort, onCreate, onReplaceCover, onRegenerateCover,
+  ws, onOpenCohort, onCreate, onCompare, onReplaceCover, onRegenerateCover,
 }: {
   ws: EdWorkspace
   onOpenCohort: (id: string) => void
   onCreate: () => void
+  onCompare: () => void
   onReplaceCover: (url: string) => void
   onRegenerateCover: () => void
 }) {
@@ -266,9 +274,16 @@ function HomeView({
         {/* Cohorts */}
         <div className="ed-section-head">
           <h2 className="ed-h2">Your cohorts</h2>
-          <button type="button" className="ed-btn ed-btn-primary" onClick={onCreate}>
-            <Plus className="w-4 h-4" /> New cohort
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {ws.cohorts.length >= 2 && (
+              <button type="button" className="ed-btn ed-btn-ghost" onClick={onCompare}>
+                <GitCompare className="w-4 h-4" /> Compare
+              </button>
+            )}
+            <button type="button" className="ed-btn ed-btn-primary" onClick={onCreate}>
+              <Plus className="w-4 h-4" /> New cohort
+            </button>
+          </div>
         </div>
 
         {ws.cohorts.length === 0 ? (

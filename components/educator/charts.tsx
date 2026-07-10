@@ -247,6 +247,109 @@ export function GrowthSparkline({ values, width = 120, height = 34 }: { values: 
   )
 }
 
+/* ── Line chart (cohort momentum) ─────────────────────────────────── */
+
+export function LineChart({
+  series, xLabels, height = 200,
+}: {
+  series: { values: number[]; color: string; label: string }[]
+  xLabels: string[]
+  height?: number
+}) {
+  const width = 640
+  const padL = 30, padR = 12, padT = 12, padB = 24
+  const n = xLabels.length
+  const x = (i: number) => padL + (i / Math.max(1, n - 1)) * (width - padL - padR)
+  const y = (v: number) => padT + (1 - v / 100) * (height - padT - padB)
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} width="100%" role="img" aria-label="Trend chart">
+      {[0, 25, 50, 75, 100].map((g) => (
+        <g key={g}>
+          <line x1={padL} y1={y(g)} x2={width - padR} y2={y(g)} stroke="var(--lq-line)" strokeWidth="1" />
+          <text x={padL - 6} y={y(g)} textAnchor="end" dominantBaseline="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fill: 'var(--lq-ink-3)' }}>{g}</text>
+        </g>
+      ))}
+      {xLabels.map((lbl, i) => (
+        <text key={i} x={x(i)} y={height - 6} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fill: 'var(--lq-ink-3)' }}>{lbl}</text>
+      ))}
+      {series.map((s, si) => {
+        const d = s.values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+        return (
+          <g key={si}>
+            <path d={d} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            {s.values.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r="3" fill={s.color} />)}
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+/* ── Grouped comparison bars ──────────────────────────────────────── */
+
+export function GroupedBars({
+  categories, a, b,
+}: {
+  categories: string[]
+  a: { label: string; color: string; values: number[] }
+  b: { label: string; color: string; values: number[] }
+}) {
+  return (
+    <div className="ed-gb">
+      <div className="ed-gb-legend">
+        <span><i style={{ background: a.color }} /> {a.label}</span>
+        <span><i style={{ background: b.color }} /> {b.label}</span>
+      </div>
+      {categories.map((c, i) => (
+        <div key={c} className="ed-gb-row">
+          <span className="ed-gb-cat">{c}</span>
+          <div className="ed-gb-bars">
+            <div className="ed-gb-track"><div className="ed-gb-fill" style={{ width: `${a.values[i]}%`, background: a.color }} /><span className="ed-gb-v">{a.values[i]}</span></div>
+            <div className="ed-gb-track"><div className="ed-gb-fill" style={{ width: `${b.values[i]}%`, background: b.color }} /><span className="ed-gb-v">{b.values[i]}</span></div>
+          </div>
+        </div>
+      ))}
+      <style>{`
+        .ed-gb-legend { display: flex; gap: 18px; margin-bottom: 14px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--lq-ink-2); }
+        .ed-gb-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+        .ed-gb-row { display: grid; grid-template-columns: 116px 1fr; gap: 12px; align-items: center; margin-bottom: 9px; }
+        .ed-gb-cat { font-size: 12px; color: var(--lq-ink-2); text-align: right; }
+        .ed-gb-bars { display: flex; flex-direction: column; gap: 3px; }
+        .ed-gb-track { position: relative; height: 12px; background: var(--lq-line); border-radius: 999px; }
+        .ed-gb-fill { height: 100%; border-radius: 999px; }
+        .ed-gb-v { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-family: var(--font-mono); font-size: 8px; font-weight: 700; color: var(--lq-ink); }
+      `}</style>
+    </div>
+  )
+}
+
+/* ── Distribution bars ────────────────────────────────────────────── */
+
+export function DistributionBars({ bands, counts }: { bands: { label: string }[]; counts: number[] }) {
+  const max = Math.max(1, ...counts)
+  return (
+    <div className="ed-dist">
+      {bands.map((b, i) => (
+        <div key={b.label} className="ed-dist-col">
+          <div className="ed-dist-bar-wrap">
+            <div className="ed-dist-count">{counts[i]}</div>
+            <div className="ed-dist-bar" style={{ height: `${(counts[i] / max) * 100}%` }} />
+          </div>
+          <div className="ed-dist-lbl">{b.label}</div>
+        </div>
+      ))}
+      <style>{`
+        .ed-dist { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-items: end; height: 160px; }
+        .ed-dist-col { display: flex; flex-direction: column; align-items: center; height: 100%; }
+        .ed-dist-bar-wrap { flex: 1; width: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 5px; }
+        .ed-dist-count { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--lq-ink-2); }
+        .ed-dist-bar { width: 100%; max-width: 54px; background: linear-gradient(180deg, var(--ed-accent), color-mix(in oklab, var(--ed-accent), #fff 30%)); border-radius: 8px 8px 0 0; min-height: 4px; }
+        .ed-dist-lbl { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; color: var(--lq-ink-3); margin-top: 8px; }
+      `}</style>
+    </div>
+  )
+}
+
 /* ── Fit bar ──────────────────────────────────────────────────────── */
 
 export function FitBar({ label, emoji, value, sub }: { label: string; emoji?: string; value: number; sub?: string }) {

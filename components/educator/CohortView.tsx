@@ -12,13 +12,14 @@ import {
 } from '@/lib/educator'
 import { ED_NOW, type EdWorkspace } from '@/components/educator/types'
 import { CapabilityHeatmap, ProgressRing } from '@/components/educator/charts'
+import { InsightsTab } from '@/components/educator/InsightsTab'
 import { ModalShell, fmtDate, dueLabel } from '@/components/educator/ui'
 import {
   ArrowLeft, Plus, X, Copy, Check, Search, Upload, Download, FileText,
-  Users, ClipboardList, GraduationCap, LayoutGrid, AlertTriangle, Star, Link2,
+  Users, ClipboardList, GraduationCap, LayoutGrid, AlertTriangle, Star, Link2, LineChart as LineIcon,
 } from 'lucide-react'
 
-type Tab = 'overview' | 'students' | 'assignments' | 'subjects'
+type Tab = 'overview' | 'insights' | 'students' | 'assignments' | 'subjects'
 
 export function CohortView({
   ws, cohort, onBack, onOpenStudent, onPatch,
@@ -65,6 +66,7 @@ export function CohortView({
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Overview', icon: <LayoutGrid className="w-4 h-4" /> },
+    { key: 'insights', label: 'Insights', icon: <LineIcon className="w-4 h-4" /> },
     { key: 'students', label: `Students · ${students.length}`, icon: <Users className="w-4 h-4" /> },
     { key: 'assignments', label: `Assignments · ${assignments.length}`, icon: <ClipboardList className="w-4 h-4" /> },
     { key: 'subjects', label: 'Subject fit', icon: <GraduationCap className="w-4 h-4" /> },
@@ -145,6 +147,9 @@ export function CohortView({
           )}
         </>
       )}
+
+      {/* ── INSIGHTS ── */}
+      {tab === 'insights' && <InsightsTab students={students} onOpenStudent={onOpenStudent} />}
 
       {/* ── STUDENTS ── */}
       {tab === 'students' && (
