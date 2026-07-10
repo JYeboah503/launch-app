@@ -27,14 +27,19 @@ import { StudentView } from '@/components/educator/StudentView'
 import { CohortCompare } from '@/components/educator/CohortCompare'
 import { ScenarioLibrary } from '@/components/educator/ScenarioLibrary'
 import { CommandPalette } from '@/components/educator/CommandPalette'
+import { NewScenarioFlow } from '@/components/educator/NewScenarioFlow'
+import { FreePlayCard } from '@/components/educator/FreePlayCard'
 import { ScenarioBuilderV2 } from '@/components/scenario-builder-v2'
+import { ScenarioPlay } from '@/components/play'
+import { SCENARIOS } from '@/lib/play/sampleScenarios'
 import { addCustomScenarioStub } from '@/lib/scenarioStore'
+import { ASSIGNABLE_SCENARIOS, GENERAL_PACKS, type EdAssignment } from '@/lib/educator'
 import { AnimatedCounter } from '@/components/motion'
 import {
   Image as ImageIcon, Settings, Plus, ArrowLeft, Upload,
   AlertTriangle, Star, CalendarClock, GitCompare, Command,
 } from 'lucide-react'
-import type { EdScenario } from '@/components/educator/types'
+import type { EdScenario, BuilderLens, FreePlaySession } from '@/components/educator/types'
 
 const KEY = 'launch.educator.v1'
 
@@ -57,7 +62,9 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
   const [showCreate, setShowCreate] = useState(false)
   const [showCompare, setShowCompare] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
-  const [builderLens, setBuilderLens] = useState<{ subjectName?: string; brief?: string } | null>(null)
+  const [flowOpen, setFlowOpen] = useState(false)
+  const [builderLens, setBuilderLens] = useState<BuilderLens | null>(null)
+  const [previewPlay, setPreviewPlay] = useState(false)
   const [hydrated, setHydrated] = useState(false)
 
   // Hydrate / persist the whole workspace.
@@ -67,8 +74,8 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
       if (raw) {
         const parsed = JSON.parse(raw)
         if (parsed && Array.isArray(parsed.cohorts)) {
-          // Older saves may predate customScenarios — default it in.
-          setWs({ customScenarios: [], ...parsed })
+          // Older saves may predate newer workspace fields — default them in.
+          setWs({ customScenarios: [], freePlaySessions: [], ...parsed })
         }
       }
     } catch { /* ignore */ }
@@ -93,6 +100,43 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
 
   const patch = (p: Partial<EdWorkspace>) => setWs((w) => ({ ...w, ...p }))
   const setBranding = (b: Partial<EdBranding>) => setWs((w) => ({ ...w, branding: { ...w.branding, ...b } }))
+
+  /** "General practice" — assign every scenario in a pack to the cohort. */
+  const assignPack = (cohortId: string, packId: string, dueIso?: string): number => {
+    const cohort = ws.cohorts.find((c) => c.id === cohortId)
+    const pack = GENERAL_PACKS.find((p) => p.id === packId)
+    if (!cohort || !pack) return 0
+    const fresh: EdAssignment[] = pack.scenarioIds.flatMap((sid, i) => {
+      const scen = ASSIGNABLE_SCENARIOS.find((s) => s.id === sid)
+      if (!scen) return []
+      return [{
+        id: `as-${Date.now().toString(36)}-${i}`,
+        cohortId,
+        title: scen.title,
+        capabilities: scen.capabilities,
+        assignedTo: 'cohort' as const,
+        dueAt: dueIso,
+        createdAt: new Date(ED_NOW).toISOString(),
+        progress: cohort.studentIds.map((id) => ({ studentId: id, state: 'not-started' as const })),
+      }]
+    })
+    patch({ assignments: [...fresh, ...ws.assignments] })
+    return fresh.length
+  }
+
+  /** "Free play" — start a timed open session; the card lands on home. */
+  const startFreePlay = (cohortId: string, durationMins: number): FreePlaySession => {
+    const session: FreePlaySession = {
+      id: `fp-${Date.now().toString(36)}`,
+      cohortId,
+      durationMins,
+      // Real wall-clock (not ED_NOW) — this drives a live countdown.
+      startedAt: new Date().toISOString(),
+      code: generateClassCodeLike().replace('CLASS-', 'PLAY-'),
+    }
+    patch({ freePlaySessions: [session, ...ws.freePlaySessions] })
+    return session
+  }
 
   const activeCohort = route.view !== 'home' ? ws.cohorts.find((c) => c.id === route.cohortId) || null : null
   const activeStudent = route.view === 'student' ? ws.students.find((s) => s.id === route.studentId) || null : null
@@ -138,7 +182,9 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
           onReplaceCover={(url) => setBranding({ coverUrl: url })}
           onRegenerateCover={() => setBranding({ coverUrl: null })}
           onAssign={(a) => patch({ assignments: [a, ...ws.assignments] })}
-          onOpenBuilder={(lens) => setBuilderLens(lens)}
+          onNewScenario={() => setFlowOpen(true)}
+          onEndSession={(id) => patch({ freePlaySessions: ws.freePlaySessions.filter((s) => s.id !== id) })}
+          onPreviewPlay={() => setPreviewPlay(true)}
         />
       )}
 
@@ -182,8 +228,32 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
           onNewCohort={() => setShowCreate(true)}
           onCompare={() => setShowCompare(true)}
           onSettings={() => setShowSettings(true)}
-          onBuild={() => setBuilderLens({})}
+          onBuild={() => setFlowOpen(true)}
         />
+      )}
+
+      {/* Purpose-first creation flow — THE entry for making/assigning. */}
+      {flowOpen && (
+        <NewScenarioFlow
+          ws={ws}
+          onClose={() => setFlowOpen(false)}
+          onOpenBuilder={(lens) => { setFlowOpen(false); setBuilderLens(lens) }}
+          onAssignPack={assignPack}
+          onStartFreePlay={startFreePlay}
+        />
+      )}
+
+      {/* "See what students see" — the ACTUAL student play experience,
+          overlaid full-screen. Exiting returns to the educator workspace. */}
+      {previewPlay && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: '#0e1833' }}>
+          <ScenarioPlay
+            scenario={SCENARIOS[0]}
+            profile={{ name: 'Preview' }}
+            onComplete={() => setPreviewPlay(false)}
+            onExit={() => setPreviewPlay(false)}
+          />
+        </div>
       )}
 
       {/* Teacher scenario builder — the same authoring power the corporates
@@ -207,7 +277,7 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
             createdAt: new Date(role.createdAt).toISOString(),
             genericQuestions: role.genericQuestions,
           })
-          // …and surface it in the educator's library, marked "Yours".
+          // …surface it in the educator's library, marked "Yours"…
           const scen: EdScenario = {
             id: role.id,
             title: role.name,
@@ -219,7 +289,21 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
             isCustom: true,
             subjectName: builderLens?.subjectName,
           }
-          patch({ customScenarios: [scen, ...ws.customScenarios] })
+          // …and if the flow targeted a cohort, assign it there immediately.
+          const targetCohort = builderLens?.cohortId ? ws.cohorts.find((c) => c.id === builderLens.cohortId) : undefined
+          const autoAssign: EdAssignment[] = targetCohort ? [{
+            id: `as-${Date.now().toString(36)}`,
+            cohortId: targetCohort.id,
+            title: scen.title,
+            capabilities: scen.capabilities,
+            assignedTo: 'cohort' as const,
+            createdAt: new Date(ED_NOW).toISOString(),
+            progress: targetCohort.studentIds.map((id) => ({ studentId: id, state: 'not-started' as const })),
+          }] : []
+          patch({
+            customScenarios: [scen, ...ws.customScenarios],
+            ...(autoAssign.length ? { assignments: [...autoAssign, ...ws.assignments] } : {}),
+          })
         }}
       />
 
@@ -249,7 +333,10 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
 
 function seedWorkspace() {
   const s = buildEducatorSeed()
-  return { students: s.students, cohorts: s.cohorts, assignments: s.assignments, subjects: s.subjects, customScenarios: [] as EdScenario[] }
+  return {
+    students: s.students, cohorts: s.cohorts, assignments: s.assignments, subjects: s.subjects,
+    customScenarios: [] as EdScenario[], freePlaySessions: [] as FreePlaySession[],
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -257,7 +344,7 @@ function seedWorkspace() {
    ══════════════════════════════════════════════════════════════════ */
 
 function HomeView({
-  ws, onOpenCohort, onCreate, onCompare, onReplaceCover, onRegenerateCover, onAssign, onOpenBuilder,
+  ws, onOpenCohort, onCreate, onCompare, onReplaceCover, onRegenerateCover, onAssign, onNewScenario, onEndSession, onPreviewPlay,
 }: {
   ws: EdWorkspace
   onOpenCohort: (id: string) => void
@@ -265,8 +352,10 @@ function HomeView({
   onCompare: () => void
   onReplaceCover: (url: string) => void
   onRegenerateCover: () => void
-  onAssign: (a: import('@/lib/educator').EdAssignment) => void
-  onOpenBuilder: (lens: { subjectName?: string; brief?: string }) => void
+  onAssign: (a: EdAssignment) => void
+  onNewScenario: () => void
+  onEndSession: (id: string) => void
+  onPreviewPlay: () => void
 }) {
   const totalStudents = ws.students.length
   const attention = needsAttention(ws.students, ws.assignments, ED_NOW)
@@ -306,6 +395,11 @@ function HomeView({
             {attention.length > 0 ? ` ${attention.length} need a nudge today.` : ' Everyone is on track today.'}
           </p>
         </div>
+
+        {/* Live free-play sessions — front and centre while running */}
+        {ws.freePlaySessions.map((s) => (
+          <FreePlayCard key={s.id} ws={ws} session={s} onEnd={() => onEndSession(s.id)} onPreview={onPreviewPlay} />
+        ))}
 
         {/* Snapshot row */}
         <div className="ed-snapshot">
@@ -381,7 +475,7 @@ function HomeView({
 
         {/* Scenario library — the educator's window into what students play,
             plus the "author for your classroom" entry to the builder. */}
-        <ScenarioLibrary ws={ws} onAssign={onAssign} onOpenBuilder={onOpenBuilder} />
+        <ScenarioLibrary ws={ws} onAssign={onAssign} onNewScenario={onNewScenario} />
       </div>
     </>
   )
@@ -426,6 +520,10 @@ function CohortBlock({ ws, cohort, onOpen }: { ws: EdWorkspace; cohort: Cohort; 
    ══════════════════════════════════════════════════════════════════ */
 
 function Cover({ branding, onReplace, onRegenerate }: { branding: EdBranding; onReplace: (url: string) => void; onRegenerate: () => void }) {
+  // The permanent default is the Launch rocket artwork at
+  // public/educator-cover.png. If the file isn't in the build yet, we fall
+  // back to the generative mesh so the cover is never broken.
+  const [defaultMissing, setDefaultMissing] = useState(false)
   const onFile = (file: File | null) => {
     if (!file) return
     const reader = new FileReader()
@@ -436,7 +534,9 @@ function Cover({ branding, onReplace, onRegenerate }: { branding: EdBranding; on
     <div className="ed-cover">
       {branding.coverUrl
         ? <img src={branding.coverUrl} alt="" className="ed-cover-img" />
-        : <GenerativeCover accent={branding.accent} />}
+        : defaultMissing
+          ? <GenerativeCover accent={branding.accent} />
+          : <img src="/educator-cover.png" alt="" className="ed-cover-img" onError={() => setDefaultMissing(true)} />}
       <div className="ed-cover-tools">
         <label className="ed-cover-btn">
           <Upload className="w-3.5 h-3.5" /> Replace cover
@@ -572,14 +672,14 @@ const edStyles = `
   .ed-cohort-grid .ed-cblock:nth-child(3) { animation-delay: 120ms; }
   .ed-cohort-grid .ed-cblock:nth-child(4) { animation-delay: 180ms; }
 
-  .ed-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px; border-radius: 999px; font-family: var(--font-body); font-weight: 600; font-size: 13px; border: 1px solid transparent; cursor: pointer; transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
+  .ed-btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 17px; border-radius: 999px; font-family: var(--font-body); font-weight: 600; font-size: 13px; border: 1px solid transparent; cursor: pointer; transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
   .ed-btn-primary { background: var(--ed-accent); color: #fff; box-shadow: 0 6px 16px -6px var(--ed-accent); }
   .ed-btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 22px -8px var(--ed-accent); }
   .ed-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
-  .ed-btn-ghost { background: #fff; color: var(--lq-ink-2); border-color: var(--lq-line-2); }
-  .ed-btn-ghost:hover { color: var(--lq-ink); border-color: var(--ed-accent); }
+  .ed-btn-ghost { background: #fff; color: var(--lq-ink-2); border-color: transparent; box-shadow: 0 1px 2px rgba(14,24,51,0.04), 0 0 0 1px rgba(14,24,51,0.05); }
+  .ed-btn-ghost:hover { color: var(--lq-ink); box-shadow: 0 1px 2px rgba(14,24,51,0.04), 0 0 0 1.5px var(--ed-accent); }
 
-  .ed-cover { position: relative; height: 200px; overflow: hidden; }
+  .ed-cover { position: relative; height: 248px; overflow: hidden; }
   .ed-cover-img, .ed-gencover { width: 100%; height: 100%; object-fit: cover; }
   .ed-gencover { display: block; }
   .ed-cover-tools { position: absolute; right: 20px; bottom: 14px; display: flex; gap: 8px; opacity: 0; transition: opacity 180ms ease; }
@@ -587,16 +687,16 @@ const edStyles = `
   .ed-cover-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.92); border: 1px solid var(--lq-line); font-family: var(--font-body); font-size: 12px; font-weight: 600; color: var(--lq-ink); cursor: pointer; }
   .ed-cover-btn:hover { border-color: var(--ed-accent); }
 
-  .ed-page { max-width: 1180px; margin: 0 auto; padding: 0 24px 80px; }
-  .ed-greeting { padding: 30px 0 24px; }
+  .ed-page { max-width: 1180px; margin: 0 auto; padding: 0 28px 110px; }
+  .ed-greeting { padding: 46px 0 36px; }
   .ed-eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ed-accent); font-weight: 600; margin-bottom: 12px; }
   .ed-h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(28px, 3.6vw, 42px); letter-spacing: -0.024em; line-height: 1.08; color: var(--lq-ink); max-width: 22ch; margin: 0 0 12px; }
   .ed-lede { font-size: 16px; color: var(--lq-ink-2); line-height: 1.55; max-width: 60ch; }
 
-  .ed-snapshot { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 40px; }
+  .ed-snapshot { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 56px; }
   @media (max-width: 940px) { .ed-snapshot { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 560px) { .ed-snapshot { grid-template-columns: 1fr; } }
-  .ed-snap-card { background: #fff; border: 1px solid var(--lq-line); border-radius: 18px; padding: 18px; min-height: 150px; }
+  .ed-snap-card { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 22px; min-height: 158px; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); }
   .ed-snap-ring { display: flex; align-items: center; gap: 16px; }
   .ed-snap-num { font-family: var(--font-mono); font-weight: 700; font-size: 26px; color: var(--lq-ink); line-height: 1; }
   .ed-snap-lbl { font-size: 12px; color: var(--lq-ink-3); margin-top: 4px; max-width: 14ch; }
@@ -608,11 +708,11 @@ const edStyles = `
   .ed-snap-more { font-family: var(--font-mono); font-size: 10px; color: var(--lq-ink-3); }
   .ed-snap-empty { font-size: 13px; color: var(--lq-ink-3); font-style: italic; }
 
-  .ed-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .ed-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 16px; }
   .ed-h2 { font-family: var(--font-display); font-weight: 500; font-size: clamp(20px, 2.4vw, 28px); letter-spacing: -0.02em; color: var(--lq-ink); }
 
-  .ed-cohort-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-  .ed-cblock { background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; padding: 22px; cursor: pointer; transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+  .ed-cohort-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 18px; }
+  .ed-cblock { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 26px; cursor: pointer; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
   .ed-cblock:hover { border-color: var(--ed-accent); box-shadow: 0 14px 34px -18px var(--ed-accent); transform: translateY(-3px); }
   .ed-cblock-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
   .ed-cblock-term { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-3); margin-bottom: 5px; }
@@ -628,6 +728,12 @@ const edStyles = `
 
   .ed-empty { text-align: center; padding: 48px; background: #fff; border: 1px dashed var(--lq-line-2); border-radius: 20px; }
   .ed-empty p { color: var(--lq-ink-2); margin-bottom: 16px; font-style: italic; font-family: var(--font-display); font-size: 17px; }
+
+  /* Shared content cards — used by cohort Insights + student view */
+  .ed-scard { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 24px; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); }
+  .ed-scard-accent { border-color: var(--ed-accent); box-shadow: 0 0 0 3px var(--ed-accent-soft); }
+  .ed-scard-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+  .ed-guide-note { font-size: 12.5px; color: var(--lq-ink-2); line-height: 1.55; margin-bottom: 14px; }
 
   /* Modals + fields (shared across educator views) */
   .ed-modal-root { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }

@@ -27,6 +27,24 @@ export interface EdScenario {
   subjectName?: string
 }
 
+/** A live timed free-play session — students join with the code and play
+ *  anything; results roll into the cohort as they finish. */
+export interface FreePlaySession {
+  id: string
+  cohortId: string
+  durationMins: number
+  startedAt: string // ISO — real wall-clock, drives the countdown
+  code: string
+}
+
+/** The classroom lens carried from the purpose-first flow into the builder. */
+export interface BuilderLens {
+  subjectName?: string
+  brief?: string
+  /** When set, the created scenario is auto-assigned to this cohort. */
+  cohortId?: string
+}
+
 export interface EdWorkspace {
   branding: EdBranding
   students: EdStudent[]
@@ -35,6 +53,8 @@ export interface EdWorkspace {
   subjects: SubjectProfile[]
   /** Teacher-authored scenarios (via the builder). */
   customScenarios: EdScenario[]
+  /** Live free-play sessions. */
+  freePlaySessions: FreePlaySession[]
 }
 
 /** Advisor's per-student overrides for career / subject guidance. */

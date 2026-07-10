@@ -87,12 +87,10 @@ export function CohortView({
           </div>
         </div>
         <div className="ed-cohead-actions">
-          <button type="button" className="ed-btn ed-btn-ghost" onClick={() => downloadText(`${cohort.code.toLowerCase()}-gradebook.csv`, cohortCsv(cohort, students))}>
-            <Download className="w-4 h-4" /> Export CSV
-          </button>
-          <button type="button" className="ed-btn ed-btn-ghost" onClick={() => window.print()}>
-            <FileText className="w-4 h-4" /> Summary PDF
-          </button>
+          <ExportMenu
+            onCsv={() => downloadText(`${cohort.code.toLowerCase()}-gradebook.csv`, cohortCsv(cohort, students))}
+            onPdf={() => window.print()}
+          />
           <button type="button" className="ed-btn ed-btn-primary" onClick={() => setEnrolOpen(true)}>
             <Plus className="w-4 h-4" /> Enrol
           </button>
@@ -218,6 +216,27 @@ export function CohortView({
 }
 
 /* ── small pieces ─────────────────────────────────────────────────── */
+
+function ExportMenu({ onCsv, onPdf }: { onCsv: () => void; onPdf: () => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ position: 'relative' }}>
+      <button type="button" className="ed-btn ed-btn-ghost" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <Download className="w-4 h-4" /> Export
+      </button>
+      {open && (
+        <div className="ed-exp-menu" role="menu">
+          <button type="button" className="ed-exp-item" onClick={() => { onCsv(); setOpen(false) }}>
+            <Download className="w-4 h-4" /> Gradebook CSV
+          </button>
+          <button type="button" className="ed-exp-item" onClick={() => { onPdf(); setOpen(false) }}>
+            <FileText className="w-4 h-4" /> Summary PDF
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function CodePill({ code }: { code: string }) {
   const [copied, setCopied] = useState(false)
@@ -599,34 +618,37 @@ function AssignModal({ cohort, students, scenarios, onClose, onAssign }: { cohor
 /* ── styles ───────────────────────────────────────────────────────── */
 
 const cohortStyles = `
-  .ed-back { display: inline-flex; align-items: center; gap: 7px; margin: 26px 0 18px; background: none; border: none; cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-2); }
+  .ed-back { display: inline-flex; align-items: center; gap: 7px; margin: 36px 0 22px; background: none; border: none; cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-2); }
   .ed-back:hover { color: var(--ed-accent); }
-  .ed-cohead { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; margin-bottom: 22px; }
+  .ed-cohead { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; margin-bottom: 30px; }
   .ed-cohead-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .ed-cohead-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .ed-dim { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; color: var(--lq-ink-3); }
   .ed-h3 { font-family: var(--font-display); font-weight: 500; font-size: 19px; letter-spacing: -0.015em; color: var(--lq-ink); }
+  .ed-exp-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; width: 210px; background: #fff; border: 1px solid var(--lq-line); border-radius: 14px; padding: 6px; box-shadow: 0 18px 40px -16px rgba(14, 24, 51, 0.28); }
+  .ed-exp-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; border: none; background: none; cursor: pointer; font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--lq-ink); text-align: left; }
+  .ed-exp-item:hover { background: var(--ed-accent-soft); color: var(--ed-accent); }
   .ed-codepill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--lq-line-2); cursor: pointer; color: var(--lq-ink-3); }
   .ed-codepill:hover { border-color: var(--ed-accent); }
   .ed-codepill-lbl { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; }
   .ed-codepill-code { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--ed-accent); }
 
-  .ed-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--lq-line); margin-bottom: 24px; overflow-x: auto; }
-  .ed-tab { display: inline-flex; align-items: center; gap: 7px; padding: 11px 14px; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--lq-ink-3); white-space: nowrap; }
+  .ed-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--lq-line); margin-bottom: 32px; overflow-x: auto; }
+  .ed-tab { display: inline-flex; align-items: center; gap: 7px; padding: 12px 16px; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--lq-ink-3); white-space: nowrap; }
   .ed-tab:hover { color: var(--lq-ink); }
   .ed-tab.is-on { color: var(--ed-accent); border-bottom-color: var(--ed-accent); }
 
-  .ed-kpis { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+  .ed-kpis { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 30px; }
   @media (max-width: 820px) { .ed-kpis { grid-template-columns: 1fr 1fr; } }
-  .ed-kpi { background: #fff; border: 1px solid var(--lq-line); border-radius: 16px; padding: 18px; }
+  .ed-kpi { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 22px; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); }
   .ed-kpi-ring { display: flex; align-items: center; gap: 16px; }
   .ed-kpi-num { font-family: var(--font-mono); font-weight: 700; font-size: 32px; color: var(--lq-ink); line-height: 1; }
   .ed-kpi-lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-3); margin-top: 8px; }
   .ed-kpi-sub { font-size: 12px; color: var(--lq-ink-3); max-width: 20ch; }
 
-  .ed-attn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 28px; }
+  .ed-attn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 38px; }
   @media (max-width: 720px) { .ed-attn-grid { grid-template-columns: 1fr; } }
-  .ed-attn-card { background: #fff; border: 1px solid var(--lq-line); border-radius: 16px; padding: 16px 18px; }
+  .ed-attn-card { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 20px 22px; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); }
   .ed-attn-rows { display: flex; flex-direction: column; gap: 2px; }
   .ed-attn-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; background: none; border: none; cursor: pointer; text-align: left; transition: background 120ms ease; }
   .ed-attn-row:hover { background: rgba(27,158,143,0.05); }
@@ -635,10 +657,10 @@ const cohortStyles = `
   .ed-attn-name { font-size: 13px; font-weight: 600; color: var(--lq-ink); }
   .ed-attn-reason { font-size: 11px; color: var(--lq-ink-3); }
 
-  .ed-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .ed-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
 
-  .ed-roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-  .ed-rcard { text-align: left; background: #fff; border: 1px solid var(--lq-line); border-radius: 16px; padding: 16px; cursor: pointer; transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
+  .ed-roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+  .ed-rcard { text-align: left; background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 18px; padding: 20px; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); cursor: pointer; transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
   .ed-rcard:hover { border-color: var(--ed-accent); transform: translateY(-2px); box-shadow: 0 12px 26px -16px var(--ed-accent); }
   .ed-rcard-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
   .ed-rcard-ini { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; background: var(--ed-accent-soft); color: var(--ed-accent); font-family: var(--font-mono); font-size: 12px; font-weight: 700; }

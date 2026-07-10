@@ -20,16 +20,15 @@ import { ModalShell } from '@/components/educator/ui'
 import { Plus, Eye, Send, Check, Sparkles, PencilRuler } from 'lucide-react'
 
 export function ScenarioLibrary({
-  ws, onAssign, onOpenBuilder,
+  ws, onAssign, onNewScenario,
 }: {
   ws: EdWorkspace
   onAssign: (a: EdAssignment) => void
-  /** Opens the ScenarioBuilder, optionally seeded with a classroom lens. */
-  onOpenBuilder: (lens: { subjectName?: string; brief?: string }) => void
+  /** Opens the purpose-first NewScenarioFlow. */
+  onNewScenario: () => void
 }) {
   const [preview, setPreview] = useState<EdScenario | null>(null)
   const [assigning, setAssigning] = useState<EdScenario | null>(null)
-  const [lensOpen, setLensOpen] = useState(false)
 
   const scenarios: EdScenario[] = [
     ...ws.customScenarios,
@@ -43,17 +42,17 @@ export function ScenarioLibrary({
           <h2 className="ed-h2">Scenario library</h2>
           <p className="ed-lib-sub">What your students can play — preview anything, assign it to a cohort, or author your own through your subject&rsquo;s lens.</p>
         </div>
-        <button type="button" className="ed-btn ed-btn-primary" onClick={() => setLensOpen(true)}>
-          <PencilRuler className="w-4 h-4" /> Build your own
+        <button type="button" className="ed-btn ed-btn-primary" onClick={onNewScenario}>
+          <PencilRuler className="w-4 h-4" /> New scenario
         </button>
       </div>
 
       <div className="ed-lib-grid">
         {/* Build-your-own card leads the grid */}
-        <button type="button" className="ed-lib-build" onClick={() => setLensOpen(true)}>
+        <button type="button" className="ed-lib-build" onClick={onNewScenario}>
           <Sparkles className="w-5 h-5" style={{ color: 'var(--ed-accent)' }} />
-          <span className="ed-lib-build-title">Author for your classroom</span>
-          <span className="ed-lib-build-sub">&ldquo;A Nike scenario focused on economics&rdquo; — describe the angle, we&rsquo;ll draft it with you.</span>
+          <span className="ed-lib-build-title">New scenario</span>
+          <span className="ed-lib-build-sub">Pick a purpose — subject focus, general practice, or free play — and go from there.</span>
         </button>
 
         {scenarios.map((s) => (
@@ -83,9 +82,6 @@ export function ScenarioLibrary({
       )}
       {assigning && (
         <AssignToCohort scenario={assigning} cohorts={ws.cohorts} onClose={() => setAssigning(null)} onAssign={(a) => { onAssign(a); setAssigning(null) }} />
-      )}
-      {lensOpen && (
-        <LensDialog subjects={ws.subjects.map((s) => s.name)} onClose={() => setLensOpen(false)} onGo={(lens) => { setLensOpen(false); onOpenBuilder(lens) }} />
       )}
 
       <style>{libStyles}</style>
@@ -185,51 +181,12 @@ function AssignToCohort({ scenario, cohorts, onClose, onAssign }: { scenario: Ed
   )
 }
 
-/* ── Classroom lens dialog ────────────────────────────────────────── */
-
-function LensDialog({ subjects, onClose, onGo }: { subjects: string[]; onClose: () => void; onGo: (lens: { subjectName?: string; brief?: string }) => void }) {
-  const [subject, setSubject] = useState(subjects[0] || '')
-  const [brief, setBrief] = useState('')
-  return (
-    <ModalShell title="Author for your classroom" onClose={onClose}>
-      <p className="ed-lens-note">
-        Describe the scenario the way you&rsquo;d brief a colleague. An economics
-        teacher might want <em>&ldquo;a Nike scenario focused on economics&rdquo;</em>;
-        business studies might want <em>&ldquo;one built around supply and demand&rdquo;</em>.
-        The builder drafts it with you — you edit everything before it ships.
-      </p>
-      <div className="ed-field">
-        <label className="ed-label">Your subject</label>
-        <select className="ed-input" value={subject} onChange={(e) => setSubject(e.target.value)}>
-          {subjects.length === 0 && <option value="">General</option>}
-          {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-      </div>
-      <div className="ed-field">
-        <label className="ed-label">The angle</label>
-        <textarea
-          className="ed-input" style={{ minHeight: 84 }} autoFocus
-          placeholder="A Nike scenario where students run the sneaker launch — pricing, demand, and a supply shock…"
-          value={brief} onChange={(e) => setBrief(e.target.value)}
-        />
-      </div>
-      <div className="ed-modal-foot">
-        <button type="button" className="ed-btn ed-btn-ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="ed-btn ed-btn-primary" onClick={() => onGo({ subjectName: subject || undefined, brief: brief.trim() || undefined })}>
-          <PencilRuler className="w-4 h-4" /> Open the builder
-        </button>
-      </div>
-      <style>{`.ed-lens-note { font-size: 13.5px; color: var(--lq-ink-2); line-height: 1.6; margin-bottom: 16px; } .ed-lens-note em { color: var(--lq-ink); }`}</style>
-    </ModalShell>
-  )
-}
-
 /* ── styles ───────────────────────────────────────────────────────── */
 
 const libStyles = `
   .ed-lib-sub { font-size: 13.5px; color: var(--lq-ink-2); margin-top: 6px; max-width: 64ch; line-height: 1.55; }
-  .ed-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-  .ed-lib-card { background: #fff; border: 1px solid var(--lq-line); border-radius: 18px; padding: 18px 20px; display: flex; flex-direction: column; transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+  .ed-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .ed-lib-card { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 22px 24px; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
   .ed-lib-card:hover { border-color: var(--ed-accent); box-shadow: 0 12px 30px -18px var(--ed-accent); transform: translateY(-2px); }
   .ed-lib-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .ed-lib-emoji { font-size: 24px; }
@@ -244,7 +201,7 @@ const libStyles = `
   .ed-lib-btn:hover { border-color: var(--ed-accent); color: var(--ed-accent); }
   .ed-lib-btn-primary { background: var(--ed-accent); border-color: var(--ed-accent); color: #fff; }
   .ed-lib-btn-primary:hover { color: #fff; opacity: 0.92; }
-  .ed-lib-build { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; background: var(--ed-accent-soft); border: 1.5px dashed var(--ed-accent); border-radius: 18px; padding: 20px; cursor: pointer; transition: transform 180ms ease, box-shadow 180ms ease; }
+  .ed-lib-build { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; text-align: left; background: var(--ed-accent-soft); border: 1.5px dashed var(--ed-accent); border-radius: 20px; padding: 24px; cursor: pointer; transition: transform 180ms ease, box-shadow 180ms ease; }
   .ed-lib-build:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -18px var(--ed-accent); }
   .ed-lib-build-title { font-family: var(--font-display); font-weight: 500; font-size: 18px; color: var(--lq-ink); }
   .ed-lib-build-sub { font-size: 12.5px; color: var(--lq-ink-2); line-height: 1.55; }

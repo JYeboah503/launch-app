@@ -482,6 +482,14 @@ export const ASSIGNABLE_SCENARIOS: { id: string; title: string; emoji: string; c
   { id: 'sc-policy', title: 'Policy Advisor', emoji: '🏛️', capabilities: ['Situational Awareness & Systems Thinking', 'Integrity & Ethics', 'Reasoning & Critical Thinking'], blurb: 'The popular option isn’t the right one. Advise the minister.', decisions: 6, mins: 13 },
 ]
 
+/** Curated scenario packs for the "General practice" purpose — assigned as
+ *  one bundle (one assignment per scenario), scores roll up per cohort. */
+export const GENERAL_PACKS: { id: string; name: string; emoji: string; blurb: string; scenarioIds: string[] }[] = [
+  { id: 'pack-starter', name: 'Starter Five', emoji: '🌱', blurb: 'A broad first workout — five scenarios covering all ten capabilities.', scenarioIds: ['sc-startup', 'sc-retail', 'sc-coach', 'sc-newsroom', 'sc-er'] },
+  { id: 'pack-judgement', name: 'Judgement & Ethics', emoji: '⚖️', blurb: 'Pressure-test how they decide when the right call isn’t the easy one.', scenarioIds: ['sc-newsroom', 'sc-policy', 'sc-er'] },
+  { id: 'pack-people', name: 'Leading People', emoji: '🧭', blurb: 'Influence, collaboration, and holding a room together.', scenarioIds: ['sc-coach', 'sc-retail', 'sc-startup'] },
+]
+
 /** Create a lightweight student from a name/email (CSV/paste import). Neutral
  *  starting profile so the heatmap has something to show; the real platform
  *  populates scores from actual plays. */
