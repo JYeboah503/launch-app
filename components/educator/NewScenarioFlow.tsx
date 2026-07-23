@@ -70,19 +70,19 @@ const PURPOSE_META: Record<Purpose, { name: string; title: string; sub: string; 
   subject: {
     name: 'Subject focus',
     title: 'Teach through your subject',
-    sub: 'Author a scenario through your subject’s lens — “a Nike scenario focused on economics”.',
+    sub: 'Author through your subject’s lens.',
     icon: <BookOpen className="w-5 h-5" />,
   },
   general: {
     name: 'General practice',
     title: 'A broad capability workout',
-    sub: 'Assign a curated pack of scenarios in one go — scores roll up across the set.',
+    sub: 'Assign a curated pack in one go.',
     icon: <Dumbbell className="w-5 h-5" />,
   },
   freeplay: {
     name: 'Free play',
     title: 'Open the platform, timed',
-    sub: 'Students play whatever they like for a set window — results land as they finish.',
+    sub: 'Timed open play. Results roll in.',
     icon: <Gamepad2 className="w-5 h-5" />,
   },
 }

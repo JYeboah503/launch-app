@@ -16,7 +16,7 @@ export interface PaletteItem {
 }
 
 export function CommandPalette({
-  ws, onClose, onOpenCohort, onOpenStudent, onNewCohort, onCompare, onSettings, onBuild,
+  ws, onClose, onOpenCohort, onOpenStudent, onNewCohort, onCompare, onSettings, onBuild, onLibrary,
 }: {
   ws: EdWorkspace
   onClose: () => void
@@ -26,6 +26,7 @@ export function CommandPalette({
   onCompare: () => void
   onSettings: () => void
   onBuild: () => void
+  onLibrary: () => void
 }) {
   const [q, setQ] = useState('')
   const [idx, setIdx] = useState(0)
@@ -34,7 +35,8 @@ export function CommandPalette({
   const items = useMemo<PaletteItem[]>(() => {
     const actions: PaletteItem[] = [
       { id: 'act-new', label: 'New cohort', hint: 'Action', icon: <Plus className="w-4 h-4" />, run: onNewCohort },
-      { id: 'act-build', label: 'Build a scenario', hint: 'Action', icon: <PencilRuler className="w-4 h-4" />, run: onBuild },
+      { id: 'act-build', label: 'Create scenario', hint: 'Action', icon: <PencilRuler className="w-4 h-4" />, run: onBuild },
+      { id: 'act-lib', label: 'Scenario library', hint: 'Page', icon: <GraduationCap className="w-4 h-4" />, run: onLibrary },
       { id: 'act-compare', label: 'Compare cohorts', hint: 'Action', icon: <GitCompare className="w-4 h-4" />, run: onCompare },
       { id: 'act-settings', label: 'School settings', hint: 'Action', icon: <Settings className="w-4 h-4" />, run: onSettings },
     ]
@@ -59,7 +61,7 @@ export function CommandPalette({
     const needle = q.trim().toLowerCase()
     if (!needle) return [...actions, ...cohorts, ...students.slice(0, 6)]
     return all.filter((i) => i.label.toLowerCase().includes(needle)).slice(0, 12)
-  }, [q, ws, onNewCohort, onBuild, onCompare, onSettings, onOpenCohort, onOpenStudent])
+  }, [q, ws, onNewCohort, onBuild, onCompare, onSettings, onOpenCohort, onOpenStudent, onLibrary])
 
   useEffect(() => { setIdx(0) }, [q])
 

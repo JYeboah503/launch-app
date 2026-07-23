@@ -17,7 +17,7 @@ import {
 } from '@/lib/educator'
 import { ED_NOW, type EdWorkspace, type EdScenario } from '@/components/educator/types'
 import { ModalShell } from '@/components/educator/ui'
-import { Plus, Eye, Send, Check, Sparkles, PencilRuler } from 'lucide-react'
+import { Eye, Send, Check, PencilRuler } from 'lucide-react'
 
 export function ScenarioLibrary({
   ws, onAssign, onNewScenario,
@@ -40,25 +40,18 @@ export function ScenarioLibrary({
       <div className="ed-section-head" style={{ marginTop: 44 }}>
         <div>
           <h2 className="ed-h2">Scenario library</h2>
-          <p className="ed-lib-sub">What your students can play — preview anything, assign it to a cohort, or author your own through your subject&rsquo;s lens.</p>
+          <p className="ed-lib-sub">What your students can play.</p>
         </div>
         <button type="button" className="ed-btn ed-btn-primary" onClick={onNewScenario}>
-          <PencilRuler className="w-4 h-4" /> New scenario
+          <PencilRuler className="w-4 h-4" /> Create scenario
         </button>
       </div>
 
       <div className="ed-lib-grid">
-        {/* Build-your-own card leads the grid */}
-        <button type="button" className="ed-lib-build" onClick={onNewScenario}>
-          <Sparkles className="w-5 h-5" style={{ color: 'var(--ed-accent)' }} />
-          <span className="ed-lib-build-title">New scenario</span>
-          <span className="ed-lib-build-sub">Pick a purpose — subject focus, general practice, or free play — and go from there.</span>
-        </button>
-
         {scenarios.map((s) => (
           <article key={s.id} className="ed-lib-card">
             <div className="ed-lib-top">
-              <span className="ed-lib-emoji">{s.emoji}</span>
+              <ArtTile seed={s.id} />
               {s.isCustom && <span className="ed-lib-yours">Yours{s.subjectName ? ` · ${s.subjectName}` : ''}</span>}
             </div>
             <h3 className="ed-lib-name">{s.title}</h3>
@@ -89,6 +82,24 @@ export function ScenarioLibrary({
   )
 }
 
+/** Generative art tile — two hues seeded from the scenario id. Consistent
+ *  visual weight across every card, zero asset work. */
+function ArtTile({ seed }: { seed: string }) {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = ((h << 5) - h) + seed.charCodeAt(i) | 0
+  const hues = [172, 208, 24, 262, 340, 96]
+  const h1 = hues[Math.abs(h) % hues.length]
+  const h2 = hues[Math.abs(h >> 3) % hues.length]
+  const angle = 115 + (Math.abs(h >> 6) % 130)
+  return (
+    <span
+      className="ed-lib-art"
+      aria-hidden
+      style={{ background: `linear-gradient(${angle}deg, hsl(${h1} 48% 62%), hsl(${h2} 42% 42%))` }}
+    />
+  )
+}
+
 /* ── Preview ──────────────────────────────────────────────────────── */
 
 function PreviewModal({ scenario, onClose, onAssign }: { scenario: EdScenario; onClose: () => void; onAssign: () => void }) {
@@ -105,8 +116,7 @@ function PreviewModal({ scenario, onClose, onAssign }: { scenario: EdScenario; o
         <div className="ed-lib-tags">{scenario.capabilities.map((c) => <span key={c} className="ed-lib-tag">{CAPABILITY_SHORT[c] || c}</span>)}</div>
       </div>
       <div className="ed-prev-how">
-        <div className="ed-label" style={{ marginBottom: 8 }}>How students experience it</div>
-        <p>They step into the role, face {scenario.decisions} live decisions — each with three answers or their own words — and Launch scores every choice against the capability benchmarks. You see their full path afterwards.</p>
+        <p>{scenario.decisions} live decisions · Launch scores every choice · you see their full path.</p>
       </div>
       <div className="ed-modal-foot">
         <button type="button" className="ed-btn ed-btn-ghost" onClick={onClose}>Close</button>
@@ -154,7 +164,7 @@ function AssignToCohort({ scenario, cohorts, onClose, onAssign }: { scenario: Ed
         <div style={{ textAlign: 'center', padding: '18px 0' }}>
           <div style={{ fontSize: 34, marginBottom: 10 }}><Check className="w-9 h-9" style={{ display: 'inline', color: 'var(--ed-accent)' }} /></div>
           <p style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 16, color: 'var(--lq-ink-2)' }}>
-            Assigned to {cohort?.name} — track it on the cohort&rsquo;s Assignments tab.
+            Assigned to {cohort?.name}.
           </p>
         </div>
       ) : (
@@ -189,7 +199,7 @@ const libStyles = `
   .ed-lib-card { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 22px 24px; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
   .ed-lib-card:hover { border-color: var(--ed-accent); box-shadow: 0 12px 30px -18px var(--ed-accent); transform: translateY(-2px); }
   .ed-lib-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  .ed-lib-emoji { font-size: 24px; }
+  .ed-lib-art { display: inline-block; width: 40px; height: 40px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); }
   .ed-lib-yours { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ed-accent); background: var(--ed-accent-soft); border-radius: 999px; padding: 3px 9px; }
   .ed-lib-name { font-family: var(--font-display); font-weight: 500; font-size: 18px; letter-spacing: -0.012em; color: var(--lq-ink); margin-bottom: 6px; }
   .ed-lib-blurb { font-size: 12.5px; color: var(--lq-ink-2); line-height: 1.55; margin-bottom: 12px; flex: 1; }
@@ -201,8 +211,4 @@ const libStyles = `
   .ed-lib-btn:hover { border-color: var(--ed-accent); color: var(--ed-accent); }
   .ed-lib-btn-primary { background: var(--ed-accent); border-color: var(--ed-accent); color: #fff; }
   .ed-lib-btn-primary:hover { color: #fff; opacity: 0.92; }
-  .ed-lib-build { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; text-align: left; background: var(--ed-accent-soft); border: 1.5px dashed var(--ed-accent); border-radius: 20px; padding: 24px; cursor: pointer; transition: transform 180ms ease, box-shadow 180ms ease; }
-  .ed-lib-build:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -18px var(--ed-accent); }
-  .ed-lib-build-title { font-family: var(--font-display); font-weight: 500; font-size: 18px; color: var(--lq-ink); }
-  .ed-lib-build-sub { font-size: 12.5px; color: var(--lq-ink-2); line-height: 1.55; }
 `

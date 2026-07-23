@@ -16,10 +16,10 @@ import { InsightsTab } from '@/components/educator/InsightsTab'
 import { ModalShell, fmtDate, dueLabel } from '@/components/educator/ui'
 import {
   ArrowLeft, Plus, X, Copy, Check, Search, Upload, Download, FileText,
-  Users, ClipboardList, GraduationCap, LayoutGrid, AlertTriangle, Star, Link2, LineChart as LineIcon,
+  Users, ClipboardList, GraduationCap, LayoutGrid, AlertTriangle, Star, Link2,
 } from 'lucide-react'
 
-type Tab = 'overview' | 'insights' | 'students' | 'assignments' | 'subjects'
+type Tab = 'overview' | 'students' | 'assignments' | 'subjects'
 
 export function CohortView({
   ws, cohort, onBack, onOpenStudent, onPatch,
@@ -66,7 +66,6 @@ export function CohortView({
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Overview', icon: <LayoutGrid className="w-4 h-4" /> },
-    { key: 'insights', label: 'Insights', icon: <LineIcon className="w-4 h-4" /> },
     { key: 'students', label: `Students · ${students.length}`, icon: <Users className="w-4 h-4" /> },
     { key: 'assignments', label: `Assignments · ${assignments.length}`, icon: <ClipboardList className="w-4 h-4" /> },
     { key: 'subjects', label: 'Subject fit', icon: <GraduationCap className="w-4 h-4" /> },
@@ -110,11 +109,11 @@ export function CohortView({
       {tab === 'overview' && (
         <>
           {students.length === 0 ? (
-            <EmptyState title="No students yet" body="Enrol students to see completion, the capability heatmap, and who needs attention." cta="Enrol students" onCta={() => setEnrolOpen(true)} />
+            <EmptyState title="No students yet" body="Enrol students to bring this page to life." cta="Enrol students" onCta={() => setEnrolOpen(true)} />
           ) : (
             <>
               <div className="ed-kpis">
-                <div className="ed-kpi ed-kpi-ring"><ProgressRing pct={completion} label="Completed" /><div><div className="ed-kpi-sub">of assigned scenarios completed across the cohort</div></div></div>
+                <div className="ed-kpi ed-kpi-ring"><ProgressRing pct={completion} label="Completed" /><div><div className="ed-kpi-sub">Across all assignments</div></div></div>
                 <div className="ed-kpi"><div className="ed-kpi-num">{avgScore}</div><div className="ed-kpi-lbl">Average overall</div></div>
                 <div className="ed-kpi"><div className="ed-kpi-num" style={{ color: 'var(--launch-danger)' }}>{attention.length}</div><div className="ed-kpi-lbl">Need attention</div></div>
                 <div className="ed-kpi"><div className="ed-kpi-num" style={{ color: 'var(--ed-accent)' }}>{shining.length}</div><div className="ed-kpi-lbl">Shining this week</div></div>
@@ -141,18 +140,21 @@ export function CohortView({
 
               <div className="ed-block-head"><h3 className="ed-h3">Capability heatmap</h3><span className="ed-dim">Tap a student to open their guidance</span></div>
               <CapabilityHeatmap students={students} average={average} onSelectStudent={onOpenStudent} />
+
+              {/* Trends + distributions live here too — one confident page,
+                  no guessing which tab holds which chart. */}
+              <div style={{ marginTop: 38 }}>
+                <InsightsTab students={students} onOpenStudent={onOpenStudent} />
+              </div>
             </>
           )}
         </>
       )}
 
-      {/* ── INSIGHTS ── */}
-      {tab === 'insights' && <InsightsTab students={students} onOpenStudent={onOpenStudent} />}
-
       {/* ── STUDENTS ── */}
       {tab === 'students' && (
         students.length === 0
-          ? <EmptyState title="No students yet" body="Share the join code, hand-pick from the roster, or import a list." cta="Enrol students" onCta={() => setEnrolOpen(true)} />
+          ? <EmptyState title="No students yet" body="Share the code or import a list." cta="Enrol students" onCta={() => setEnrolOpen(true)} />
           : <div className="ed-roster">
               {students.map((s) => (
                 <button key={s.id} className="ed-rcard" onClick={() => onOpenStudent(s.id)}>
@@ -179,7 +181,7 @@ export function CohortView({
             <button type="button" className="ed-btn ed-btn-primary" onClick={() => setAssignOpen(true)}><Plus className="w-4 h-4" /> Assign scenario</button>
           </div>
           {assignments.length === 0
-            ? <EmptyState title="Nothing assigned yet" body="Assign a Launch scenario to the whole cohort or specific students, with a due date." cta="Assign scenario" onCta={() => setAssignOpen(true)} />
+            ? <EmptyState title="Nothing assigned yet" body="Give this cohort its first scenario." cta="Assign scenario" onCta={() => setAssignOpen(true)} />
             : <div className="ed-assign-list">
                 {assignments.map((a) => <AssignmentRow key={a.id} a={a} cohort={cohort} students={students} onOpenStudent={onOpenStudent} />)}
               </div>}

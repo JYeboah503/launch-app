@@ -52,6 +52,7 @@ const DEFAULT_BRANDING: EdBranding = {
 
 type Route =
   | { view: 'home' }
+  | { view: 'library' }
   | { view: 'cohort'; cohortId: string }
   | { view: 'student'; cohortId: string; studentId: string }
 
@@ -138,7 +139,7 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
     return session
   }
 
-  const activeCohort = route.view !== 'home' ? ws.cohorts.find((c) => c.id === route.cohortId) || null : null
+  const activeCohort = (route.view === 'cohort' || route.view === 'student') ? ws.cohorts.find((c) => c.id === route.cohortId) || null : null
   const activeStudent = route.view === 'student' ? ws.students.find((s) => s.id === route.studentId) || null : null
 
   // Scroll to top on route change.
@@ -159,6 +160,10 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
             <span className="ed-brand-name">{ws.branding.schoolName}</span>
             <span className="ed-brand-tag">Careers</span>
           </div>
+          <nav className="ed-nav" aria-label="Workspace">
+            <button type="button" className={`ed-nav-tab ${route.view === 'home' || route.view === 'cohort' || route.view === 'student' ? 'is-on' : ''}`} onClick={() => setRoute({ view: 'home' })}>Home</button>
+            <button type="button" className={`ed-nav-tab ${route.view === 'library' ? 'is-on' : ''}`} onClick={() => setRoute({ view: 'library' })}>Library</button>
+          </nav>
           <div className="ed-topbar-actions">
             <button type="button" className="ed-kbd-hint" onClick={() => setShowPalette(true)} title="Command palette">
               <Command className="w-3.5 h-3.5" /> K
@@ -181,11 +186,15 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
           onCompare={() => setShowCompare(true)}
           onReplaceCover={(url) => setBranding({ coverUrl: url })}
           onRegenerateCover={() => setBranding({ coverUrl: null })}
-          onAssign={(a) => patch({ assignments: [a, ...ws.assignments] })}
-          onNewScenario={() => setFlowOpen(true)}
           onEndSession={(id) => patch({ freePlaySessions: ws.freePlaySessions.filter((s) => s.id !== id) })}
           onPreviewPlay={() => setPreviewPlay(true)}
         />
+      )}
+
+      {route.view === 'library' && (
+        <div className="ed-page" style={{ paddingTop: 34 }}>
+          <ScenarioLibrary ws={ws} onAssign={(a) => patch({ assignments: [a, ...ws.assignments] })} onNewScenario={() => setFlowOpen(true)} />
+        </div>
       )}
 
       {route.view === 'cohort' && activeCohort && (
@@ -229,6 +238,7 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
           onCompare={() => setShowCompare(true)}
           onSettings={() => setShowSettings(true)}
           onBuild={() => setFlowOpen(true)}
+          onLibrary={() => setRoute({ view: 'library' })}
         />
       )}
 
@@ -344,7 +354,7 @@ function seedWorkspace() {
    ══════════════════════════════════════════════════════════════════ */
 
 function HomeView({
-  ws, onOpenCohort, onCreate, onCompare, onReplaceCover, onRegenerateCover, onAssign, onNewScenario, onEndSession, onPreviewPlay,
+  ws, onOpenCohort, onCreate, onCompare, onReplaceCover, onRegenerateCover, onEndSession, onPreviewPlay,
 }: {
   ws: EdWorkspace
   onOpenCohort: (id: string) => void
@@ -352,8 +362,6 @@ function HomeView({
   onCompare: () => void
   onReplaceCover: (url: string) => void
   onRegenerateCover: () => void
-  onAssign: (a: EdAssignment) => void
-  onNewScenario: () => void
   onEndSession: (id: string) => void
   onPreviewPlay: () => void
 }) {
@@ -389,10 +397,10 @@ function HomeView({
         {/* Greeting */}
         <div className="ed-greeting">
           <div className="ed-eyebrow">Your careers workspace</div>
-          <h1 className="ed-h1">Good morning. Let&rsquo;s move some students forward.</h1>
+          <h1 className="ed-h1">Good morning.</h1>
           <p className="ed-lede">
             {totalStudents} students across {ws.cohorts.length} cohorts.
-            {attention.length > 0 ? ` ${attention.length} need a nudge today.` : ' Everyone is on track today.'}
+            {attention.length > 0 ? ` ${attention.length} need a nudge.` : ' All on track.'}
           </p>
         </div>
 
@@ -407,7 +415,7 @@ function HomeView({
             <ProgressRing pct={completion} label="Completed" />
             <div>
               <div className="ed-snap-num"><AnimatedCounter value={completion} suffix="%" duration={900} /></div>
-              <div className="ed-snap-lbl">of assigned scenarios done</div>
+              <div className="ed-snap-lbl">Completion</div>
             </div>
           </div>
 
@@ -472,10 +480,6 @@ function HomeView({
             ))}
           </div>
         )}
-
-        {/* Scenario library — the educator's window into what students play,
-            plus the "author for your classroom" entry to the builder. */}
-        <ScenarioLibrary ws={ws} onAssign={onAssign} onNewScenario={onNewScenario} />
       </div>
     </>
   )
@@ -659,6 +663,10 @@ const edStyles = `
   .ed-brand-name { font-family: var(--font-display); font-weight: 500; font-size: 15px; color: var(--lq-ink); }
   .ed-brand-tag { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ed-accent); border: 1px solid var(--ed-accent); border-radius: 999px; padding: 2px 8px; }
   .ed-topbar-actions { display: flex; gap: 8px; align-items: center; }
+  .ed-nav { display: flex; gap: 4px; margin-left: 26px; margin-right: auto; }
+  .ed-nav-tab { padding: 8px 16px; border-radius: 999px; border: none; background: none; cursor: pointer; font-family: var(--font-body); font-size: 13.5px; font-weight: 600; color: var(--lq-ink-3); transition: color 140ms ease, background 140ms ease; }
+  .ed-nav-tab:hover { color: var(--lq-ink); }
+  .ed-nav-tab.is-on { background: var(--ed-accent-soft); color: var(--ed-accent); }
   .ed-kbd-hint { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--lq-line-2); background: #fff; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--lq-ink-3); cursor: pointer; transition: border-color 140ms ease, color 140ms ease; }
   .ed-kbd-hint:hover { border-color: var(--ed-accent); color: var(--ed-accent); }
 
@@ -682,7 +690,8 @@ const edStyles = `
   .ed-cover { position: relative; height: 248px; overflow: hidden; }
   .ed-cover-img, .ed-gencover { width: 100%; height: 100%; object-fit: cover; }
   .ed-gencover { display: block; }
-  .ed-cover-tools { position: absolute; right: 20px; bottom: 14px; display: flex; gap: 8px; opacity: 0; transition: opacity 180ms ease; }
+  .ed-cover-tools { position: absolute; right: 18px; bottom: 14px; display: flex; gap: 8px; opacity: 0; transition: opacity 200ms ease; }
+  .ed-cover:hover .ed-cover-tools { opacity: 1; }
   .ed-cover:hover .ed-cover-tools { opacity: 1; }
   .ed-cover-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.92); border: 1px solid var(--lq-line); font-family: var(--font-body); font-size: 12px; font-weight: 600; color: var(--lq-ink); cursor: pointer; }
   .ed-cover-btn:hover { border-color: var(--ed-accent); }

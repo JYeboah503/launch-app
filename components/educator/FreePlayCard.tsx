@@ -43,8 +43,8 @@ export function FreePlayCard({
           <div className="ed-fp-title">Free play · {cohort?.name ?? 'Cohort'}</div>
           <div className="ed-fp-sub">
             {expired
-              ? 'Session ended — results are in the cohort’s Insights.'
-              : `${joined} of ${cohort?.studentIds.length ?? 0} students in · results land as they finish`}
+              ? 'Session ended · results saved to the cohort.'
+              : `${joined}/${cohort?.studentIds.length ?? 0} in · results roll in live`}
           </div>
         </div>
       </div>
@@ -53,7 +53,7 @@ export function FreePlayCard({
           {session.code} {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
         </button>
         <span className={`ed-fp-clock ${expired ? 'is-over' : ''}`}>{expired ? '0:00' : `${mm}:${String(ss).padStart(2, '0')}`}</span>
-        <button type="button" className="ed-btn ed-btn-ghost" onClick={onPreview}><Eye className="w-4 h-4" /> See what students see</button>
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={onPreview}><Eye className="w-4 h-4" /> Student view</button>
         <button type="button" className="ed-fp-end" aria-label="End session" onClick={onEnd}><X className="w-4 h-4" /></button>
       </div>
       <style>{`
