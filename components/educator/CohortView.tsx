@@ -638,19 +638,20 @@ const cohortStyles = `
   .ed-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--lq-line); margin-bottom: 32px; overflow-x: auto; }
   .ed-tab { display: inline-flex; align-items: center; gap: 7px; padding: 12px 16px; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--lq-ink-3); white-space: nowrap; }
   .ed-tab:hover { color: var(--lq-ink); }
-  .ed-tab.is-on { color: var(--ed-accent); border-bottom-color: var(--ed-accent); }
+  .ed-tab.is-on { color: var(--lq-ink); border-bottom-color: var(--lq-ink); }
 
-  .ed-kpis { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 30px; }
+  .ed-kpis { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 0; margin-bottom: 36px; background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; overflow: hidden; }
   @media (max-width: 820px) { .ed-kpis { grid-template-columns: 1fr 1fr; } }
-  .ed-kpi { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 22px; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); }
+  .ed-kpi { background: transparent; border: none; border-left: 1px solid var(--lq-line); border-radius: 0; padding: 26px 24px; box-shadow: none; }
+  .ed-kpi:first-child { border-left: none; }
   .ed-kpi-ring { display: flex; align-items: center; gap: 16px; }
-  .ed-kpi-num { font-family: var(--font-mono); font-weight: 700; font-size: 32px; color: var(--lq-ink); line-height: 1; }
+  .ed-kpi-num { font-family: var(--font-display); font-weight: 550; font-size: 42px; letter-spacing: -0.03em; color: var(--lq-ink); line-height: 1; }
   .ed-kpi-lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-3); margin-top: 8px; }
   .ed-kpi-sub { font-size: 12px; color: var(--lq-ink-3); max-width: 20ch; }
 
   .ed-attn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 38px; }
   @media (max-width: 720px) { .ed-attn-grid { grid-template-columns: 1fr; } }
-  .ed-attn-card { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 20px 22px; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); }
+  .ed-attn-card { background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; padding: 22px 24px; }
   .ed-attn-rows { display: flex; flex-direction: column; gap: 2px; }
   .ed-attn-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; background: none; border: none; cursor: pointer; text-align: left; transition: background 120ms ease; }
   .ed-attn-row:hover { background: rgba(27,158,143,0.05); }
@@ -662,7 +663,7 @@ const cohortStyles = `
   .ed-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
 
   .ed-roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-  .ed-rcard { text-align: left; background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 18px; padding: 20px; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); cursor: pointer; transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
+  .ed-rcard { text-align: left; background: #fff; border: 1px solid var(--lq-line); border-radius: 18px; padding: 20px; cursor: pointer; transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
   .ed-rcard:hover { border-color: var(--ed-accent); transform: translateY(-2px); box-shadow: 0 12px 26px -16px var(--ed-accent); }
   .ed-rcard-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
   .ed-rcard-ini { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; background: var(--ed-accent-soft); color: var(--ed-accent); font-family: var(--font-mono); font-size: 12px; font-weight: 700; }

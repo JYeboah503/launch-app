@@ -196,19 +196,19 @@ function AssignToCohort({ scenario, cohorts, onClose, onAssign }: { scenario: Ed
 const libStyles = `
   .ed-lib-sub { font-size: 13.5px; color: var(--lq-ink-2); margin-top: 6px; max-width: 64ch; line-height: 1.55; }
   .ed-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-  .ed-lib-card { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 22px 24px; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
-  .ed-lib-card:hover { border-color: var(--ed-accent); box-shadow: 0 12px 30px -18px var(--ed-accent); transform: translateY(-2px); }
+  .ed-lib-card { background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; transition: border-color 180ms ease, transform 180ms ease; }
+  .ed-lib-card:hover { border-color: var(--lq-ink); transform: translateY(-2px); }
   .ed-lib-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .ed-lib-art { display: inline-block; width: 40px; height: 40px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); }
   .ed-lib-yours { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ed-accent); background: var(--ed-accent-soft); border-radius: 999px; padding: 3px 9px; }
   .ed-lib-name { font-family: var(--font-display); font-weight: 500; font-size: 18px; letter-spacing: -0.012em; color: var(--lq-ink); margin-bottom: 6px; }
   .ed-lib-blurb { font-size: 12.5px; color: var(--lq-ink-2); line-height: 1.55; margin-bottom: 12px; flex: 1; }
   .ed-lib-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
-  .ed-lib-tag { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.05em; color: var(--lq-ink-2); background: #f2efe8; border-radius: 999px; padding: 3px 8px; }
+  .ed-lib-tag { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lq-ink-2); background: transparent; border: 1px solid var(--lq-line-2); border-radius: 999px; padding: 3px 9px; }
   .ed-lib-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-top: 12px; border-top: 1px solid var(--lq-line); }
   .ed-lib-actions { display: flex; gap: 6px; }
   .ed-lib-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--lq-line-2); background: #fff; font-size: 11.5px; font-weight: 600; color: var(--lq-ink-2); cursor: pointer; transition: border-color 140ms ease, color 140ms ease; }
-  .ed-lib-btn:hover { border-color: var(--ed-accent); color: var(--ed-accent); }
-  .ed-lib-btn-primary { background: var(--ed-accent); border-color: var(--ed-accent); color: #fff; }
+  .ed-lib-btn:hover { border-color: var(--lq-ink); color: var(--lq-ink); }
+  .ed-lib-btn-primary { background: var(--lq-ink); border-color: var(--lq-ink); color: #fff; }
   .ed-lib-btn-primary:hover { color: #fff; opacity: 0.92; }
 `

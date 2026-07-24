@@ -654,7 +654,18 @@ function CreateCohortModal({ onClose, onCreate }: { onClose: () => void; onCreat
 /* ── styles ───────────────────────────────────────────────────────── */
 
 const edStyles = `
-  .ed-root { min-height: 100vh; background: #f6f2ea; color: var(--lq-ink); --ed-accent-soft: color-mix(in oklab, var(--ed-accent), transparent 86%); }
+  .ed-root {
+    min-height: 100vh; background: #f6f5f1; color: var(--lq-ink);
+    /* Superpower-inspired register: near-black ink, hairline lines, bone
+       canvas. Scoping these token overrides here restyles every educator
+       rule at once without touching the corporate/student surfaces. */
+    --lq-ink: #131417;
+    --lq-ink-2: #55575e;
+    --lq-ink-3: #8f9197;
+    --lq-line: rgba(19, 20, 23, 0.08);
+    --lq-line-2: rgba(19, 20, 23, 0.16);
+    --ed-accent-soft: color-mix(in oklab, var(--ed-accent), transparent 88%);
+  }
   .ed-topbar { position: sticky; top: 0; z-index: 40; background: rgba(246, 242, 234, 0.82); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--lq-line); }
   .ed-topbar-in { max-width: 1180px; margin: 0 auto; padding: 0 24px; height: 62px; display: flex; align-items: center; justify-content: space-between; }
   .ed-brand { display: flex; align-items: center; gap: 12px; }
@@ -666,7 +677,7 @@ const edStyles = `
   .ed-nav { display: flex; gap: 4px; margin-left: 26px; margin-right: auto; }
   .ed-nav-tab { padding: 8px 16px; border-radius: 999px; border: none; background: none; cursor: pointer; font-family: var(--font-body); font-size: 13.5px; font-weight: 600; color: var(--lq-ink-3); transition: color 140ms ease, background 140ms ease; }
   .ed-nav-tab:hover { color: var(--lq-ink); }
-  .ed-nav-tab.is-on { background: var(--ed-accent-soft); color: var(--ed-accent); }
+  .ed-nav-tab.is-on { background: var(--lq-ink); color: #fff; }
   .ed-kbd-hint { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--lq-line-2); background: #fff; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--lq-ink-3); cursor: pointer; transition: border-color 140ms ease, color 140ms ease; }
   .ed-kbd-hint:hover { border-color: var(--ed-accent); color: var(--ed-accent); }
 
@@ -681,11 +692,11 @@ const edStyles = `
   .ed-cohort-grid .ed-cblock:nth-child(4) { animation-delay: 180ms; }
 
   .ed-btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 17px; border-radius: 999px; font-family: var(--font-body); font-weight: 600; font-size: 13px; border: 1px solid transparent; cursor: pointer; transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
-  .ed-btn-primary { background: var(--ed-accent); color: #fff; box-shadow: 0 6px 16px -6px var(--ed-accent); }
-  .ed-btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 22px -8px var(--ed-accent); }
+  .ed-btn-primary { background: var(--lq-ink); color: #fff; }
+  .ed-btn-primary:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.88; }
   .ed-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
-  .ed-btn-ghost { background: #fff; color: var(--lq-ink-2); border-color: transparent; box-shadow: 0 1px 2px rgba(14,24,51,0.04), 0 0 0 1px rgba(14,24,51,0.05); }
-  .ed-btn-ghost:hover { color: var(--lq-ink); box-shadow: 0 1px 2px rgba(14,24,51,0.04), 0 0 0 1.5px var(--ed-accent); }
+  .ed-btn-ghost { background: transparent; color: var(--lq-ink-2); border-color: var(--lq-line-2); }
+  .ed-btn-ghost:hover { color: var(--lq-ink); border-color: var(--lq-ink); }
 
   .ed-cover { position: relative; height: 248px; overflow: hidden; }
   .ed-cover-img, .ed-gencover { width: 100%; height: 100%; object-fit: cover; }
@@ -699,16 +710,17 @@ const edStyles = `
   .ed-page { max-width: 1180px; margin: 0 auto; padding: 0 28px 110px; }
   .ed-greeting { padding: 46px 0 36px; }
   .ed-eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ed-accent); font-weight: 600; margin-bottom: 12px; }
-  .ed-h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(28px, 3.6vw, 42px); letter-spacing: -0.024em; line-height: 1.08; color: var(--lq-ink); max-width: 22ch; margin: 0 0 12px; }
+  .ed-h1 { font-family: var(--font-display); font-weight: 450; font-size: clamp(34px, 4.6vw, 58px); letter-spacing: -0.032em; line-height: 1.02; color: var(--lq-ink); max-width: 22ch; margin: 0 0 14px; }
   .ed-lede { font-size: 16px; color: var(--lq-ink-2); line-height: 1.55; max-width: 60ch; }
 
-  .ed-snapshot { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 56px; }
+  .ed-snapshot { display: grid; grid-template-columns: 1.1fr 1fr 1fr 1fr; gap: 0; margin-bottom: 64px; background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; overflow: hidden; }
   @media (max-width: 940px) { .ed-snapshot { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 560px) { .ed-snapshot { grid-template-columns: 1fr; } }
-  .ed-snap-card { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 22px; min-height: 158px; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); }
+  .ed-snap-card { background: transparent; border: none; border-left: 1px solid var(--lq-line); border-radius: 0; padding: 26px 24px; min-height: 172px; box-shadow: none; }
+  .ed-snap-card:first-child { border-left: none; }
   .ed-snap-ring { display: flex; align-items: center; gap: 16px; }
-  .ed-snap-num { font-family: var(--font-mono); font-weight: 700; font-size: 26px; color: var(--lq-ink); line-height: 1; }
-  .ed-snap-lbl { font-size: 12px; color: var(--lq-ink-3); margin-top: 4px; max-width: 14ch; }
+  .ed-snap-num { font-family: var(--font-display); font-weight: 550; font-size: 44px; letter-spacing: -0.03em; color: var(--lq-ink); line-height: 1; }
+  .ed-snap-lbl { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; color: var(--lq-ink-3); margin-top: 8px; }
   .ed-snap-head { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; color: var(--lq-ink-3); margin-bottom: 12px; }
   .ed-snap-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
   .ed-snap-list li { display: flex; flex-direction: column; gap: 1px; }
@@ -721,8 +733,8 @@ const edStyles = `
   .ed-h2 { font-family: var(--font-display); font-weight: 500; font-size: clamp(20px, 2.4vw, 28px); letter-spacing: -0.02em; color: var(--lq-ink); }
 
   .ed-cohort-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 18px; }
-  .ed-cblock { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 26px; cursor: pointer; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
-  .ed-cblock:hover { border-color: var(--ed-accent); box-shadow: 0 14px 34px -18px var(--ed-accent); transform: translateY(-3px); }
+  .ed-cblock { background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; padding: 26px; cursor: pointer; transition: border-color 180ms ease, transform 180ms ease; }
+  .ed-cblock:hover { border-color: var(--lq-ink); transform: translateY(-2px); }
   .ed-cblock-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
   .ed-cblock-term { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-3); margin-bottom: 5px; }
   .ed-cblock-name { font-family: var(--font-display); font-weight: 500; font-size: 21px; letter-spacing: -0.015em; color: var(--lq-ink); line-height: 1.15; }
@@ -739,7 +751,7 @@ const edStyles = `
   .ed-empty p { color: var(--lq-ink-2); margin-bottom: 16px; font-style: italic; font-family: var(--font-display); font-size: 17px; }
 
   /* Shared content cards — used by cohort Insights + student view */
-  .ed-scard { background: #fff; border: 1px solid rgba(14, 24, 51, 0.06); border-radius: 20px; padding: 24px; box-shadow: 0 1px 2px rgba(14,24,51,0.02), 0 10px 30px -22px rgba(14,24,51,0.12); }
+  .ed-scard { background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; padding: 26px; }
   .ed-scard-accent { border-color: var(--ed-accent); box-shadow: 0 0 0 3px var(--ed-accent-soft); }
   .ed-scard-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
   .ed-guide-note { font-size: 12.5px; color: var(--lq-ink-2); line-height: 1.55; margin-bottom: 14px; }
