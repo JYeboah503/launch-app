@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { HeroSection } from '@/components/hero-section'
+import { JourneyFlow } from '@/components/journey/JourneyFlow'
 import { StudentDashboard } from '@/components/student-dashboard'
 import { EducatorDashboard } from '@/components/educator/EducatorDashboard'
 import { CorporateTopBar } from '@/components/corporate-top-bar'
@@ -1494,11 +1495,13 @@ export default function Page() {
     setAppMode('corporate')
   }
   const enterEducator = () => setAppMode('teacher')
+  const enterJourney = () => setAppMode('journey')
 
   return (
     <main className="min-h-screen bg-background">
       <HeroSection
         onScenarioClick={enterScenario}
+        onJourneyClick={enterJourney}
         onPartnerClick={enterPartner}
         onEducatorClick={enterEducator}
       />
@@ -1506,6 +1509,7 @@ export default function Page() {
       <CapabilitiesSection />
       <CTASection
         onPrimaryClick={enterScenario}
+        onJourneyClick={enterJourney}
         onPartnerClick={enterPartner}
         onEducatorClick={enterEducator}
       />

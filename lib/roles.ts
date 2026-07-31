@@ -14,6 +14,7 @@ export type UserRole = 'player' | 'teacher' | 'corporate'
 export type AppMode =
   | 'landing'
   | 'play'
+  | 'journey'
   | 'teacher'
   | 'corporate'
 
