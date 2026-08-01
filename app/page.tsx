@@ -277,6 +277,21 @@ export default function Page() {
 
   const studentChallenges = selectedStudentId ? CHALLENGES[selectedStudentId] || [] : []
 
+  // Journeys — the passion-led school path. No login, no test energy;
+  // finishing can funnel straight into work scenarios.
+  if (appMode === 'journey') {
+    return (
+      <JourneyFlow
+        onExit={() => setAppMode('landing')}
+        onWorkScenarios={() => {
+          setStudentName('Explorer')
+          setIsStudentLoggedIn(true)
+          setAppMode('play')
+        }}
+      />
+    )
+  }
+
   // If student is logged in, show their dashboard
   if (isStudentLoggedIn) {
     return (

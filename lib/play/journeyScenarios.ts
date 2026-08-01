@@ -408,7 +408,204 @@ export const FARM_JOURNEY: Scenario = {
   reflect: { asker: 'Your uncle, over the rain', prompt: 'That last corner. Talk me through why.' },
 }
 
-export const JOURNEYS: Scenario[] = [SURF_JOURNEY, FOOTY_JOURNEY, FARM_JOURNEY]
+
+export const BAND_JOURNEY: Scenario = {
+  id: 'journey-band',
+  role: 'Battle of the Bands — three weeks out',
+  meta: 'SCHOOL HALL · THREE WEEKS TO SHOW NIGHT',
+  goal: { label: 'A BAND STILL TOGETHER', target: 70 },
+  opening: {
+    eyebrow: 'Your story',
+    title: 'Your band got the last slot at Battle of the Bands. Your drummer just quit.',
+    body: "Three weeks out, {name}. The song isn't finished, the drummer's gone over a group-chat argument, and Mia — who's never performed but practises constantly — just asked if she can try out.",
+    imageCaption: 'The music room · lunchtime',
+    ambient: [
+      { label: 'SHOW', value: '3 weeks' },
+      { label: 'DRUMMER', value: 'quit last night' },
+      { label: 'THE SONG', value: '70% written' },
+    ],
+  },
+  steps: [
+    {
+      kind: 'decision', mood: 'private', transition: 'cross-fade', eyebrow: 'Lunchtime · music room', scene: 'musicroom', sceneCaption: 'One empty drum stool',
+      prompt: "Mia can barely look at you while she asks. Jake — your old drummer — is telling people he'd come back if you apologised. You didn't start the argument.",
+      keyAsk: 'The stool needs someone.',
+      factors: [
+        { label: 'Mia', value: 'nervous, prepared', kind: 'quote' },
+        { label: 'Jake', value: '"if he apologises…"', kind: 'quote' },
+        { label: 'Rehearsals left', value: '8', kind: 'metric' },
+      ],
+      options: [
+        { id: 'a', label: 'Give Mia a real audition — today, full song.', skill: 'Judgement & Decision-Making', score: 13,
+          echo: 'She was shaky for one verse. Then she wasn\'t.', consequence: 'Mia nails it by the second chorus. The band has a drummer — a hungrier one.',
+          ghost: 'Jake heard about it within the hour.', stats: [{ label: 'MIA', change: 'in' }, { label: 'THE SOUND', change: 'different, alive' }],
+          insight: 'You judged the person in front of you on evidence, not the one in your history on comfort. Auditions over assumptions — that\'s selection done right.' },
+        { id: 'b', label: 'Swallow it. Apologise to Jake, get the band back.', skill: 'Emotional Intelligence', score: 10,
+          echo: 'The apology cost you something. The band noticed you paid it.', consequence: 'Jake\'s back behind the kit by Thursday. Something\'s still unsaid.',
+          ghost: 'Mia didn\'t ask twice.', stats: [{ label: 'JAKE', change: 'back' }, { label: 'PRIDE', change: 'spent on the band' }],
+          insight: 'You paid with pride to protect the group. Worth noticing: repairs that skip the honest conversation tend to bill you again later.' },
+        { id: 'c', label: 'Both — Mia auditions, and you talk to Jake straight.', skill: 'Leadership & Influence', score: 12,
+          echo: 'Two hard conversations in one lunchtime. Both needed.', consequence: 'Mia gets her shot; Jake gets honesty instead of an apology. Whoever earns it plays.',
+          ghost: 'Managing both took everything you had.', stats: [{ label: 'FAIRNESS', change: 'visible' }, { label: 'YOU', change: 'stretched, upright' }],
+          insight: 'You refused a false either/or and ran a fair process in public view. That\'s leadership — the band watched how you did it more than what you decided.' },
+      ],
+    },
+    {
+      kind: 'decision', mood: 'tense', transition: 'cross-fade', eyebrow: 'One week out', scene: 'garage', sceneCaption: 'The bridge still isn\'t right',
+      prompt: 'Your best song has a broken bridge nobody can fix. Sam wrote a new song — honestly, it\'s better — but learning it from scratch in a week is a risk.',
+      keyAsk: 'Polish the old, or back the new?',
+      factors: [
+        { label: 'Old song', value: 'safe, 90% there', kind: 'meter' },
+        { label: 'Sam\'s song', value: 'better, unlearned', kind: 'quote' },
+        { label: 'Rehearsals left', value: '3', kind: 'metric' },
+      ],
+      options: [
+        { id: 'a', label: 'Back Sam\'s song. Three rehearsals, all in.', skill: 'Adaptability & Cognitive Flexibility', score: 13,
+          echo: 'Rehearsal one was chaos. Rehearsal three was the best you\'ve ever sounded.', consequence: 'The band bets on better. It\'s terrifying and then it isn\'t.',
+          ghost: 'The old song sat there, finished-ish, watching.', stats: [{ label: 'THE SET', change: 'upgraded' }, { label: 'NERVES', change: 'earned' }],
+          insight: 'You dropped sunk cost the moment better evidence arrived. Most adults can\'t do that with three weeks of work. You did it with a week to go.' },
+        { id: 'b', label: 'Fix the bridge — simplify it until it works.', skill: 'Problem Solving', score: 11,
+          echo: 'You cut the bridge to four bars. Suddenly the song breathes.', consequence: 'Subtraction fixes what addition couldn\'t. The old song finally lands.',
+          ghost: 'Sam shelved the better song quietly.', stats: [{ label: 'THE BRIDGE', change: 'four honest bars' }, { label: 'RISK', change: 'contained' }],
+          insight: 'You solved by removing, not adding — genuinely rare instinct. The cost lives in Sam\'s notebook; good leaders go back for those later.' },
+        { id: 'c', label: 'Put it to the band. Majority rules, no grudges.', skill: 'Collaboration', score: 10,
+          echo: 'Three to one for Sam\'s song. The one was you. You went all in anyway.', consequence: 'The band chooses, together. You back the choice louder than anyone.',
+          ghost: 'Your vote lost. Your effort didn\'t show it.', stats: [{ label: 'DECISION', change: 'shared' }, { label: 'YOUR BACKING', change: 'total' }],
+          insight: 'Losing the vote and then out-working everyone for the winning option — that\'s what "disagree and commit" actually looks like.' },
+      ],
+    },
+    {
+      kind: 'decision', mood: 'loud', transition: 'cross-fade', eyebrow: 'Show night · side of stage', scene: 'stage', sceneCaption: 'Two minutes to your slot',
+      prompt: "Mia's frozen. Actually frozen — sticks in hand, staring through the curtain at 400 people. The stage manager is counting you down.",
+      keyAsk: 'Ninety seconds.',
+      factors: [
+        { label: 'Mia', value: 'white-knuckled', kind: 'quote' },
+        { label: 'The crowd', value: '~400', kind: 'metric' },
+        { label: 'Countdown', value: '90 seconds', kind: 'meter' },
+      ],
+      options: [
+        { id: 'a', label: 'Get in front of her. Eyes only. "First eight bars. Just us in the garage."', skill: 'Emotional Intelligence', score: 14,
+          echo: 'She locked onto you. Counted in the first eight. The crowd disappeared for her.', consequence: 'You shrink the stadium to a garage. She plays the best set of anyone\'s life.',
+          ghost: 'Ninety seconds is exactly enough for the right sentence.', stats: [{ label: 'MIA', change: 'unfrozen' }, { label: 'THE SET', change: 'hers now' }],
+          insight: 'You found the sentence that made the fear small — not "you\'ll be fine" but a picture she could stand inside. That\'s empathy with craft.' },
+        { id: 'b', label: 'Open with the acoustic number — buy her two songs to land.', skill: 'Adaptability & Cognitive Flexibility', score: 12,
+          echo: 'You reordered the set at the curtain. Nobody in the crowd ever knew.', consequence: 'The plan bends around the person. By song three she\'s driving it.',
+          ghost: 'The big opener became the closer. Better, maybe.', stats: [{ label: 'SET LIST', change: 'rewritten live' }, { label: 'MIA', change: 'landed softly' }],
+          insight: 'You changed the plan instead of demanding the person change — invisible accommodation, executed in seconds. The crowd never saw the seam.' },
+        { id: 'c', label: 'Straight with her: "You earned this stool. Play like the audition."', skill: 'Leadership & Influence', score: 10,
+          echo: 'She breathed out. Nodded once. Walked out first.', consequence: 'You hand her back her own evidence. She walks on before you do.',
+          ghost: 'Belief, transferred at the curtain.', stats: [{ label: 'MIA', change: 'walked out first' }, { label: 'THE MOMENT', change: 'hers' }],
+          insight: 'You reminded her of proof, not hope — "the audition happened, you were there." Evidence beats reassurance under pressure.' },
+      ],
+    },
+  ],
+  outcome: {
+    eyebrow: 'After the last chord',
+    title: 'Three weeks. One quit, one frozen, one better song. You held it together.',
+    body: 'Nobody graded any of that, {name} — but forming a team, betting on better, and unfreezing a friend at the curtain? Every band, startup and crew on earth runs on those. Here\'s what you showed.',
+  },
+  reflect: { asker: 'Sam, packing cables', prompt: 'Would you have played my song if the vote went the other way?' },
+}
+
+export const MARKET_JOURNEY: Scenario = {
+  id: 'journey-market',
+  role: 'Market stall day — your first real customers',
+  meta: 'SUNDAY MARKET · 6AM SETUP · SOLD OUT OR BUST',
+  goal: { label: 'A STALL WORTH REMEMBERING', target: 70 },
+  opening: {
+    eyebrow: 'Your story',
+    title: 'Forty candles, one trestle table, and the market opens in an hour.',
+    body: "Six months of making, {name}, and today strangers decide if it was worth it. Your mate Elle is helping. The stall next door sells candles too — half your price, and the woman running it has been doing this for years.",
+    imageCaption: 'Bay 14 · fog lifting',
+    ambient: [
+      { label: 'STOCK', value: '40 candles' },
+      { label: 'NEXT DOOR', value: 'same product, half price' },
+      { label: 'GATE', value: 'opens 8am' },
+    ],
+  },
+  steps: [
+    {
+      kind: 'decision', mood: 'private', transition: 'cross-fade', eyebrow: '7:20am · setup', scene: 'market', sceneCaption: 'Her sign says $8. Yours says $16.',
+      prompt: "Elle's panicking about the price difference and wants to drop yours to $10 before the gate opens. Your candles cost $6 each to make.",
+      keyAsk: 'Hold your price, or race to the bottom?',
+      factors: [
+        { label: 'Next door', value: '$8 · factory-made', kind: 'metric' },
+        { label: 'Yours', value: '$16 · hand-poured', kind: 'metric' },
+        { label: 'Elle', value: '"nobody pays double!"', kind: 'quote' },
+      ],
+      options: [
+        { id: 'a', label: 'Hold $16 — and rewrite the sign: "Hand-poured. Small batch. Six months of Sundays."', skill: 'Reasoning & Critical Thinking', score: 13,
+          echo: 'The first customer read the sign, smiled, and paid full price.', consequence: 'You sell the story, not the wax. Different product, different price — the sign does the arguing.',
+          ghost: 'Two people walked to the $8 stall. They were never yours.', stats: [{ label: 'PRICE', change: 'held' }, { label: 'STORY', change: 'on the sign' }],
+          insight: 'You worked out you weren\'t actually in competition — different product, different buyer. Positioning over panic is real commercial reasoning.' },
+        { id: 'b', label: 'Meet in the middle at $12 and move stock fast.', skill: 'Judgement & Decision-Making', score: 9,
+          echo: 'Brisk morning. The maths said you left money on the table. The empty table said otherwise.', consequence: 'Volume over margin — a defensible call, deliberately made.',
+          ghost: '$4 a candle, forty times…', stats: [{ label: 'PACE', change: 'brisk' }, { label: 'MARGIN', change: 'thinner, chosen' }],
+          insight: 'You picked certainty over optimisation and knew what it cost. A chosen trade-off beats an accidental one every time.' },
+        { id: 'c', label: 'Walk over and introduce yourself to the neighbour first.', skill: 'Collaboration', score: 12,
+          echo: '"Hand-poured? Love. Send anyone who wants fancy to me, I\'ll send you the gift-buyers."', consequence: 'The "competitor" becomes a referral partner in ninety seconds. Different customers, it turns out.',
+          ghost: 'Elle watched the whole thing, recalibrating.', stats: [{ label: 'NEXT DOOR', change: 'ally' }, { label: 'GIFT-BUYERS', change: 'incoming' }],
+          insight: 'You tested the assumption that proximity means rivalry — it usually doesn\'t. Turning competitors into a network is a career-long superpower.' },
+      ],
+    },
+    {
+      kind: 'decision', mood: 'tense', transition: 'cross-fade', eyebrow: '11am · the rush', scene: 'market', sceneCaption: 'Queue four deep, Elle flat out',
+      prompt: 'A customer returns a candle from your first-ever batch — "it tunnels, barely burns." She\'s polite. The queue behind her is listening. It probably IS a first-batch fault.',
+      keyAsk: 'The queue is watching what you do next.',
+      factors: [
+        { label: 'The queue', value: 'four deep, ears on', kind: 'meter' },
+        { label: 'The candle', value: 'first batch — you knew', kind: 'quote' },
+        { label: 'Refund', value: '$16 you\'ve already spent', kind: 'metric' },
+      ],
+      options: [
+        { id: 'a', label: 'Full refund + a new candle from today\'s batch, no quibble.', skill: 'Integrity & Ethics', score: 14,
+          echo: 'Two people in the queue bought extra "because of how you handled that."', consequence: 'The refund costs $16. The queue watching you make it costs your competitors more.',
+          ghost: 'Your margin flinched. Your name didn\'t.', stats: [{ label: 'HER', change: 'won for life' }, { label: 'THE QUEUE', change: 'convinced' }],
+          insight: 'You treated a complaint as a public promise-keeping moment. Trust compounds faster than margin — you just watched it happen live.' },
+        { id: 'b', label: 'Replace it and ask exactly how it burned — mine the fault.', skill: 'Reasoning & Critical Thinking', score: 12,
+          echo: 'Wick too thin for the jar width. Every candle since is better because she came back.', consequence: 'The return becomes R&D. You fix the whole first batch\'s flaw by Tuesday.',
+          ghost: 'The queue waited through your questions. Worth it.', stats: [{ label: 'ROOT CAUSE', change: 'found' }, { label: 'NEXT BATCH', change: 'better' }],
+          insight: 'You turned a complaint into data on the spot. Makers who interrogate their failures improve at double speed.' },
+        { id: 'c', label: 'Elle handles the refund warmly — you keep the queue moving.', skill: 'Execution & Ownership', score: 9,
+          echo: 'Elle was brilliant. The queue never stalled. You caught her eye: thanks.', consequence: 'Divide and conquer under pressure. Both jobs done properly.',
+          ghost: 'You didn\'t hear how it burned.', stats: [{ label: 'QUEUE', change: 'kept moving' }, { label: 'ELLE', change: 'trusted with it' }],
+          insight: 'You delegated the moment to the right person and held the system together. Noticing what you DIDN\'T learn is the growth edge here.' },
+      ],
+    },
+    {
+      kind: 'decision', mood: 'reflective', transition: 'cross-fade', eyebrow: '2pm · eleven candles left', scene: 'market', sceneCaption: 'The fog long gone, feet aching',
+      prompt: 'A café owner has been watching your stall for ten minutes. She offers to buy all eleven remaining — at $9 each — and "maybe a regular order, we\'ll see."',
+      keyAsk: 'Your first wholesale moment, at a discount.',
+      factors: [
+        { label: 'Her offer', value: '11 × $9, cash now', kind: 'metric' },
+        { label: 'Walk-ups', value: 'still coming, slower', kind: 'meter' },
+        { label: '"Regular order"', value: 'maybe · unwritten', kind: 'quote' },
+      ],
+      options: [
+        { id: 'a', label: 'Counter: $11 each today — and a written trial order for next month.', skill: 'Leadership & Influence', score: 13,
+          echo: 'She laughed, respected it, and wrote "24/month trial" on the back of her card.', consequence: 'You trade $2 a candle for a real commitment on paper. The stall becomes a supplier.',
+          ghost: 'She could have walked. People who respect a counter rarely do.', stats: [{ label: 'TODAY', change: '11 × $11' }, { label: 'NEXT MONTH', change: '24, in writing' }],
+          insight: 'You negotiated — kindly, immediately, with a trade instead of a no. And you got the "maybe" onto paper, which is where maybes become real.' },
+        { id: 'b', label: 'Take the deal. Empty table, full till, done by 2:15.', skill: 'Judgement & Decision-Making', score: 10,
+          echo: 'Sold out. Elle bought celebration doughnuts with the float.', consequence: 'A bird in the hand, taken cleanly. First sell-out day, banked.',
+          ghost: 'The "regular order" floated off, unwritten.', stats: [{ label: 'STOCK', change: 'zero' }, { label: 'THE DAY', change: 'won' }],
+          insight: 'Closing cleanly has real value — momentum, morale, proof. The unwritten maybe is the tuition fee; next time you\'ll ask for ink.' },
+        { id: 'c', label: 'Sell her six, keep five for walk-ups — protect the stall\'s last hours.', skill: 'Situational Awareness & Systems Thinking', score: 11,
+          echo: 'The last five went to five different strangers. Two asked for your Instagram.', consequence: 'Wholesale AND retail, balanced. The stall stays alive till close — future customers included.',
+          ghost: 'Five candles as marketing budget.', stats: [{ label: 'CAF\u00c9', change: 'six + a taste' }, { label: 'NEW FOLLOWERS', change: 'the real stock' }],
+          insight: 'You saw the stall as a system — today\'s revenue AND tomorrow\'s customers — and allocated between them. That\'s portfolio thinking at a trestle table.' },
+      ],
+    },
+  ],
+  outcome: {
+    eyebrow: 'Packing the ute',
+    title: 'Six months of making. Seven hours of selling. A business, briefly, yours.',
+    body: 'No classroom covered this morning, {name} — pricing, a public complaint, a negotiation on your feet. Except every choice you made is the actual job. Here\'s what you showed.',
+  },
+  reflect: { asker: 'Elle, doughnut in hand', prompt: 'The refund, in front of everyone. Why so fast?' },
+}
+
+export const JOURNEYS: Scenario[] = [SURF_JOURNEY, FOOTY_JOURNEY, FARM_JOURNEY, BAND_JOURNEY, MARKET_JOURNEY]
 
 /** Passion tiles for the journey entry — the doc's whole entry mechanic:
  *  the student picks what they LOVE; the journey wraps it. */
@@ -424,9 +621,9 @@ export const PASSIONS: Passion[] = [
   { id: 'surfing', emoji: '🏄', label: 'Surfing', journeyId: 'journey-surf', keywords: ['surf', 'beach', 'ocean', 'swim', 'wave'] },
   { id: 'footy', emoji: '🏉', label: 'Footy', journeyId: 'journey-footy', keywords: ['footy', 'football', 'rugby', 'afl', 'soccer', 'netball', 'basketball', 'sport', 'team'] },
   { id: 'farming', emoji: '🚜', label: 'Farming', journeyId: 'journey-farm', keywords: ['farm', 'animal', 'outdoors', 'tractor', 'country', 'horse', 'dog'] },
-  { id: 'music', emoji: '🎸', label: 'Music', journeyId: 'journey-footy', keywords: ['music', 'guitar', 'sing', 'band', 'dance', 'drum'] },
-  { id: 'gaming', emoji: '🎮', label: 'Gaming', journeyId: 'journey-surf', keywords: ['gam', 'minecraft', 'fortnite', 'computer', 'code'] },
-  { id: 'making', emoji: '🛠️', label: 'Making things', journeyId: 'journey-farm', keywords: ['build', 'make', 'craft', 'art', 'draw', 'cook', 'bake'] },
+  { id: 'music', emoji: '🎸', label: 'Music', journeyId: 'journey-band', keywords: ['music', 'guitar', 'sing', 'band', 'dance', 'drum', 'dj'] },
+  { id: 'gaming', emoji: '🎮', label: 'Gaming', journeyId: 'journey-band', keywords: ['gam', 'minecraft', 'fortnite', 'computer', 'code', 'esport'] },
+  { id: 'making', emoji: '🛠️', label: 'Making things', journeyId: 'journey-market', keywords: ['build', 'make', 'craft', 'art', 'draw', 'cook', 'bake', 'sew', 'candle', 'sell'] },
 ]
 
 /** Map free-text ("I love fishing with my pop") to the closest journey. */
@@ -478,4 +675,50 @@ export const JOURNEY_REVEALS: Record<string, {
     subjects: ['Agriculture', 'Engineering Studies', 'Biology', 'Business Studies'],
     directions: ['Agribusiness', 'Engineering', 'Environmental science', 'Operations & logistics'],
   },
+}
+
+/** Sky palette arcs — [top, bottom] per beat (opening, step1..3, reveal).
+ *  The sky IS the progress bar: each journey moves through its own day. */
+export const JOURNEY_SKIES: Record<string, [string, string][]> = {
+  'journey-surf':   [['#101c33', '#27406b'], ['#233d63', '#4c6f9a'], ['#3f6a95', '#8fb4d0'], ['#6fa4c8', '#f0d6a4'], ['#8fc3e0', '#fdeecb']],
+  'journey-footy':  [['#1b2c22', '#3c5a40'], ['#2e4a35', '#5d8a5f'], ['#4a6d47', '#93b585'], ['#6f8f5e', '#d9cf94'], ['#93b06f', '#f4e9b8']],
+  'journey-farm':   [['#20180f', '#4a3419'], ['#3d2e17', '#7a5a2a'], ['#5f4a22', '#b08a48'], ['#7d6631', '#dcb56e'], ['#8f7a3e', '#f2d9a0']],
+  'journey-band':   [['#171226', '#332752'], ['#2a2044', '#553e78'], ['#3f2f5e', '#7e5a9c'], ['#5a3f78', '#b083b5'], ['#7a58a6', '#e8c5d8']],
+  'journey-market': [['#1f2430', '#3d4a5c'], ['#33445a', '#6a7f94'], ['#4c6a84', '#9fb3bd'], ['#6f93a8', '#e3cba8'], ['#8fb4c4', '#f8e3bd']],
+}
+
+export const JOURNEY_REVEALS_EXTRA: typeof JOURNEY_REVEALS = {
+  'journey-band': {
+    capabilities: [
+      { name: 'Emotional Intelligence', level: 86, line: 'You found the sentence that unfroze Mia at the curtain.' },
+      { name: 'Adaptability & Cognitive Flexibility', level: 83, line: 'You dropped three weeks of work the moment a better song appeared.' },
+      { name: 'Leadership & Influence', level: 81, line: 'You ran a fair process while the whole band watched how.' },
+    ],
+    subjects: ['Music', 'Drama', 'English', 'Business Studies'],
+    directions: ['Creative production', 'Events & entertainment', 'Teaching & coaching', 'Team management'],
+  },
+  'journey-market': {
+    capabilities: [
+      { name: 'Reasoning & Critical Thinking', level: 85, line: 'You worked out the $8 stall was never your competitor.' },
+      { name: 'Integrity & Ethics', level: 84, line: 'You made the refund in front of the whole queue.' },
+      { name: 'Leadership & Influence', level: 80, line: 'You countered the caf\u00e9 owner — kindly, immediately, in writing.' },
+    ],
+    subjects: ['Business Studies', 'Economics', 'Design & Technology', 'Visual Arts'],
+    directions: ['Entrepreneurship', 'Marketing & brand', 'Product & retail', 'Negotiation-heavy roles'],
+  },
+}
+Object.assign(JOURNEY_REVEALS, JOURNEY_REVEALS_EXTRA)
+
+/** OPEN GENERATION (prototype-mocked): journeys are not a finite library.
+ *  The student describes anything they love; the real build generates a
+ *  bespoke journey via FUSE. Here we pick the structurally-nearest
+ *  flagship and frame it with their passion so the INTENT — infinite
+ *  journeys — is what the demo communicates. */
+export function generateJourney(passionText: string): { scenario: Scenario; passionLabel: string } {
+  const scenario = journeyForPassion(passionText)
+  const cleaned = (passionText || '').trim()
+  const passionLabel = cleaned.length > 1
+    ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1, 40)
+    : 'Your thing'
+  return { scenario, passionLabel }
 }
