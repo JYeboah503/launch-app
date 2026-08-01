@@ -176,7 +176,10 @@ export function OpeningScreen({ scenario, onBegin, profile }: OpeningScreenProps
               <span>Step in</span>
               <span className="begin-arrow">→</span>
             </button>
-            <span className="mono faint">4 decisions · roughly 10 minutes · no do-overs</span>
+            <span className="mono faint">
+              {scenario.steps.filter((s) => s.kind === 'decision').length} decisions · roughly{' '}
+              {Math.max(8, scenario.steps.filter((s) => s.kind === 'decision').length * 3)} minutes · no do-overs
+            </span>
           </div>
         </div>
       </div>
@@ -931,6 +934,9 @@ interface OutcomeScreenProps {
   onRestart: () => void
   onReport: () => void
   showSkills: boolean
+  /** Final goal-meter value. With scenario.outcomeTiers present, this picks
+   *  the ending — the player's decisions genuinely shape how it lands. */
+  meterValue?: number
 }
 
 export function OutcomeScreen({
@@ -939,6 +945,7 @@ export function OutcomeScreen({
   onRestart,
   onReport,
   showSkills,
+  meterValue,
 }: OutcomeScreenProps) {
   const skills = history
     .filter((h) => h.skill)
@@ -946,6 +953,15 @@ export function OutcomeScreen({
       acc[h.skill as string] = (acc[h.skill as string] || 0) + 1
       return acc
     }, {})
+  const tiers = scenario.outcomeTiers
+  const outcome =
+    tiers && typeof meterValue === 'number'
+      ? meterValue >= 68
+        ? tiers.high
+        : meterValue >= 45
+          ? tiers.mid
+          : tiers.low
+      : scenario.outcome
   return (
     <div className="screen outcome">
       <SceneBackdrop scene="court" active={true} />
@@ -954,19 +970,23 @@ export function OutcomeScreen({
           <span className="brand-mark" />
           <span className="brand-name">LAUNCH</span>
         </div>
-        <div className="mono meta">session · complete</div>
+        <div className="mono meta">
+          {tiers && typeof meterValue === 'number'
+            ? `${scenario.goal.label} · ${meterValue}%`
+            : 'session · complete'}
+        </div>
       </div>
 
       <div className="outcome-body">
-        <RevealText text={scenario.outcome.eyebrow} className="eyebrow" stagger={30} />
+        <RevealText text={outcome.eyebrow} className="eyebrow" stagger={30} />
         <RevealText
-          text={scenario.outcome.title}
+          text={outcome.title}
           as="h1"
           className="display display-sm"
           stagger={50}
           delay={300}
         />
-        <RevealText text={scenario.outcome.body} className="lede" stagger={15} delay={1200} />
+        <RevealText text={outcome.body} className="lede" stagger={15} delay={1200} />
 
         <div className="trace">
           <div className="trace-head mono">decision trace</div>

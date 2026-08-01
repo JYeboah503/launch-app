@@ -632,6 +632,7 @@ export function ScenarioPlay({
             onRestart={handleRestart}
             onReport={handleShowReport}
             showSkills={tweaks.showSkills}
+            meterValue={meterValue}
           />
         )}
         {phase === 'report' && (

@@ -118,6 +118,10 @@ export interface Scenario {
   opening: OpeningContent
   steps: DecisionStep[]
   outcome: OutcomeContent
+  /** Optional tiered endings — when present, the outcome screen picks the
+   *  ending by the final goal-meter value, so every decision the player
+   *  made genuinely shapes how the story lands. Journeys use this. */
+  outcomeTiers?: { high: OutcomeContent; mid: OutcomeContent; low: OutcomeContent }
   reflect?: ReflectContent
   /** Visual register. Optional — when unset, the play flow keeps its default look. */
   variant?: ScenarioVariant
