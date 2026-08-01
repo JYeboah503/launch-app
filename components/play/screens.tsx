@@ -23,6 +23,7 @@ import type {
   CompletionResult,
   DecisionOption,
   HistoryEntry,
+  JourneyRevealData,
   Profile,
   Scenario,
 } from '@/lib/play/types'
@@ -1017,6 +1018,134 @@ interface ReportScreenProps {
   onRestart: () => void
   onHome: () => void
   onComplete?: (result: CompletionResult) => void
+  /** Journey mode — same report layout, journey copy (capabilities shown,
+   *  subject shepherding, work-scenarios funnel, locked credential). */
+  journeyReveal?: JourneyRevealData
+}
+
+/** Journey variant of the skills report. Identical chrome and card grid to
+ *  the work-scenario report — only the content differs. */
+function JourneyReportScreen({
+  scenario,
+  journeyReveal: jr,
+  onRestart,
+  onHome,
+}: {
+  scenario: Scenario
+  journeyReveal: JourneyRevealData
+  onRestart: () => void
+  onHome: () => void
+}) {
+  const [credUnlocked, setCredUnlocked] = useState(false)
+  const reached = useRef(false)
+  useEffect(() => {
+    if (!reached.current) {
+      reached.current = true
+      jr.onReached?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const narrative = jr.capabilities.map((c) => c.line).join(' ')
+  const credId = `LNCH-${scenario.id.replace('journey-', '').slice(0, 2).toUpperCase()}-${1000 + (scenario.id.length * 397) % 9000}`
+
+  return (
+    <div className="screen report">
+      <SceneBackdrop scene="reflect" active={true} />
+
+      <div className="top-bar">
+        <div className="brand">
+          <span className="brand-mark" />
+          <span className="brand-name">LAUNCH</span>
+          <span className="brand-sep">·</span>
+          <span className="brand-sub">journey report</span>
+        </div>
+        <div className="mono meta">{jr.passionLabel}</div>
+      </div>
+
+      <div className="report-body">
+        <div className="report-grid">
+          <div className="report-card skills-card">
+            <div className="card-title">That wasn&rsquo;t a test. Here&rsquo;s what you showed.</div>
+            <p className="report-prose">{narrative}</p>
+            <div className="skill-chips">
+              {jr.capabilities.map((c) => (
+                <div className="skill-chip" key={c.name}>
+                  {c.name} · {c.level}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="report-card companies-card">
+            <div className="card-title">People who decide like you thrive in</div>
+            <div className="section-head" style={{ marginTop: 4 }}>Subjects</div>
+            <div className="skill-chips">
+              {jr.subjects.map((s) => (
+                <div className="skill-chip" key={s}>{s}</div>
+              ))}
+            </div>
+            <div className="section-head" style={{ marginTop: 14 }}>Directions</div>
+            <div className="skill-chips">
+              {jr.directions.map((d) => (
+                <div className="skill-chip" key={d}>{d}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="recommended-section">
+          <div className="section-head">Where this goes next</div>
+          <div className="recommended-grid">
+            <button
+              className="rec-card"
+              onClick={jr.workUnlocked ? jr.onWorkScenarios : undefined}
+              style={jr.workUnlocked ? undefined : { opacity: 0.65, cursor: 'default' }}
+            >
+              <div className="rec-role mono">Work scenarios</div>
+              <div className="rec-title">The real thing.</div>
+              <div className="rec-blurb">
+                {jr.workUnlocked
+                  ? 'Bigger rooms, real roles, real companies — and you’ve earned the door.'
+                  : `Bigger rooms, real roles, real companies. Unlocks after 2 journeys · ${Math.min(jr.completedCount, 2)}/2.`}
+              </div>
+              <div className="rec-arrow">{jr.workUnlocked ? 'Step in →' : 'Locked for now'}</div>
+            </button>
+
+            <button
+              className="rec-card"
+              onClick={() => setCredUnlocked(true)}
+              style={credUnlocked ? { cursor: 'default' } : undefined}
+            >
+              <div className="rec-role mono">Launch Credential</div>
+              <div className="rec-title">{credUnlocked ? credId : 'Yours to unlock.'}</div>
+              <div className="rec-blurb">
+                {credUnlocked
+                  ? `A verified record of what you showed — ${jr.capabilities.map((c) => c.name.split(' ')[0]).join(', ')} · ${Math.min(jr.completedCount, 5)}/5 journey stamps.`
+                  : 'A verified record of what you showed, for schools and employers. Unlocks with a school or family plan.'}
+              </div>
+              <div className="rec-arrow">{credUnlocked ? '✓ Unlocked (demo)' : 'Unlock (demo) →'}</div>
+            </button>
+
+            <button className="rec-card" onClick={onRestart}>
+              <div className="rec-role mono">Another journey</div>
+              <div className="rec-title">Same you, different Saturday.</div>
+              <div className="rec-blurb">Tell us something else you love — we’ll build the next story around it.</div>
+              <div className="rec-arrow">Go again →</div>
+            </button>
+          </div>
+        </div>
+
+        <div className="report-foot">
+          <button className="ghost-btn" onClick={jr.onAnotherJourney}>
+            ↻ Another journey
+          </button>
+          <button className="ghost-btn" onClick={onHome}>
+            ← Done
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function ReportScreen({
@@ -1025,7 +1154,18 @@ export function ReportScreen({
   onRestart,
   onHome,
   onComplete,
+  journeyReveal,
 }: ReportScreenProps) {
+  if (journeyReveal) {
+    return (
+      <JourneyReportScreen
+        scenario={scenario}
+        journeyReveal={journeyReveal}
+        onRestart={journeyReveal.onAnotherJourney}
+        onHome={onHome}
+      />
+    )
+  }
   const skillsMap = history
     .filter((h) => h.skill)
     .reduce<Record<string, number>>((acc, h) => {

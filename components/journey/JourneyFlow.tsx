@@ -1,502 +1,620 @@
 'use client'
 
 /**
- * JourneyFlow — the school-platform path, v2 ("daylight" design).
+ * Journeys — the school-platform path for younger students.
  *
- * NOT a finite library: the student describes ANYTHING they love and a
- * journey is generated around it (mocked here — the real build generates
- * via FUSE; the flagships are examples, not the catalogue).
+ * Deliberately the SAME surface as the work-scenarios student flow:
+ * the navy moon hero, the giant Quick play sign, the cream create band
+ * with the animated italic input, the rocket LaunchTransition, and the
+ * full cinema ScenarioPlay engine. Only the content differs — stories
+ * are journey-based (a Saturday, not a screening), generated from
+ * whatever the student says they love, and the final report carries
+ * journey copy: capabilities shown, subject shepherding, the funnel
+ * into work scenarios, and the payment-locked Launch Credential.
  *
- * Stages:
- *   MAP        — "What do you love?" hero input + example tiles, the trail
- *                of completed journey stamps, and the work-scenario summit
- *                (visible from day one, locked until two climbs).
- *   GENERATING — the "building your story…" beat that makes generation felt.
- *   PLAY       — the daylight shell: the SKY is the progress bar (each
- *                journey moves through its own day), waypoint trail,
- *                italic narrator, story-card choices, page-turn consequences.
- *                No timers, no scores, no test energy.
- *   REVEAL     — the constellation (10 faint stars; your three ignite),
- *                pathway shepherding, the funnel nudge, and the locked
- *                Launch Credential.
- *
- * Mobile-responsive by design — the doc pilots students on tablets/phones.
+ * Journeys are NOT a finite library. The free-text input is the primary
+ * door; the flagship cards below are examples. generateJourney() mocks
+ * the open generation (real build: FUSE builds a bespoke story).
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { LaunchWordmark } from '@/components/launch-wordmark'
+import { LaunchTransition } from '@/components/launch-transition'
+import { ScenarioPlay } from '@/components/play'
+import type { CompletionResult, Scenario } from '@/lib/play/types'
 import {
-  PASSIONS, JOURNEYS, JOURNEY_REVEALS, JOURNEY_SKIES,
-  generateJourney, journeyById,
+  JOURNEYS,
+  JOURNEY_REVEALS,
+  PASSIONS,
+  generateJourney,
 } from '@/lib/play/journeyScenarios'
-import type { Scenario, DecisionOption, DecisionStep } from '@/lib/play/types'
-import { ArrowLeft, ArrowRight, Lock, Unlock, Mountain } from 'lucide-react'
 
-/* ── stamps: completed journeys persist ─────────────────────────── */
+/* ---------- Completed-journey stamps (localStorage) ---------- */
+
+export interface JourneyStamp {
+  id: string
+  journeyId: string
+  title: string
+  passionLabel: string
+  completedAt: string
+  capabilities: string[]
+}
+
 const STAMPS_KEY = 'launch.journeys.v1'
-interface Stamp { journeyId: string; title: string; completedAt: string }
-const loadStamps = (): Stamp[] => {
-  try { const r = localStorage.getItem(STAMPS_KEY); return r ? JSON.parse(r) : [] } catch { return [] }
-}
-const saveStamp = (s: Stamp) => {
-  try { localStorage.setItem(STAMPS_KEY, JSON.stringify([s, ...loadStamps()].slice(0, 20))) } catch { /* ignore */ }
+
+function loadStamps(): JourneyStamp[] {
+  try {
+    const raw = localStorage.getItem(STAMPS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
-type Stage = 'map' | 'generating' | 'play' | 'reveal'
+function saveStamp(stamp: JourneyStamp): JourneyStamp[] {
+  const next = [...loadStamps(), stamp]
+  try {
+    localStorage.setItem(STAMPS_KEY, JSON.stringify(next))
+  } catch {}
+  return next
+}
 
-export function JourneyFlow({ onExit, onWorkScenarios }: { onExit: () => void; onWorkScenarios: () => void }) {
-  const [stage, setStage] = useState<Stage>('map')
+const WORK_UNLOCK_AT = 2
+
+/* ---------- Journey example lines for the animated input ---------- */
+
+const JOURNEY_EXAMPLES = [
+  'fishing with my pop',
+  'BMX with my brother',
+  'baking for the school fete',
+  'horses before school',
+  'building worlds in Minecraft',
+  'surf before anyone’s awake',
+]
+
+interface JourneyFlowProps {
+  onExit: () => void
+  /** Funnel — the student steps up into the work-scenarios flow. */
+  onWorkScenarios: () => void
+}
+
+export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
   const [name, setName] = useState('')
-  const [journey, setJourney] = useState<Scenario | null>(null)
-  const [passionLabel, setPassionLabel] = useState('')
-  const [stamps, setStamps] = useState<Stamp[]>([])
-  useEffect(() => { setStamps(loadStamps()) }, [stage])
+  const [interest, setInterest] = useState('')
+  const [stamps, setStamps] = useState<JourneyStamp[]>([])
+  const [showLaunchTransition, setShowLaunchTransition] = useState(false)
+  const [showPlay, setShowPlay] = useState(false)
+  const [current, setCurrent] = useState<{ scenario: Scenario; passionLabel: string } | null>(null)
 
-  const begin = (scenario: Scenario, label: string) => {
-    setJourney(scenario); setPassionLabel(label); setStage('generating')
-    setTimeout(() => setStage('play'), 2100)
+  // Typing animation — same mechanic as the work-scenarios create band.
+  const [animatedText, setAnimatedText] = useState('')
+  const [isTyping, setIsTyping] = useState(true)
+  const [exampleIdx, setExampleIdx] = useState(0)
+
+  useEffect(() => {
+    setStamps(loadStamps())
+  }, [])
+
+  useEffect(() => {
+    if (interest.trim()) {
+      setAnimatedText('')
+      return
+    }
+    const currentExample = JOURNEY_EXAMPLES[exampleIdx]
+    let timeout: ReturnType<typeof setTimeout>
+    if (isTyping) {
+      if (animatedText.length < currentExample.length) {
+        timeout = setTimeout(() => {
+          setAnimatedText(currentExample.slice(0, animatedText.length + 1))
+        }, 30)
+      } else {
+        timeout = setTimeout(() => setIsTyping(false), 800)
+      }
+    } else {
+      if (animatedText.length > 0) {
+        timeout = setTimeout(() => setAnimatedText(animatedText.slice(0, -1)), 25)
+      } else {
+        setIsTyping(true)
+        setExampleIdx((prev) => (prev + 1) % JOURNEY_EXAMPLES.length)
+      }
+    }
+    return () => clearTimeout(timeout)
+  }, [animatedText, isTyping, exampleIdx, interest])
+
+  /* ---------- Launch mechanics — rocket transition, then cinema ---------- */
+
+  const stampedThisRun = useRef(false)
+
+  const startJourney = (scenario: Scenario, passionLabel: string) => {
+    stampedThisRun.current = false
+    setCurrent({ scenario, passionLabel })
+    setShowLaunchTransition(true)
+    setTimeout(() => {
+      setShowLaunchTransition(false)
+      setShowPlay(true)
+    }, 4000)
   }
 
-  if (stage === 'generating' && journey) {
-    const sky = JOURNEY_SKIES[journey.id]?.[0] || ['#101c33', '#27406b']
-    return (
-      <main className="jd-root" style={{ background: `linear-gradient(180deg, ${sky[0]}, ${sky[1]})` }}>
-        <div className="jd-gen">
-          <div className="jd-gen-orb" />
-          <p className="jd-gen-line" style={{ animationDelay: '150ms' }}>Reading what you love&hellip;</p>
-          <p className="jd-gen-line" style={{ animationDelay: '1100ms' }}>Building your story around <em>{passionLabel.toLowerCase()}</em></p>
-        </div>
-        <style>{jdStyles}</style>
-      </main>
+  const handleCreate = () => {
+    if (!interest.trim()) return
+    const g = generateJourney(interest)
+    startJourney(g.scenario, g.passionLabel)
+  }
+
+  const handleQuickPlay = () => {
+    const next =
+      JOURNEYS.find((j) => !stamps.some((s) => s.journeyId === j.id)) ||
+      JOURNEYS[stamps.length % JOURNEYS.length]
+    startJourney(next, next.role)
+  }
+
+  const handleFlagship = (j: Scenario) => startJourney(j, j.role)
+
+  const stampCurrent = () => {
+    if (!current || stampedThisRun.current) return
+    // Guard against double-writes: one stamp per completed run.
+    stampedThisRun.current = true
+    setStamps(
+      saveStamp({
+        id: `stamp-${Date.now().toString(36)}`,
+        journeyId: current.scenario.id,
+        title: current.scenario.role,
+        passionLabel: current.passionLabel,
+        completedAt: new Date().toISOString(),
+        capabilities: (JOURNEY_REVEALS[current.scenario.id]?.capabilities || []).map((c) => c.name),
+      }),
     )
   }
 
-  if (stage === 'play' && journey) {
+  const closePlay = () => {
+    setShowPlay(false)
+    setCurrent(null)
+    setInterest('')
+    setStamps(loadStamps())
+  }
+
+  const handlePlayComplete = (_result: CompletionResult) => closePlay()
+
+  /* ---------- Cinema play — the untouched work-scenarios engine ---------- */
+
+  if (showPlay && current) {
+    const reveal = JOURNEY_REVEALS[current.scenario.id]
+    // Before the report is reached the current run isn't stamped yet — count
+    // it in so the report always reads "including this one".
+    const completedCount = stampedThisRun.current ? stamps.length : stamps.length + 1
     return (
-      <JourneyPlay
-        journey={journey} name={name.trim() || 'Explorer'}
-        onDone={() => {
-          saveStamp({ journeyId: journey.id, title: passionLabel || journey.role, completedAt: new Date().toISOString() })
-          setStage('reveal')
+      <ScenarioPlay
+        scenario={current.scenario}
+        profile={{ name: name.trim() || 'Explorer' }}
+        onComplete={handlePlayComplete}
+        onExit={closePlay}
+        journeyReveal={{
+          passionLabel: current.passionLabel,
+          capabilities: reveal?.capabilities || [],
+          subjects: reveal?.subjects || [],
+          directions: reveal?.directions || [],
+          completedCount,
+          workUnlocked: completedCount >= WORK_UNLOCK_AT,
+          onReached: stampCurrent,
+          onWorkScenarios,
+          onAnotherJourney: closePlay,
         }}
-        onBail={() => setStage('map')}
       />
     )
   }
 
-  if (stage === 'reveal' && journey) {
-    return (
-      <Reveal
-        journey={journey} name={name.trim() || 'Explorer'} stamps={stamps}
-        onAgain={() => setStage('map')} onWorkScenarios={onWorkScenarios} onDone={onExit}
-      />
-    )
-  }
+  /* ---------- Journey home — clone of the student-dashboard surface ---------- */
 
-  /* ── MAP ───────────────────────────────────────────────────────── */
-  const done = new Set(stamps.map((s) => s.journeyId))
-  const summitOpen = stamps.length >= 2
+  const workUnlocked = stamps.length >= WORK_UNLOCK_AT
+
   return (
-    <main className="jd-root jd-root-day">
-      <div className="jd-wrap">
-        <button type="button" className="jd-back" onClick={onExit}><ArrowLeft className="w-4 h-4" /> Home</button>
+    <main
+      className="dark min-h-screen"
+      style={{
+        background: 'linear-gradient(180deg, #07091c 0%, #0e1737 50%, #182046 100%)',
+        color: 'var(--lq-cream)',
+      }}
+    >
+      <LaunchTransition
+        isActive={showLaunchTransition}
+        onComplete={() => setShowLaunchTransition(false)}
+      />
 
-        <div className="jd-eyebrow">Journeys</div>
-        <h1 className="jd-h1">What do you love?</h1>
-        <p className="jd-lede">Anything. We&rsquo;ll build the story around it.</p>
-
-        <div className="jd-hero-row">
-          <input
-            type="text" className="jd-name" placeholder="I'm…"
-            value={name} onChange={(e) => setName(e.target.value)}
-          />
-          <PassionInput onGo={(text) => { const g = generateJourney(text); begin(g.scenario, g.passionLabel) }} />
-        </div>
-
-        <div className="jd-examples">
-          <span className="jd-label">or start from one of these</span>
-          <div className="jd-tiles">
-            {PASSIONS.map((p, i) => (
-              <button key={p.id} type="button" className="jd-tile" style={{ animationDelay: `${i * 50}ms` }}
-                onClick={() => begin(journeyById(p.journeyId)!, p.label)}>
-                <span className="jd-tile-emoji">{p.emoji}</span>{p.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* The trail — stamps below, summit above. Progress you can see. */}
-        <div className="jd-trail">
-          <div className="jd-label" style={{ marginBottom: 16 }}>Your trail</div>
-
-          <div className={`jd-summit ${summitOpen ? 'is-open' : ''}`}>
-            <Mountain className="w-5 h-5" />
-            <span className="jd-summit-body">
-              <span className="jd-summit-title">Work scenarios</span>
-              <span className="jd-summit-sub">{summitOpen ? 'Unlocked — you’ve climbed enough. Higher stakes await.' : `Unlocks after 2 journeys · ${stamps.length}/2`}</span>
+      {/* Top bar — same chrome as the student dashboard */}
+      <div
+        className="fixed top-0 left-0 right-0 z-40 border-b"
+        style={{
+          borderColor: 'rgba(146, 184, 255, 0.12)',
+          background: 'rgba(7, 9, 28, 0.72)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+        }}
+      >
+        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <LaunchWordmark height={40} tone="light" ariaLabel="LAUNCH" />
+            <span className="hidden sm:inline editorial-mono" style={{ color: 'rgba(246, 242, 234, 0.5)' }}>
+              · journeys
             </span>
-            {summitOpen
-              ? <button type="button" className="jd-go" onClick={onWorkScenarios}>Enter <ArrowRight className="w-4 h-4" /></button>
-              : <Lock className="w-4 h-4" style={{ opacity: 0.5 }} />}
           </div>
-
-          {JOURNEYS.map((j) => {
-            const stamp = stamps.find((s) => s.journeyId === j.id)
-            return (
-              <button key={j.id} type="button" className={`jd-way ${stamp ? 'is-done' : ''}`} onClick={() => begin(j, j.role.split(' — ')[0])}>
-                <span className="jd-way-dot" style={{ background: `linear-gradient(135deg, ${JOURNEY_SKIES[j.id]?.[3]?.[0] || '#888'}, ${JOURNEY_SKIES[j.id]?.[4]?.[1] || '#ccc'})` }} />
-                <span className="jd-way-body">
-                  <span className="jd-way-title">{j.role}</span>
-                  <span className="jd-way-sub">{stamp ? `Completed · ${new Date(stamp.completedAt).toLocaleDateString()}` : `${j.steps.length} choices · ~10 min`}</span>
-                </span>
-                <span className="jd-way-cta">{stamp ? 'Again' : 'Play'} <ArrowRight className="w-3.5 h-3.5" /></span>
-              </button>
-            )
-          })}
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={onExit} className="editorial-pill editorial-pill-ghost text-xs">
+              Exit
+            </button>
+          </div>
         </div>
       </div>
-      <style>{jdStyles}</style>
-    </main>
-  )
-}
 
-function PassionInput({ onGo }: { onGo: (text: string) => void }) {
-  const [text, setText] = useState('')
-  return (
-    <div className="jd-passion">
-      <input
-        type="text" className="jd-passion-input"
-        placeholder="fishing with pop · BMX · baking · horses…"
-        value={text} onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && text.trim()) onGo(text) }}
-      />
-      <button type="button" className="jd-go" disabled={!text.trim()} onClick={() => onGo(text)}>
-        Build my journey <ArrowRight className="w-4 h-4" />
-      </button>
-    </div>
-  )
-}
+      <section
+        className="relative min-h-screen flex flex-col px-4 sm:px-8 md:px-12 overflow-hidden pt-20"
+      >
+        {/* Softly-blurred moon — same treatment as the front page */}
+        <div
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage:
+              'url(https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Moon%20final-K7dIJI6GEA4qMkAGyHWOt2WR0Q2XDM.jpg)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.55,
+            filter: 'blur(2px)',
+          }}
+          aria-hidden
+        />
+        <div
+          className="absolute inset-0 z-[1]"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(7,9,28,0.55) 0%, rgba(7,9,28,0.5) 35%, rgba(14,23,55,0.65) 70%, rgba(24,32,70,0.9) 100%)',
+          }}
+          aria-hidden
+        />
 
-/* ── PLAY · the daylight shell ──────────────────────────────────── */
-
-type Beat = { kind: 'opening' } | { kind: 'step'; i: number } | { kind: 'after'; i: number; opt: DecisionOption } | { kind: 'outcome' }
-
-function JourneyPlay({ journey, name, onDone, onBail }: { journey: Scenario; name: string; onDone: () => void; onBail: () => void }) {
-  const [beat, setBeat] = useState<Beat>({ kind: 'opening' })
-  const [own, setOwn] = useState('')
-  const skies = JOURNEY_SKIES[journey.id] || JOURNEY_SKIES['journey-surf']
-  const skyIdx = beat.kind === 'opening' ? 0 : beat.kind === 'outcome' ? skies.length - 1 : Math.min((beat.kind === 'after' ? beat.i + 1 : beat.i) + 1, skies.length - 2)
-  const sky = skies[skyIdx]
-  const fill = (s: string) => s.replace(/\{name\}/g, name)
-  const step: DecisionStep | null = beat.kind === 'step' ? (journey.steps[beat.i] as DecisionStep) : null
-  const late = skyIdx >= skies.length - 2 // light skies → dark ink text
-
-  const pick = (i: number, opt: DecisionOption) => { setOwn(''); setBeat({ kind: 'after', i, opt }) }
-  const next = (i: number) => (i + 1 < journey.steps.length ? setBeat({ kind: 'step', i: i + 1 }) : setBeat({ kind: 'outcome' }))
-
-  return (
-    <main className={`jd-root jd-play ${late ? 'is-late' : ''}`} style={{ background: `linear-gradient(180deg, ${sky[0]}, ${sky[1]})` }}>
-      <div className="jd-wrap jd-wrap-play">
-        <button type="button" className="jd-back jd-back-play" onClick={onBail}><ArrowLeft className="w-4 h-4" /> Leave the story</button>
-
-        {beat.kind === 'opening' && (
-          <div className="jd-beat">
-            <div className="jd-eyebrow-play">{fill(journey.opening.eyebrow)}</div>
-            <h1 className="jd-prompt">{fill(journey.opening.title)}</h1>
-            <p className="jd-narrator">{fill(journey.opening.body)}</p>
-            <button type="button" className="jd-go jd-go-big" onClick={() => setBeat({ kind: 'step', i: 0 })}>
-              Step in <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        {step && beat.kind === 'step' && (
-          <div className="jd-beat" key={beat.i}>
-            <div className="jd-eyebrow-play">{step.eyebrow}</div>
-            {step.sceneCaption && <p className="jd-narrator jd-narrator-sm">{fill(step.sceneCaption)}</p>}
-            <h1 className="jd-prompt">{fill(step.prompt)}</h1>
-            <div className="jd-cards">
-              {step.options.map((o, oi) => (
-                <button key={o.id} type="button" className="jd-card" style={{ animationDelay: `${oi * 90}ms` }} onClick={() => pick(beat.i, o)}>
-                  {o.label}
-                </button>
-              ))}
-            </div>
-            <div className="jd-own">
-              <input
-                type="text" className="jd-own-input" placeholder="or, in your own words…"
-                value={own} onChange={(e) => setOwn(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && own.trim()) pick(beat.i, {
-                    id: 'own', label: own.trim(),
-                    echo: 'You did it your way.', consequence: 'The morning bent around your call — and held.',
-                    stats: [{ label: 'YOUR PATH', change: 'self-chosen' }],
-                  })
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        {beat.kind === 'after' && (
-          <div className="jd-beat">
-            <div className="jd-eyebrow-play">What happened next</div>
-            <h1 className="jd-prompt jd-prompt-echo">{fill(beat.opt.echo || beat.opt.consequence || 'The story moved.')}</h1>
-            {beat.opt.consequence && beat.opt.echo && <p className="jd-narrator">{fill(beat.opt.consequence)}</p>}
-            {beat.opt.stats && (
-              <div className="jd-chips">
-                {beat.opt.stats.map((s) => <span key={s.label} className="jd-chip">{s.label.toLowerCase()} · {s.change}</span>)}
-              </div>
-            )}
-            <button type="button" className="jd-go jd-go-big" onClick={() => next(beat.i)}>
-              Keep going <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        {beat.kind === 'outcome' && (
-          <div className="jd-beat">
-            <div className="jd-eyebrow-play">{fill(journey.outcome.eyebrow)}</div>
-            <h1 className="jd-prompt">{fill(journey.outcome.title)}</h1>
-            <p className="jd-narrator">{fill(journey.outcome.body)}</p>
-            <button type="button" className="jd-go jd-go-big" onClick={onDone}>
-              See what you showed <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        {/* The waypoint trail — stones on sand, not a progress bar */}
-        <div className="jd-waytrail" aria-hidden>
-          {[-1, ...journey.steps.map((_, i) => i)].map((i) => {
-            const here = (beat.kind === 'opening' && i === -1) || ((beat.kind === 'step' || beat.kind === 'after') && beat.i === i)
-            const past = beat.kind === 'outcome' || (beat.kind !== 'opening' && i < (beat.kind === 'step' || beat.kind === 'after' ? beat.i : -1)) || (i === -1 && beat.kind !== 'opening')
-            return <span key={i} className={`jd-stone ${here ? 'is-here' : ''} ${past ? 'is-past' : ''}`} />
-          })}
-          <span className={`jd-stone jd-stone-star ${beat.kind === 'outcome' ? 'is-here' : ''}`}>✦</span>
-        </div>
-      </div>
-      <style>{jdStyles}</style>
-    </main>
-  )
-}
-
-/* ── REVEAL · constellation + pathways + credential ─────────────── */
-
-const STAR_POS = [
-  [12, 30], [26, 14], [40, 34], [55, 10], [68, 28], [82, 16], [90, 42], [22, 52], [50, 56], [76, 58],
-] // % coords in the sky box
-
-function Reveal({ journey, name, stamps, onAgain, onWorkScenarios, onDone }: {
-  journey: Scenario; name: string; stamps: Stamp[]
-  onAgain: () => void; onWorkScenarios: () => void; onDone: () => void
-}) {
-  const reveal = JOURNEY_REVEALS[journey.id] || JOURNEY_REVEALS['journey-surf']
-  const [unlocked, setUnlocked] = useState(false)
-  const [confirming, setConfirming] = useState(false)
-  const litIdx = useMemo(() => [1, 4, 8], []) // which stars ignite
-  const credId = `LNCH-${journey.id.slice(8, 10).toUpperCase()}-${(name.length * 7919 % 8999 + 1000)}`
-
-  return (
-    <main className="jd-root jd-root-day">
-      <div className="jd-wrap jd-wrap-wide">
-        <div className="jd-eyebrow">That wasn&rsquo;t a test</div>
-        <h1 className="jd-h1">Here&rsquo;s what you showed, {name}.</h1>
-
-        {/* Constellation — 10 faint stars, your three ignite */}
-        <div className="jd-sky">
-          {STAR_POS.map(([x, y], i) => {
-            const lit = litIdx.indexOf(i)
-            const cap = lit >= 0 ? reveal.capabilities[lit] : null
-            return (
-              <span key={i} className={`jd-star ${cap ? 'is-lit' : ''}`} style={{ left: `${x}%`, top: `${y}%`, animationDelay: cap ? `${400 + lit * 500}ms` : undefined }}>
-                {cap && (
-                  <span className="jd-star-tag" style={{ animationDelay: `${700 + lit * 500}ms` }}>
-                    <b>{cap.level}</b> {cap.name}
-                  </span>
-                )}
-              </span>
-            )
-          })}
-        </div>
-        <div className="jd-cap-lines">
-          {reveal.capabilities.map((c, i) => (
-            <p key={c.name} className="jd-cap-line" style={{ animationDelay: `${900 + i * 500}ms` }}>{c.line}</p>
-          ))}
-        </div>
-
-        {/* Pathways + the funnel nudge */}
-        <div className="jd-path">
-          <h2 className="jd-h2">People who decide like you thrive in&hellip;</h2>
-          <div className="jd-path-grid">
-            <div><div className="jd-label" style={{ marginBottom: 10 }}>Subjects</div>
-              <div className="jd-chips">{reveal.subjects.map((s) => <span key={s} className="jd-chip jd-chip-teal">{s}</span>)}</div></div>
-            <div><div className="jd-label" style={{ marginBottom: 10 }}>Directions</div>
-              <div className="jd-chips">{reveal.directions.map((d) => <span key={d} className="jd-chip">{d}</span>)}</div></div>
-          </div>
-          <button type="button" className="jd-nudge" onClick={onWorkScenarios}>
-            <span><span className="jd-nudge-title">Ready for a bigger one?</span>
-              <span className="jd-nudge-sub">A work scenario — same you, higher stakes.</span></span>
-            <ArrowRight className="w-5 h-5" />
+        {/* Quick play — the same giant sign */}
+        <div className="relative z-10 flex-1 flex items-center justify-center w-full">
+          <button type="button" onClick={handleQuickPlay} className="quick-play-sign">
+            Quick <em>play</em>
           </button>
         </div>
 
-        {/* Credential — stamps fill it; locked until unlocked */}
-        <div className="jd-cred-wrap">
-          <div className={`jd-cred ${unlocked ? '' : 'is-locked'}`}>
-            <div className="jd-cred-head"><span className="jd-cred-brand">LAUNCH CREDENTIAL</span><span className="jd-cred-id">{credId}</span></div>
-            <div className="jd-cred-name">{name}</div>
-            <div className="jd-chips" style={{ marginBottom: 14 }}>
-              {reveal.capabilities.map((c) => <span key={c.name} className="jd-chip jd-chip-dark">{c.name.split(' ')[0]} {c.level}</span>)}
-            </div>
-            <div className="jd-cred-stamps">
-              {[0, 1, 2, 3, 4].map((i) => <span key={i} className={`jd-slot ${i < Math.min(Math.max(stamps.length, 1), 5) ? 'is-filled' : ''}`} />)}
-              <span className="jd-cred-foot">{Math.min(Math.max(stamps.length, 1), 5)}/5 journey stamps · Verified by Launch</span>
-            </div>
-          </div>
-          {!unlocked && (
-            <div className="jd-cred-gate">
-              <Lock className="w-5 h-5" />
-              {confirming ? (
-                <div className="jd-gate-confirm">
-                  <span>Unlocks with a school or family plan.</span>
-                  <button type="button" className="jd-go" onClick={() => setUnlocked(true)}><Unlock className="w-4 h-4" /> Unlock (demo)</button>
+        {/* Cream band — "Create your own journey" */}
+        <div className="relative z-10 create-band">
+          <div className="create-band-inner">
+            <div className="quick-create-label">Create your own journey</div>
+            <p
+              className="mt-2 text-center"
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontStyle: 'italic',
+                fontSize: 'clamp(14px, 1.4vw, 17px)',
+                color: 'rgba(14, 24, 51, 0.55)',
+              }}
+            >
+              Tell us what you love. We&rsquo;ll build the story around it.
+            </p>
+
+            <div className="relative w-full max-w-2xl mt-5 sm:mt-6">
+              <input
+                id="create-journey-input"
+                type="text"
+                value={interest}
+                onChange={(e) => setInterest(e.target.value)}
+                className="w-full bg-transparent text-2xl sm:text-3xl outline-none cursor-text relative z-10 text-center"
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  color: 'var(--lq-ink)',
+                  fontWeight: 400,
+                  letterSpacing: '-0.015em',
+                  caretColor: 'var(--launch-lime-3)',
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                aria-label="What do you love?"
+              />
+              {!interest && (
+                <div
+                  className="absolute left-0 right-0 top-0 text-2xl sm:text-3xl pointer-events-none text-center"
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    color: 'rgba(14, 24, 51, 0.38)',
+                    fontWeight: 400,
+                    letterSpacing: '-0.015em',
+                    fontStyle: 'italic',
+                  }}
+                >
+                  {animatedText}
+                  <span className="opacity-50 animate-pulse">|</span>
                 </div>
-              ) : (
-                <button type="button" className="jd-gate-btn" onClick={() => setConfirming(true)}>Unlock your credential</button>
               )}
             </div>
-          )}
+
+            {/* Name entry — the band's quiet second field */}
+            <div className="code-entry">
+              <span className="code-entry-label">I&rsquo;m</span>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }}
+                placeholder="your name"
+                className="code-entry-input"
+                aria-label="Your name"
+              />
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={!interest.trim()}
+                className="code-entry-btn"
+              >
+                Go →
+              </button>
+            </div>
+
+            {/* Scroll cue — down to the flagship journeys */}
+            <button
+              type="button"
+              aria-label="Scroll for more"
+              onClick={() => {
+                document.getElementById('journey-more')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+              className="scroll-cue mt-8"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        <div className="jd-foot">
-          <button type="button" className="jd-ghost" onClick={onAgain}>Another journey</button>
-          <button type="button" className="jd-ghost" onClick={onDone}>Done</button>
+        <style>{`
+          .create-band {
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100vw;
+            background-image:
+              linear-gradient(180deg,
+                rgba(246, 242, 234, 0.86) 0%,
+                rgba(246, 242, 234, 0.78) 45%,
+                rgba(246, 242, 234, 0.88) 100%),
+              url('/images/capabilities-mosaic.png');
+            background-size: cover, cover;
+            background-position: center, center;
+            background-repeat: no-repeat, no-repeat;
+            padding: clamp(32px, 6vh, 60px) 24px clamp(28px, 5vh, 52px);
+          }
+          .create-band-inner {
+            max-width: 720px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+          }
+          .quick-create-label {
+            font-family: var(--font-display);
+            font-weight: 500;
+            font-size: clamp(24px, 3.4vw, 40px);
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            color: var(--launch-navy);
+            text-align: center;
+          }
+          .quick-play-sign {
+            display: inline-block;
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            font-family: var(--font-display);
+            font-weight: 300;
+            font-size: clamp(56px, 10vw, 132px);
+            letter-spacing: -0.028em;
+            line-height: 1.02;
+            color: var(--lq-cream);
+            transition: transform 280ms cubic-bezier(0.2,0.7,0.2,1), opacity 280ms ease;
+          }
+          .quick-play-sign em {
+            font-style: italic;
+            color: #92b8ff;
+          }
+          .quick-play-sign:hover { transform: scale(1.02); opacity: 0.94; }
+          .quick-play-sign:active { transform: scale(0.99); }
+
+          .code-entry {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 22px;
+            padding: 6px 6px 6px 18px;
+            background: rgba(255, 255, 255, 0.65);
+            border: 1px solid var(--lq-line-2);
+            border-radius: 999px;
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            transition: border-color 200ms ease, box-shadow 200ms ease;
+          }
+          .code-entry:focus-within {
+            border-color: var(--launch-navy);
+            box-shadow: 0 0 0 4px rgba(10, 42, 107, 0.10);
+          }
+          .code-entry-label {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--lq-ink-3);
+          }
+          .code-entry-input {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--lq-ink);
+            font-family: var(--font-mono);
+            font-size: 14px;
+            letter-spacing: 0.08em;
+            min-width: 180px;
+            padding: 8px 4px;
+          }
+          .code-entry-input::placeholder {
+            color: var(--lq-ink-3);
+            letter-spacing: 0.04em;
+          }
+          .code-entry-btn {
+            border: none;
+            background: var(--launch-navy);
+            color: var(--lq-cream);
+            font-family: var(--font-body);
+            font-weight: 600;
+            font-size: 13px;
+            padding: 8px 16px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 200ms ease, transform 200ms ease;
+          }
+          .code-entry-btn:hover:not(:disabled) {
+            background: var(--launch-navy-2);
+            transform: translateY(-1px);
+          }
+          .code-entry-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+          .scroll-cue {
+            color: rgba(10, 42, 107, 0.45);
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: color 200ms ease;
+            animation: scrollCueBob 1.8s ease-in-out infinite;
+          }
+          .scroll-cue:hover { color: rgba(10, 42, 107, 0.85); }
+          @keyframes scrollCueBob {
+            0%, 100% { transform: translateY(0); }
+            50%      { transform: translateY(5px); }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .scroll-cue { animation: none; }
+          }
+
+          /* Flagship journey cards — same card idiom as the student
+             dashboard's project cards. */
+          .jy-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            text-align: left;
+            gap: 8px;
+            padding: 22px 22px 18px;
+            border-radius: var(--card-r, 14px);
+            background: rgba(246, 242, 234, 0.05);
+            border: 1px solid rgba(246, 242, 234, 0.10);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            cursor: pointer;
+            transition: background 240ms ease, border-color 240ms ease, box-shadow 240ms ease, transform 240ms cubic-bezier(0.2,0.7,0.2,1);
+          }
+          .jy-card:hover {
+            background: color-mix(in srgb, #92b8ff 9%, rgba(246, 242, 234, 0.05));
+            border-color: color-mix(in srgb, #92b8ff 42%, transparent);
+            box-shadow: 0 14px 36px color-mix(in srgb, #92b8ff 16%, transparent);
+            transform: translateY(-2px);
+          }
+          .jy-card-role {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: rgba(146, 184, 255, 0.85);
+          }
+          .jy-card-title {
+            font-family: var(--font-display);
+            font-weight: 400;
+            font-size: 19px;
+            letter-spacing: -0.015em;
+            line-height: 1.25;
+            color: var(--lq-cream);
+          }
+          .jy-card-blurb {
+            font-size: 13.5px;
+            line-height: 1.5;
+            color: rgba(246, 242, 234, 0.62);
+          }
+          .jy-card-arrow {
+            margin-top: auto;
+            padding-top: 8px;
+            font-family: var(--font-body);
+            font-weight: 600;
+            font-size: 13px;
+            color: #92b8ff;
+          }
+          .jy-card-done {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: rgba(190, 227, 178, 0.85);
+          }
+          .jy-summit {
+            background: rgba(146, 184, 255, 0.08);
+            border-color: rgba(146, 184, 255, 0.28);
+          }
+          .jy-summit.is-locked { cursor: default; opacity: 0.75; }
+          .jy-summit.is-locked:hover { transform: none; box-shadow: none; }
+        `}</style>
+      </section>
+
+      {/* Flagship journeys — examples, not the catalogue */}
+      <section id="journey-more" className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+        <div className="mb-6">
+          <div className="editorial-mono" style={{ color: 'rgba(146, 184, 255, 0.75)' }}>
+            or start from one of these
+          </div>
+          <h2
+            className="mt-2"
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 300,
+              fontSize: 'clamp(26px, 3.4vw, 40px)',
+              letterSpacing: '-0.02em',
+              color: 'var(--lq-cream)',
+            }}
+          >
+            Example journeys
+          </h2>
         </div>
-      </div>
-      <style>{jdStyles}</style>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {JOURNEYS.map((j) => {
+            const done = stamps.find((s) => s.journeyId === j.id)
+            const passion = PASSIONS.find((p) => p.journeyId === j.id)
+            return (
+              <button key={j.id} type="button" className="jy-card" onClick={() => handleFlagship(j)}>
+                <span className="jy-card-role">{passion ? `${passion.emoji} ${passion.label}` : 'Journey'}</span>
+                <span className="jy-card-title">{j.role}</span>
+                <span className="jy-card-blurb">{j.opening.title}</span>
+                {done ? (
+                  <span className="jy-card-done">✓ Completed · {new Date(done.completedAt).toLocaleDateString()}</span>
+                ) : null}
+                <span className="jy-card-arrow">{done ? 'Play again →' : 'Step in →'}</span>
+              </button>
+            )
+          })}
+
+          {/* The summit — work scenarios, visible from day one */}
+          <button
+            type="button"
+            className={`jy-card jy-summit ${workUnlocked ? '' : 'is-locked'}`}
+            onClick={workUnlocked ? onWorkScenarios : undefined}
+          >
+            <span className="jy-card-role">⛰ The next room</span>
+            <span className="jy-card-title">Work scenarios</span>
+            <span className="jy-card-blurb">
+              Bigger rooms, real roles, real companies.
+              {workUnlocked ? ' You’ve earned the door.' : ` Unlocks after ${WORK_UNLOCK_AT} journeys · ${Math.min(stamps.length, WORK_UNLOCK_AT)}/${WORK_UNLOCK_AT}.`}
+            </span>
+            <span className="jy-card-arrow">{workUnlocked ? 'Step in →' : '🔒 Locked for now'}</span>
+          </button>
+        </div>
+      </section>
     </main>
   )
 }
-
-/* ── daylight styles — warm, responsive, zero test energy ───────── */
-
-const jdStyles = `
-  .jd-root { min-height: 100vh; transition: background 1200ms ease; }
-  .jd-root-day { background: linear-gradient(180deg, #fdf8ec 0%, #f3ecdb 100%); color: #22242a; }
-  .jd-wrap { max-width: 820px; margin: 0 auto; padding: 40px 22px 90px; }
-  .jd-wrap-wide { max-width: 880px; }
-  .jd-wrap-play { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding-bottom: 110px; }
-  .jd-back { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 34px; background: none; border: none; cursor: pointer; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #8a8c92; }
-  .jd-back:hover { color: #22242a; }
-  .jd-back-play { position: absolute; top: 22px; left: 22px; color: rgba(255,255,255,0.55); z-index: 5; }
-  .jd-back-play:hover { color: #fff; }
-  .is-late .jd-back-play { color: rgba(34,36,42,0.5); } .is-late .jd-back-play:hover { color: #22242a; }
-  .jd-eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700; color: var(--launch-teal-3, #126b60); margin-bottom: 12px; }
-  .jd-h1 { font-family: var(--font-display); font-weight: 450; font-size: clamp(34px, 6vw, 58px); letter-spacing: -0.03em; line-height: 1.03; margin: 0 0 10px; color: #22242a; }
-  .jd-h2 { font-family: var(--font-display); font-weight: 500; font-size: clamp(21px, 3vw, 28px); letter-spacing: -0.02em; margin: 0 0 18px; }
-  .jd-lede { font-size: 16px; color: #5d5f66; margin-bottom: 30px; }
-  .jd-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; color: #8a8c92; }
-
-  .jd-hero-row { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
-  .jd-name { width: 130px; border: 1.5px solid rgba(34,36,42,0.12); border-radius: 999px; background: #fff; padding: 13px 18px; font-family: var(--font-display); font-size: 16px; outline: none; }
-  .jd-name:focus { border-color: var(--launch-teal, #1B9E8F); }
-  .jd-passion { flex: 1; display: flex; gap: 10px; min-width: 280px; }
-  .jd-passion-input { flex: 1; border: 1.5px solid rgba(34,36,42,0.12); border-radius: 999px; background: #fff; padding: 13px 20px; font-size: 15px; outline: none; }
-  .jd-passion-input:focus { border-color: var(--launch-teal, #1B9E8F); }
-  .jd-go { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; border: none; background: #22242a; color: #fff; font-family: var(--font-body); font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap; transition: opacity 160ms ease, transform 160ms ease; }
-  .jd-go:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.9; }
-  .jd-go:disabled { opacity: 0.35; cursor: not-allowed; }
-  .jd-go-big { padding: 14px 26px; font-size: 15px; margin-top: 8px; }
-
-  .jd-examples { margin-bottom: 44px; }
-  .jd-tiles { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 10px; }
-  .jd-tile { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; background: #fff; border: 1.5px solid rgba(34,36,42,0.08); font-family: var(--font-body); font-weight: 600; font-size: 14px; cursor: pointer; animation: jd-pop 380ms cubic-bezier(0.2,0.8,0.3,1.1) both; transition: border-color 160ms ease, transform 160ms ease; }
-  .jd-tile:hover { border-color: var(--launch-teal, #1B9E8F); transform: translateY(-2px); }
-  .jd-tile-emoji { font-size: 19px; }
-  @keyframes jd-pop { from { opacity: 0; transform: translateY(10px) scale(0.96); } to { opacity: 1; transform: none; } }
-
-  .jd-trail { border-top: 1.5px solid rgba(34,36,42,0.08); padding-top: 26px; }
-  .jd-summit { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-radius: 18px; background: #22242a; color: #fff; margin-bottom: 12px; }
-  .jd-summit.is-open { background: linear-gradient(135deg, #145f55, #1B9E8F); }
-  .jd-summit-body { flex: 1; } .jd-summit-title { display: block; font-family: var(--font-display); font-weight: 500; font-size: 16px; }
-  .jd-summit-sub { display: block; font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 2px; }
-  .jd-way { width: 100%; display: flex; align-items: center; gap: 14px; text-align: left; padding: 14px 16px; border-radius: 16px; background: #fff; border: 1.5px solid rgba(34,36,42,0.07); margin-bottom: 10px; cursor: pointer; transition: border-color 160ms ease, transform 160ms ease; }
-  .jd-way:hover { border-color: #22242a; transform: translateY(-1px); }
-  .jd-way.is-done { background: rgba(27,158,143,0.06); }
-  .jd-way-dot { width: 34px; height: 34px; border-radius: 12px; flex-shrink: 0; }
-  .jd-way-body { flex: 1; min-width: 0; }
-  .jd-way-title { display: block; font-family: var(--font-display); font-weight: 500; font-size: 15px; }
-  .jd-way-sub { display: block; font-size: 11.5px; color: #8a8c92; margin-top: 1px; }
-  .jd-way-cta { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--launch-teal-3, #126b60); white-space: nowrap; }
-
-  /* generating */
-  .jd-gen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: rgba(255,255,255,0.9); text-align: center; padding: 20px; }
-  .jd-gen-orb { width: 54px; height: 54px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0.15) 70%); animation: jd-breathe 1.6s ease-in-out infinite; }
-  @keyframes jd-breathe { 0%,100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.18); opacity: 1; } }
-  .jd-gen-line { font-family: var(--font-display); font-style: italic; font-size: clamp(17px, 2.6vw, 23px); opacity: 0; animation: jd-fadein 700ms ease forwards; }
-  @keyframes jd-fadein { to { opacity: 1; } }
-
-  /* play */
-  .jd-play { color: #fff; position: relative; }
-  .jd-play.is-late { color: #22242a; }
-  .jd-beat { animation: jd-fadein 600ms ease both; }
-  .jd-eyebrow-play { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700; opacity: 0.6; margin-bottom: 14px; }
-  .jd-prompt { font-family: var(--font-display); font-weight: 450; font-size: clamp(26px, 4.6vw, 44px); letter-spacing: -0.025em; line-height: 1.12; margin: 0 0 16px; max-width: 24ch; color: inherit; }
-  .jd-prompt-echo { font-style: italic; }
-  .jd-narrator { font-family: var(--font-display); font-style: italic; font-size: clamp(15px, 2vw, 18px); line-height: 1.6; opacity: 0.82; max-width: 58ch; margin-bottom: 26px; }
-  .jd-narrator-sm { font-size: 14px; margin-bottom: 10px; }
-  .jd-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
-  @media (max-width: 700px) { .jd-cards { grid-template-columns: 1fr; } }
-  .jd-card { text-align: left; padding: 20px; border-radius: 18px; background: rgba(255,255,255,0.94); color: #22242a; border: 1.5px solid transparent; font-family: var(--font-display); font-weight: 500; font-size: 15.5px; line-height: 1.45; cursor: pointer; animation: jd-pop 420ms cubic-bezier(0.2,0.8,0.3,1.1) both; transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease; }
-  .jd-card:hover { transform: translateY(-3px); border-color: var(--launch-teal, #1B9E8F); box-shadow: 0 16px 30px -20px rgba(0,0,0,0.5); }
-  .jd-own-input { width: 100%; border: 1.5px dashed rgba(255,255,255,0.35); border-radius: 999px; background: rgba(255,255,255,0.08); padding: 12px 20px; font-size: 14px; color: inherit; outline: none; }
-  .is-late .jd-own-input { border-color: rgba(34,36,42,0.25); background: rgba(255,255,255,0.5); }
-  .jd-own-input::placeholder { color: currentColor; opacity: 0.55; }
-  .jd-own-input:focus { border-style: solid; border-color: var(--launch-teal, #1B9E8F); }
-  .jd-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
-  .jd-chip { padding: 7px 14px; border-radius: 999px; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.25); font-size: 12.5px; font-weight: 600; }
-  .jd-root-day .jd-chip { background: rgba(34,36,42,0.05); border-color: rgba(34,36,42,0.1); color: #22242a; }
-  .is-late .jd-chip { background: rgba(34,36,42,0.07); border-color: rgba(34,36,42,0.14); }
-  .jd-chip-teal { background: rgba(27,158,143,0.1) !important; border-color: transparent !important; color: var(--launch-teal-3, #126b60) !important; }
-  .jd-chip-dark { background: rgba(255,255,255,0.1) !important; border-color: rgba(255,255,255,0.25) !important; color: rgba(255,255,255,0.85) !important; }
-  .jd-waytrail { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 14px; }
-  .jd-stone { width: 9px; height: 9px; border-radius: 50%; background: currentColor; opacity: 0.25; transition: all 400ms ease; }
-  .jd-stone.is-past { opacity: 0.55; }
-  .jd-stone.is-here { opacity: 1; transform: scale(1.5); box-shadow: 0 0 0 5px rgba(255,255,255,0.15); }
-  .jd-stone-star { background: none; width: auto; height: auto; font-size: 13px; }
-
-  /* reveal */
-  .jd-sky { position: relative; height: 240px; border-radius: 22px; background: linear-gradient(180deg, #101c33, #27406b); margin: 18px 0 8px; overflow: hidden; }
-  .jd-star { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.35); }
-  .jd-star.is-lit { width: 11px; height: 11px; margin: -3px; background: #fff; animation: jd-ignite 900ms ease both; box-shadow: 0 0 18px 4px rgba(255,255,240,0.7); }
-  @keyframes jd-ignite { from { transform: scale(0.2); opacity: 0; } 60% { transform: scale(1.5); } to { transform: scale(1); opacity: 1; } }
-  .jd-star-tag { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; color: rgba(255,255,255,0.9); background: rgba(0,0,0,0.3); border-radius: 999px; padding: 4px 10px; opacity: 0; animation: jd-fadein 600ms ease forwards; }
-  .jd-star-tag b { color: #7fe0d2; }
-  @media (max-width: 700px) { .jd-star-tag { font-size: 8.5px; } .jd-sky { height: 200px; } }
-  .jd-cap-lines { margin: 16px 0 44px; }
-  .jd-cap-line { font-family: var(--font-display); font-style: italic; font-size: 15px; color: #5d5f66; line-height: 1.6; margin: 4px 0; opacity: 0; animation: jd-fadein 600ms ease forwards; }
-  .jd-path { background: #fff; border: 1.5px solid rgba(34,36,42,0.08); border-radius: 22px; padding: 28px; margin-bottom: 46px; }
-  .jd-path-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-bottom: 22px; }
-  @media (max-width: 620px) { .jd-path-grid { grid-template-columns: 1fr; } }
-  .jd-nudge { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px; text-align: left; padding: 18px 22px; border-radius: 16px; border: none; background: #22242a; color: #fff; cursor: pointer; transition: transform 160ms ease, opacity 160ms ease; }
-  .jd-nudge:hover { transform: translateY(-1px); opacity: 0.92; }
-  .jd-nudge-title { display: block; font-family: var(--font-display); font-weight: 500; font-size: 17px; }
-  .jd-nudge-sub { display: block; font-size: 12.5px; color: rgba(255,255,255,0.6); margin-top: 3px; }
-  .jd-cred-wrap { position: relative; margin-bottom: 40px; }
-  .jd-cred { background: linear-gradient(135deg, #171921, #232734 60%, #1c2c2a); border-radius: 22px; padding: 28px 30px; color: #fff; transition: filter 400ms ease; }
-  .jd-cred.is-locked { filter: blur(7px) saturate(0.8); pointer-events: none; user-select: none; }
-  .jd-cred-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; flex-wrap: wrap; gap: 6px; }
-  .jd-cred-brand { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.28em; font-weight: 700; color: var(--launch-teal, #1B9E8F); }
-  .jd-cred-id { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; color: rgba(255,255,255,0.4); }
-  .jd-cred-name { font-family: var(--font-display); font-weight: 500; font-size: clamp(24px, 4vw, 36px); letter-spacing: -0.02em; margin-bottom: 14px; }
-  .jd-cred-stamps { display: flex; align-items: center; gap: 7px; }
-  .jd-slot { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.35); }
-  .jd-slot.is-filled { background: var(--launch-teal, #1B9E8F); border-color: var(--launch-teal, #1B9E8F); }
-  .jd-cred-foot { font-size: 11px; color: rgba(255,255,255,0.45); margin-left: 8px; }
-  .jd-cred-gate { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #fff; }
-  .jd-gate-btn { padding: 11px 22px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,0.5); background: rgba(23,25,33,0.5); color: #fff; font-weight: 600; font-size: 14px; cursor: pointer; backdrop-filter: blur(2px); }
-  .jd-gate-btn:hover { border-color: #fff; }
-  .jd-gate-confirm { display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 13px; text-shadow: 0 1px 8px rgba(0,0,0,0.5); }
-  .jd-foot { display: flex; gap: 10px; }
-  .jd-ghost { padding: 11px 20px; border-radius: 999px; border: 1.5px solid rgba(34,36,42,0.16); background: transparent; color: #5d5f66; font-weight: 600; font-size: 13.5px; cursor: pointer; transition: border-color 160ms ease, color 160ms ease; }
-  .jd-ghost:hover { border-color: #22242a; color: #22242a; }
-`

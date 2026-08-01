@@ -164,3 +164,21 @@ export type CompletionResult =
   | { kind: 'back-to-dashboard' }
   | { kind: 'create-new-scenario' }
   | { kind: 'department-selected'; company: string; department: string }
+
+/** Journey-mode payload for the final ReportScreen. When present the report
+ *  keeps its exact layout but carries journey copy instead of the employer
+ *  copy: capabilities shown, subject/direction shepherding, the funnel into
+ *  work scenarios, and the payment-locked Launch Credential. */
+export interface JourneyRevealData {
+  passionLabel: string
+  capabilities: { name: string; level: number; line: string }[]
+  subjects: string[]
+  directions: string[]
+  /** Journeys completed including this one — drives the work-scenarios lock. */
+  completedCount: number
+  workUnlocked: boolean
+  /** Fired once when the report is reached — the host persists the stamp. */
+  onReached?: () => void
+  onWorkScenarios: () => void
+  onAnotherJourney: () => void
+}

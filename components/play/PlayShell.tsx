@@ -230,6 +230,9 @@ export interface ScenarioPlayProps {
     answers: Record<string, string>,
     profile?: import('@/lib/candidateProfile').CandidateProfile,
   ) => void
+  /** Journey mode — the final report keeps its layout but carries journey
+   *  copy (capabilities shown, subject shepherding, funnel, credential). */
+  journeyReveal?: import('@/lib/play/types').JourneyRevealData
 }
 
 export function ScenarioPlay({
@@ -240,6 +243,7 @@ export function ScenarioPlay({
   variant,
   genericQuestions,
   onIntakeComplete,
+  journeyReveal,
 }: ScenarioPlayProps) {
   const [scenario, setScenario] = useState<Scenario>(initialScenario)
   const [profile, setProfile] = useState<Profile>({
@@ -637,6 +641,7 @@ export function ScenarioPlay({
             onRestart={handleRestart}
             onHome={close}
             onComplete={onComplete}
+            journeyReveal={journeyReveal}
           />
         )}
       </TransitionStack>
