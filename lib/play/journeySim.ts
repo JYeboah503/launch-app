@@ -18,7 +18,9 @@
  * what Johnny is saying").
  */
 
-export type StreamKey = 'team' | 'venue' | 'food' | 'promo' | 'sponsor' | 'umpires'
+/** Workstream keys are per-script (footy has venue/canteen, farm has
+ *  header/paddocks…) — any string, defined by the script's `streams`. */
+export type StreamKey = string
 export type StreamStatus = 'todo' | 'underway' | 'sorted' | 'shaky'
 
 export interface SimEffect {
@@ -70,7 +72,9 @@ export interface JourneySimScript {
   nodes: Record<string, SimNode>
   /** Threads completed before the complication forces its way in. */
   threadsBeforeFinale: number
-  complication: { venueSorted: string; venueNot: string }
+  /** Which complication arrives depends on whether `checkStream` was
+   *  secured — difficulty evolves off the player's own inputs. */
+  complication: { checkStream: StreamKey; whenSorted: string; otherwise: string }
   finale: string
   endings: { high: SimEnding; mid: SimEnding; low: SimEnding }
 }
@@ -690,7 +694,7 @@ export const FOOTY_SIM: JourneySimScript = {
       kind: 'scene',
       eyebrow: 'Grand final day · 7:10am',
       narrative:
-        "The morning of. Fresh lines on the grass{venueLine}. Cars already nosing into the carpark two hours early. Whatever's sorted is sorted; whatever isn't is about to introduce itself. Tom finds you by the gate and hands you a coffee: \"Big day, boss.\"",
+        "The morning of. Fresh lines on the grass. Cars already nosing into the carpark two hours early. Whatever's sorted is sorted; whatever isn't is about to introduce itself. Tom finds you by the gate and hands you a coffee: \"Big day, boss.\"",
       prompt: 'Last call of the project. How do you spend the final hour before gates?',
       customTo: 'END',
       options: [
@@ -725,7 +729,7 @@ export const FOOTY_SIM: JourneySimScript = {
     },
   },
   threadsBeforeFinale: 3,
-  complication: { venueSorted: 'comp-storm', venueNot: 'comp-venue' },
+  complication: { checkStream: 'venue', whenSorted: 'comp-storm', otherwise: 'comp-venue' },
   finale: 'finale',
   endings: {
     high: {

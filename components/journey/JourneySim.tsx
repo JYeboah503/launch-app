@@ -75,10 +75,7 @@ export function JourneySim({ script, name, passionLabel, scenario, journeyReveal
   // Which capabilities the player's picks exercised — the run's analysis.
   const [skillCounts, setSkillCounts] = useState<Record<string, number>>({})
 
-  const fill = (s: string) =>
-    s
-      .replaceAll('{name}', name || 'mate')
-      .replaceAll('{venueLine}', streams.venue === 'sorted' ? ' — Marge kept her word' : '')
+  const fill = (s: string) => s.replaceAll('{name}', name || 'mate')
 
   const currentNode: SimNode | null = phase.kind === 'node' ? script.nodes[phase.id] : null
 
@@ -103,8 +100,10 @@ export function JourneySim({ script, name, passionLabel, scenario, journeyReveal
       setDay((d) => Math.min(script.daysTotal, d + 1))
       if (done >= script.threadsBeforeFinale) {
         // The complication that arrives depends on what the player secured.
-        const venueOk = (phase.effects?.stream === 'venue' ? phase.effects.status : streams.venue) === 'sorted'
-        setPhase({ kind: 'node', id: venueOk ? script.complication.venueSorted : script.complication.venueNot })
+        const check = script.complication.checkStream
+        const ok =
+          (phase.effects?.stream === check ? phase.effects.status : streams[check]) === 'sorted'
+        setPhase({ kind: 'node', id: ok ? script.complication.whenSorted : script.complication.otherwise })
       } else {
         setPhase({ kind: 'hub' })
       }

@@ -20,9 +20,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { LaunchWordmark } from '@/components/launch-wordmark'
 import { LaunchTransition } from '@/components/launch-transition'
-import { ScenarioPlay } from '@/components/play'
 import { JourneySim } from '@/components/journey/JourneySim'
-import { FOOTY_SIM } from '@/lib/play/journeySim'
+import { SIM_SCRIPTS } from '@/lib/play/journeySimScripts'
 import {
   type JourneyProfile,
   type ScenarioProposal,
@@ -36,7 +35,7 @@ import {
   saveProfile,
   styleLinesFromCounts,
 } from '@/lib/play/journeyProfile'
-import type { CompletionResult, Scenario } from '@/lib/play/types'
+import type { Scenario } from '@/lib/play/types'
 import {
   JOURNEYS,
   JOURNEY_REVEALS,
@@ -230,8 +229,6 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     setStamps(loadStamps())
   }
 
-  const handlePlayComplete = (_result: CompletionResult) => closePlay()
-
   /* ---------- Cinema play — the untouched work-scenarios engine ---------- */
 
   if (showPlay && current) {
@@ -268,28 +265,18 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
       onWorkScenarios,
       onAnotherJourney: closePlay,
     }
-    // The footy grand final runs on the node-journey sim — the Sims-style
-    // hub-and-threads exemplar. Other journeys stay on the cinema arcs
-    // until their node scripts are authored.
-    if (current.scenario.id === 'journey-footy') {
-      return (
-        <JourneySim
-          script={FOOTY_SIM}
-          name={name.trim() || 'Explorer'}
-          passionLabel={current.passionLabel}
-          scenario={current.scenario}
-          journeyReveal={journeyReveal}
-          onExit={closePlay}
-        />
-      )
-    }
+    // EVERY journey runs on the node-journey sim — the continuous
+    // Sims-style shape (hub → threads → calls → complication → finale)
+    // is THE journey experience. One script per passion.
+    const script = SIM_SCRIPTS[current.scenario.id] || SIM_SCRIPTS['journey-footy']
     return (
-      <ScenarioPlay
+      <JourneySim
+        script={script}
+        name={name.trim() || 'Explorer'}
+        passionLabel={current.passionLabel}
         scenario={current.scenario}
-        profile={{ name: name.trim() || 'Explorer' }}
-        onComplete={handlePlayComplete}
-        onExit={closePlay}
         journeyReveal={journeyReveal}
+        onExit={closePlay}
       />
     )
   }
