@@ -125,7 +125,13 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     setStamps(loadStamps())
     const p = loadProfile()
     setProfile(p)
-    if (!p) setIntakeStage('passion')
+    // The selection conversation runs EVERY time the journeys door opens —
+    // prior answers prefill so a returning student moves through fast.
+    if (p) {
+      setInPassion(p.passion || '')
+      setInStrengths(p.strengths || [])
+    }
+    setIntakeStage('passion')
   }, [])
 
   useEffect(() => {
@@ -348,13 +354,16 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
           <LaunchWordmark height={34} tone="light" ariaLabel="LAUNCH" />
           <span className="jin-top-meta">· journeys</span>
           <span style={{ flex: 1 }} />
+          <button type="button" className="jin-ghost" onClick={() => setIntakeStage(null)}>
+            Skip → all journeys
+          </button>
           <button type="button" className="jin-ghost" onClick={onExit}>Exit</button>
         </div>
 
         <section className="jin-stage">
           {intakeStage === 'passion' && (
             <div className="jin-card" key="passion">
-              <div className="jin-eyebrow">Building your first scenario · 1 of 3</div>
+              <div className="jin-eyebrow">Building your {profile ? 'next' : 'first'} scenario · 1 of 3</div>
               <h1 className="jin-q">What are you passionate about?</h1>
               <p className="jin-sub">Anything counts. The more yours, the better.</p>
               <div className="jin-chips">
@@ -403,7 +412,7 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
 
           {intakeStage === 'strengths' && (
             <div className="jin-card" key="strengths">
-              <div className="jin-eyebrow">Building your first scenario · 2 of 3</div>
+              <div className="jin-eyebrow">Building your {profile ? 'next' : 'first'} scenario · 2 of 3</div>
               <h1 className="jin-q">What do you reckon you&rsquo;re good at?</h1>
               <p className="jin-sub">Pick up to three. Be honest — nobody&rsquo;s marking this.</p>
               <div className="jin-chips">
@@ -434,7 +443,7 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
 
           {intakeStage === 'pay' && (
             <div className="jin-card" key="pay">
-              <div className="jin-eyebrow">Building your first scenario · 3 of 3</div>
+              <div className="jin-eyebrow">Building your {profile ? 'next' : 'first'} scenario · 3 of 3</div>
               <h1 className="jin-q">Fast-forward — you&rsquo;re 25. What would you love to be getting paid to do?</h1>
               <p className="jin-sub">A direction, not a contract. You can change your mind forever.</p>
               <div className="jin-chips">
