@@ -181,8 +181,19 @@ export interface JourneyRevealData {
   /** Journeys completed including this one — drives the work-scenarios lock. */
   completedCount: number
   workUnlocked: boolean
+  /** "How you decide" — pattern lines derived from the choices made. */
+  styleLines?: string[]
+  /** Next-scenario suggestions: skill-matched + deliberately different. */
+  nextUp?: {
+    effective: { journeyId: string; title: string; blurb: string; reason: string }
+    different: { journeyId: string; title: string; blurb: string; reason: string }
+  }
+  /** Play a recommended scenario straight from the report. */
+  onPlayNext?: (journeyId: string, title: string) => void
   /** Fired once when the report is reached — the host persists the stamp. */
   onReached?: () => void
+  /** Live run analytics handed up before the report (sim runs only). */
+  onAnalytics?: (data: { skillCounts: Record<string, number>; score: number }) => void
   onWorkScenarios: () => void
   onAnotherJourney: () => void
 }

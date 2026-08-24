@@ -1094,6 +1094,16 @@ function JourneyReportScreen({
                 </div>
               ))}
             </div>
+            {jr.styleLines && jr.styleLines.length > 0 && (
+              <>
+                <div className="section-head" style={{ marginTop: 18 }}>How you decide</div>
+                {jr.styleLines.map((line) => (
+                  <p className="report-prose" style={{ fontStyle: 'italic', marginBottom: 6 }} key={line}>
+                    {line}
+                  </p>
+                ))}
+              </>
+            )}
           </div>
 
           <div className="report-card companies-card">
@@ -1116,6 +1126,31 @@ function JourneyReportScreen({
         <div className="recommended-section">
           <div className="section-head">Where this goes next</div>
           <div className="recommended-grid">
+            {jr.nextUp && (
+              <button
+                className="rec-card"
+                onClick={() => jr.onPlayNext?.(jr.nextUp!.effective.journeyId, jr.nextUp!.effective.title)}
+              >
+                <div className="rec-role mono">You’d be effective in</div>
+                <div className="rec-title">{jr.nextUp.effective.title}</div>
+                <div className="rec-blurb">{jr.nextUp.effective.blurb}</div>
+                <div className="rec-tone mono">{jr.nextUp.effective.reason}</div>
+                <div className="rec-arrow">Step in →</div>
+              </button>
+            )}
+            {jr.nextUp && (
+              <button
+                className="rec-card"
+                onClick={() => jr.onPlayNext?.(jr.nextUp!.different.journeyId, jr.nextUp!.different.title)}
+              >
+                <div className="rec-role mono">Something entirely different</div>
+                <div className="rec-title">{jr.nextUp.different.title}</div>
+                <div className="rec-blurb">{jr.nextUp.different.blurb}</div>
+                <div className="rec-tone mono">{jr.nextUp.different.reason}</div>
+                <div className="rec-arrow">Try it →</div>
+              </button>
+            )}
+
             <button
               className="rec-card"
               onClick={jr.workUnlocked ? jr.onWorkScenarios : undefined}
@@ -1146,12 +1181,14 @@ function JourneyReportScreen({
               <div className="rec-arrow">{credUnlocked ? '✓ Unlocked (demo)' : 'Unlock (demo) →'}</div>
             </button>
 
-            <button className="rec-card" onClick={onRestart}>
-              <div className="rec-role mono">Another journey</div>
-              <div className="rec-title">Same you, different Saturday.</div>
-              <div className="rec-blurb">Tell us something else you love — we’ll build the next story around it.</div>
-              <div className="rec-arrow">Go again →</div>
-            </button>
+            {!jr.nextUp && (
+              <button className="rec-card" onClick={onRestart}>
+                <div className="rec-role mono">Another journey</div>
+                <div className="rec-title">Same you, different Saturday.</div>
+                <div className="rec-blurb">Tell us something else you love — we’ll build the next story around it.</div>
+                <div className="rec-arrow">Go again →</div>
+              </button>
+            )}
           </div>
         </div>
 

@@ -23,12 +23,26 @@ import { LaunchTransition } from '@/components/launch-transition'
 import { ScenarioPlay } from '@/components/play'
 import { JourneySim } from '@/components/journey/JourneySim'
 import { FOOTY_SIM } from '@/lib/play/journeySim'
+import {
+  type JourneyProfile,
+  type ScenarioProposal,
+  PAY_CHIPS,
+  STRENGTH_CHIPS,
+  appendRun,
+  clearProfile,
+  loadProfile,
+  proposeScenario,
+  recommendNext,
+  saveProfile,
+  styleLinesFromCounts,
+} from '@/lib/play/journeyProfile'
 import type { CompletionResult, Scenario } from '@/lib/play/types'
 import {
   JOURNEYS,
   JOURNEY_REVEALS,
   PASSIONS,
   generateJourney,
+  journeyById,
 } from '@/lib/play/journeyScenarios'
 
 /* ---------- Completed-journey stamps (localStorage) ---------- */
@@ -95,8 +109,23 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
   const [isTyping, setIsTyping] = useState(true)
   const [exampleIdx, setExampleIdx] = useState(0)
 
+  // Intake — the first-visit conversation that leads a student into a
+  // scenario "like they're already in it": passion → strengths → paid-for
+  // → one tailored proposal with a free-text redirect.
+  const [profile, setProfile] = useState<JourneyProfile | null>(null)
+  const [intakeStage, setIntakeStage] = useState<null | 'passion' | 'strengths' | 'pay' | 'proposal'>(null)
+  const [inPassion, setInPassion] = useState('')
+  const [inStrengths, setInStrengths] = useState<string[]>([])
+  const [inPay, setInPay] = useState<{ label: string; journeyId: string } | null>(null)
+  const [proposal, setProposal] = useState<ScenarioProposal | null>(null)
+  const [redirectText, setRedirectText] = useState('')
+  const runAnalytics = useRef<{ skillCounts: Record<string, number>; score: number } | null>(null)
+
   useEffect(() => {
     setStamps(loadStamps())
+    const p = loadProfile()
+    setProfile(p)
+    if (!p) setIntakeStage('passion')
   }, [])
 
   useEffect(() => {
@@ -131,6 +160,8 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
 
   const startJourney = (scenario: Scenario, passionLabel: string) => {
     stampedThisRun.current = false
+    runAnalytics.current = null
+    setIntakeStage(null)
     setCurrent({ scenario, passionLabel })
     setShowLaunchTransition(true)
     setTimeout(() => {
@@ -161,6 +192,7 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     if (!current || stampedThisRun.current) return
     // Guard against double-writes: one stamp per completed run.
     stampedThisRun.current = true
+    const caps = (JOURNEY_REVEALS[current.scenario.id]?.capabilities || []).map((c) => c.name)
     setStamps(
       saveStamp({
         id: `stamp-${Date.now().toString(36)}`,
@@ -168,9 +200,21 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
         title: current.scenario.role,
         passionLabel: current.passionLabel,
         completedAt: new Date().toISOString(),
-        capabilities: (JOURNEY_REVEALS[current.scenario.id]?.capabilities || []).map((c) => c.name),
+        capabilities: caps,
       }),
     )
+    // Record the run on the profile — live analytics from the sim when
+    // available, otherwise the journey's known capability exercise.
+    appendRun({
+      journeyId: current.scenario.id,
+      passionLabel: current.passionLabel,
+      skillCounts:
+        runAnalytics.current?.skillCounts ??
+        Object.fromEntries(caps.map((c) => [c, 1])),
+      score: runAnalytics.current?.score ?? 70,
+      completedAt: new Date().toISOString(),
+    })
+    setProfile(loadProfile())
   }
 
   const closePlay = () => {
@@ -189,6 +233,8 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     // Before the report is reached the current run isn't stamped yet — count
     // it in so the report always reads "including this one".
     const completedCount = stampedThisRun.current ? stamps.length : stamps.length + 1
+    const topCap = reveal?.capabilities?.[0]?.name || 'Judgement & Decision-Making'
+    const playedIds = stamps.map((s) => s.journeyId)
     const journeyReveal = {
       passionLabel: current.passionLabel,
       capabilities: reveal?.capabilities || [],
@@ -196,6 +242,22 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
       directions: reveal?.directions || [],
       completedCount,
       workUnlocked: completedCount >= WORK_UNLOCK_AT,
+      // Arcs get static pattern lines from the journey's capability profile;
+      // the sim overrides these with lines from the player's actual picks.
+      styleLines: styleLinesFromCounts(
+        Object.fromEntries((reveal?.capabilities || []).map((c, i) => [c.name, 3 - i])),
+      ),
+      nextUp: recommendNext(current.scenario.id, topCap, playedIds),
+      onPlayNext: (journeyId: string, title: string) => {
+        const next = journeyById(journeyId)
+        if (!next) return
+        setShowPlay(false)
+        setStamps(loadStamps())
+        startJourney(next, title)
+      },
+      onAnalytics: (d: { skillCounts: Record<string, number>; score: number }) => {
+        runAnalytics.current = d
+      },
       onReached: stampCurrent,
       onWorkScenarios,
       onAnotherJourney: closePlay,
@@ -226,9 +288,212 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     )
   }
 
+  /* ---------- Intake — the first-visit conversation ---------- */
+
+  const toggleStrength = (label: string) =>
+    setInStrengths((s) =>
+      s.includes(label) ? s.filter((x) => x !== label) : s.length < 3 ? [...s, label] : s,
+    )
+
+  const choosePay = (chip: { label: string; journeyId: string }) => {
+    setInPay(chip)
+    setProposal(proposeScenario(inPassion, inStrengths, chip.label, chip.journeyId))
+    setIntakeStage('proposal')
+  }
+
+  const acceptProposal = () => {
+    if (!proposal) return
+    const strengthCaps = STRENGTH_CHIPS.filter((c) => inStrengths.includes(c.label)).map((c) => c.cap)
+    saveProfile({
+      passion: inPassion.trim(),
+      strengths: inStrengths,
+      strengthCaps,
+      payFor: inPay?.label || '',
+      createdAt: new Date().toISOString(),
+      runs: [],
+    })
+    setProfile(loadProfile())
+    const target = journeyById(proposal.journeyId)
+    if (!target) return
+    const label = inPassion.trim()
+      ? inPassion.trim().charAt(0).toUpperCase() + inPassion.trim().slice(1, 40)
+      : target.role
+    startJourney(target, label)
+  }
+
+  const redirectProposal = () => {
+    const t = redirectText.trim()
+    if (!t) return
+    const next = proposeScenario(t, inStrengths, inPay?.label || '', inPay?.journeyId || '')
+    setProposal({ ...next, framing: 'Righto — how about this instead:' })
+    setInPassion(t)
+    setRedirectText('')
+  }
+
+  const redoProfile = () => {
+    clearProfile()
+    setProfile(null)
+    setInPassion('')
+    setInStrengths([])
+    setInPay(null)
+    setProposal(null)
+    setIntakeStage('passion')
+  }
+
+  if (intakeStage) {
+    return (
+      <main className="jin-root">
+        <LaunchTransition isActive={showLaunchTransition} onComplete={() => setShowLaunchTransition(false)} />
+        <div className="jin-top">
+          <LaunchWordmark height={34} tone="light" ariaLabel="LAUNCH" />
+          <span className="jin-top-meta">· journeys</span>
+          <span style={{ flex: 1 }} />
+          <button type="button" className="jin-ghost" onClick={onExit}>Exit</button>
+        </div>
+
+        <section className="jin-stage">
+          {intakeStage === 'passion' && (
+            <div className="jin-card" key="passion">
+              <div className="jin-eyebrow">Building your first scenario · 1 of 3</div>
+              <h1 className="jin-q">What are you passionate about?</h1>
+              <p className="jin-sub">Anything counts. The more yours, the better.</p>
+              <div className="jin-chips">
+                {PASSIONS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`jin-chip ${inPassion === p.label ? 'is-on' : ''}`}
+                    onClick={() => setInPassion(p.label)}
+                  >
+                    {p.emoji} {p.label}
+                  </button>
+                ))}
+              </div>
+              <input
+                className="jin-input"
+                type="text"
+                value={inPassion}
+                onChange={(e) => setInPassion(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && inPassion.trim()) setIntakeStage('strengths') }}
+                placeholder="or say it your way — “fishing with my pop”, “making beats”…"
+                aria-label="What are you passionate about?"
+              />
+              <div className="jin-row">
+                <span className="jin-name">
+                  <em>I&rsquo;m</em>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="your name"
+                    aria-label="Your name"
+                  />
+                </span>
+                <button
+                  type="button"
+                  className="jin-next"
+                  disabled={!inPassion.trim()}
+                  onClick={() => setIntakeStage('strengths')}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {intakeStage === 'strengths' && (
+            <div className="jin-card" key="strengths">
+              <div className="jin-eyebrow">Building your first scenario · 2 of 3</div>
+              <h1 className="jin-q">What do you reckon you&rsquo;re good at?</h1>
+              <p className="jin-sub">Pick up to three. Be honest — nobody&rsquo;s marking this.</p>
+              <div className="jin-chips">
+                {STRENGTH_CHIPS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={`jin-chip ${inStrengths.includes(c.label) ? 'is-on' : ''}`}
+                    onClick={() => toggleStrength(c.label)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              <div className="jin-row">
+                <button type="button" className="jin-ghost" onClick={() => setIntakeStage('passion')}>← Back</button>
+                <button
+                  type="button"
+                  className="jin-next"
+                  disabled={inStrengths.length === 0}
+                  onClick={() => setIntakeStage('pay')}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {intakeStage === 'pay' && (
+            <div className="jin-card" key="pay">
+              <div className="jin-eyebrow">Building your first scenario · 3 of 3</div>
+              <h1 className="jin-q">Fast-forward — you&rsquo;re 25. What would you love to be getting paid to do?</h1>
+              <p className="jin-sub">A direction, not a contract. You can change your mind forever.</p>
+              <div className="jin-chips">
+                {PAY_CHIPS.map((c) => (
+                  <button key={c.id} type="button" className="jin-chip" onClick={() => choosePay(c)}>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              <div className="jin-row">
+                <button type="button" className="jin-ghost" onClick={() => setIntakeStage('strengths')}>← Back</button>
+              </div>
+            </div>
+          )}
+
+          {intakeStage === 'proposal' && proposal && (
+            <div className="jin-card" key="proposal">
+              <div className="jin-eyebrow">Your scenario</div>
+              <p className="jin-framing">{proposal.framing}</p>
+              <h1 className="jin-q">{proposal.title}</h1>
+              <p className="jin-sub">{proposal.hook}</p>
+              <div className="jin-row" style={{ marginTop: 22 }}>
+                <button type="button" className="jin-next" onClick={acceptProposal}>
+                  Let&rsquo;s go →
+                </button>
+              </div>
+              <div className="jin-redirect">
+                <input
+                  type="text"
+                  value={redirectText}
+                  onChange={(e) => setRedirectText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') redirectProposal() }}
+                  placeholder="or, what would you rather? tell us and we’ll rebuild it…"
+                  aria-label="What would you rather?"
+                />
+                <button type="button" disabled={!redirectText.trim()} onClick={redirectProposal}>
+                  Rebuild →
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+        <style>{jinStyles}</style>
+      </main>
+    )
+  }
+
   /* ---------- Journey home — clone of the student-dashboard surface ---------- */
 
   const workUnlocked = stamps.length >= WORK_UNLOCK_AT
+  const lastRun = profile?.runs?.length ? profile.runs[profile.runs.length - 1] : null
+  const homeRecs = lastRun
+    ? recommendNext(
+        lastRun.journeyId,
+        Object.entries(lastRun.skillCounts || {}).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+          'Judgement & Decision-Making',
+        stamps.map((s) => s.journeyId),
+      )
+    : null
 
   return (
     <main
@@ -585,6 +850,55 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
 
       {/* Flagship journeys — examples, not the catalogue */}
       <section id="journey-more" className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+        {homeRecs && (
+          <div className="mb-10">
+            <div className="editorial-mono" style={{ color: 'rgba(146, 184, 255, 0.75)' }}>
+              built from how you played
+            </div>
+            <h2
+              className="mt-2 mb-5"
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontWeight: 300,
+                fontSize: 'clamp(26px, 3.4vw, 40px)',
+                letterSpacing: '-0.02em',
+                color: 'var(--lq-cream)',
+              }}
+            >
+              Your next scenario
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              {[
+                { rec: homeRecs.effective, role: 'You’d be effective in' },
+                { rec: homeRecs.different, role: 'Something entirely different' },
+              ].map(({ rec, role }) => (
+                <button
+                  key={rec.journeyId + role}
+                  type="button"
+                  className="jy-card"
+                  onClick={() => {
+                    const next = journeyById(rec.journeyId)
+                    if (next) startJourney(next, rec.title)
+                  }}
+                >
+                  <span className="jy-card-role">{role}</span>
+                  <span className="jy-card-title">{rec.title}</span>
+                  <span className="jy-card-blurb">{rec.blurb}</span>
+                  <span className="jy-card-done">{rec.reason}</span>
+                  <span className="jy-card-arrow">Step in →</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={redoProfile}
+              className="editorial-mono mt-4"
+              style={{ color: 'rgba(246,242,234,0.45)', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              ↻ tell us about you again
+            </button>
+          </div>
+        )}
         <div className="mb-6">
           <div className="editorial-mono" style={{ color: 'rgba(146, 184, 255, 0.75)' }}>
             or start from one of these
@@ -639,3 +953,181 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     </main>
   )
 }
+
+/* Intake conversation — one question per screen, chips as inspiration,
+   free text as the hero. Navy register consistent with the sim. */
+const jinStyles = `
+  .jin-root {
+    min-height: 100vh;
+    background: linear-gradient(180deg, #07091c 0%, #0e1737 55%, #182046 100%);
+    color: var(--lq-cream, #f6f2ea);
+    display: flex;
+    flex-direction: column;
+  }
+  .jin-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px clamp(16px, 4vw, 40px);
+    border-bottom: 1px solid rgba(146, 184, 255, 0.12);
+  }
+  .jin-top-meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(246,242,234,0.5);
+  }
+  .jin-ghost {
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: rgba(246,242,234,0.85);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .jin-stage {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(24px, 6vh, 64px) clamp(16px, 4vw, 40px) 90px;
+  }
+  .jin-card { width: 100%; max-width: 760px; animation: jinIn 500ms cubic-bezier(0.2,0.7,0.2,1) both; }
+  @keyframes jinIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  .jin-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #92b8ff;
+    margin-bottom: 16px;
+  }
+  .jin-q {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(26px, 4.4vw, 42px);
+    letter-spacing: -0.022em;
+    line-height: 1.15;
+    color: var(--lq-cream, #f6f2ea);
+    margin: 0 0 10px;
+    max-width: 24ch;
+  }
+  .jin-sub {
+    font-size: 15.5px;
+    color: rgba(246,242,234,0.6);
+    margin: 0 0 22px;
+  }
+  .jin-framing {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: clamp(16px, 2vw, 19px);
+    color: rgba(246,242,234,0.75);
+    margin: 0 0 14px;
+    max-width: 52ch;
+  }
+  .jin-chips { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 20px; }
+  .jin-chip {
+    padding: 11px 18px;
+    border-radius: 999px;
+    border: 1px solid rgba(246,242,234,0.25);
+    background: rgba(246,242,234,0.05);
+    color: rgba(246,242,234,0.9);
+    font-size: 14.5px;
+    font-weight: 550;
+    cursor: pointer;
+    transition: background 200ms ease, border-color 200ms ease, transform 200ms cubic-bezier(0.2,0.7,0.2,1);
+  }
+  .jin-chip:hover { transform: translateY(-1px); border-color: rgba(146,184,255,0.6); }
+  .jin-chip.is-on {
+    background: var(--lq-cream, #f6f2ea);
+    color: #131b33;
+    border-color: var(--lq-cream, #f6f2ea);
+  }
+  .jin-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1.5px solid rgba(246,242,234,0.28);
+    padding: 10px 2px 12px;
+    color: var(--lq-cream, #f6f2ea);
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: clamp(17px, 2.2vw, 21px);
+    outline: none;
+    margin-bottom: 22px;
+    transition: border-color 200ms ease;
+  }
+  .jin-input:focus { border-color: #92b8ff; }
+  .jin-input::placeholder { color: rgba(246,242,234,0.35); }
+  .jin-row { display: flex; align-items: center; gap: 14px; }
+  .jin-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 6px 6px 16px;
+    border: 1px solid rgba(246,242,234,0.2);
+    border-radius: 999px;
+  }
+  .jin-name em {
+    font-family: var(--font-mono);
+    font-style: normal;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(246,242,234,0.5);
+  }
+  .jin-name input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--lq-cream, #f6f2ea);
+    font-size: 14px;
+    width: 130px;
+    padding: 6px 4px;
+  }
+  .jin-next {
+    margin-left: auto;
+    border: none;
+    border-radius: 999px;
+    padding: 13px 26px;
+    background: var(--lq-cream, #f6f2ea);
+    color: #131b33;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    transition: transform 200ms cubic-bezier(0.2,0.7,0.2,1), opacity 200ms ease;
+  }
+  .jin-next:hover:not(:disabled) { transform: translateY(-1px); }
+  .jin-next:disabled { opacity: 0.35; cursor: default; }
+  .jin-redirect { display: flex; gap: 8px; margin-top: 26px; }
+  .jin-redirect input {
+    flex: 1;
+    background: transparent;
+    border: 1.5px dashed rgba(246,242,234,0.3);
+    border-radius: 999px;
+    padding: 12px 18px;
+    color: var(--lq-cream, #f6f2ea);
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 15px;
+    outline: none;
+  }
+  .jin-redirect input:focus { border-color: rgba(146,184,255,0.7); border-style: solid; }
+  .jin-redirect input::placeholder { color: rgba(246,242,234,0.4); }
+  .jin-redirect button {
+    border: 1px solid rgba(246,242,234,0.3);
+    border-radius: 999px;
+    padding: 12px 20px;
+    background: transparent;
+    color: rgba(246,242,234,0.9);
+    font-weight: 650;
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+  .jin-redirect button:disabled { opacity: 0.35; cursor: default; }
+`

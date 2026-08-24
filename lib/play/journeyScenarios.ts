@@ -1635,7 +1635,7 @@ export const PASSIONS: Passion[] = [
   { id: 'surfing', emoji: '🏄', label: 'Surfing', journeyId: 'journey-surf', keywords: ['surf', 'beach', 'ocean', 'swim', 'wave'] },
   { id: 'footy', emoji: '🏉', label: 'Footy', journeyId: 'journey-footy', keywords: ['footy', 'football', 'rugby', 'afl', 'soccer', 'netball', 'basketball', 'sport', 'team'] },
   { id: 'farming', emoji: '🚜', label: 'Farming', journeyId: 'journey-farm', keywords: ['farm', 'animal', 'outdoors', 'tractor', 'country', 'horse', 'dog'] },
-  { id: 'music', emoji: '🎸', label: 'Music', journeyId: 'journey-band', keywords: ['music', 'guitar', 'sing', 'band', 'dance', 'drum', 'dj', 'busk'] },
+  { id: 'music', emoji: '🎸', label: 'Music', journeyId: 'journey-band', keywords: ['music', 'guitar', 'sing', 'band', 'dance', 'drum', 'dj', 'busk', 'beat', 'rap', 'song', 'producer', 'piano'] },
   { id: 'gaming', emoji: '🎮', label: 'Gaming', journeyId: 'journey-band', keywords: ['gam', 'minecraft', 'fortnite', 'computer', 'code', 'esport'] },
   { id: 'making', emoji: '🛠️', label: 'Making things', journeyId: 'journey-market', keywords: ['build', 'make', 'craft', 'art', 'draw', 'cook', 'bake', 'sew', 'candle', 'sell'] },
 ]

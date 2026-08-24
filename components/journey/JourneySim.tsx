@@ -16,7 +16,7 @@
  * display, cream option cards) but built around function first.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type {
   JourneySimScript,
   SimEffect,
@@ -26,6 +26,7 @@ import type {
   StreamStatus,
 } from '@/lib/play/journeySim'
 import { neglectLine } from '@/lib/play/journeySim'
+import { styleLinesFromCounts } from '@/lib/play/journeyProfile'
 import type { JourneyRevealData, Scenario } from '@/lib/play/types'
 import { ReportScreen } from '@/components/play/screens'
 import '@/components/play/styles/play.css'
@@ -71,6 +72,8 @@ export function JourneySim({ script, name, passionLabel, scenario, journeyReveal
   const [streams, setStreams] = useState<Record<StreamKey, StreamStatus>>(
     () => Object.fromEntries(streamKeys.map((k) => [k, 'todo'])) as Record<StreamKey, StreamStatus>,
   )
+  // Which capabilities the player's picks exercised — the run's analysis.
+  const [skillCounts, setSkillCounts] = useState<Record<string, number>>({})
 
   const fill = (s: string) =>
     s
@@ -110,8 +113,14 @@ export function JourneySim({ script, name, passionLabel, scenario, journeyReveal
     setPhase({ kind: 'node', id: to })
   }
 
+  const trackSkill = (skill?: string) => {
+    if (!skill) return
+    setSkillCounts((c) => ({ ...c, [skill]: (c[skill] || 0) + 1 }))
+  }
+
   const pickOption = (node: SimNode, opt: SimOption) => {
     setCustomText('')
+    trackSkill(opt.skill)
     setPhase({ kind: 'echo', text: fill(opt.response), skill: opt.skill, effects: opt.effects, to: opt.to })
   }
 
@@ -119,6 +128,7 @@ export function JourneySim({ script, name, passionLabel, scenario, journeyReveal
     const text = customText.trim()
     if (!text) return
     setCustomText('')
+    trackSkill('Self-direction')
     if (!node) {
       // Own-words move from the hub — a self-made thread.
       setPhase({
@@ -149,6 +159,12 @@ export function JourneySim({ script, name, passionLabel, scenario, journeyReveal
 
   /* ---------------- REPORT ---------------- */
   if (phase.kind === 'report') {
+    // Enrich the reveal with this run's live analysis — "how you decide"
+    // comes from the choices actually made, not the script.
+    const enriched: JourneyRevealData = {
+      ...journeyReveal,
+      styleLines: styleLinesFromCounts(skillCounts),
+    }
     return (
       <div className="lq-play-root app" data-theme="cinema" style={{ minHeight: '100vh' }}>
         <ReportScreen
@@ -156,7 +172,7 @@ export function JourneySim({ script, name, passionLabel, scenario, journeyReveal
           history={[]}
           onRestart={journeyReveal.onAnotherJourney}
           onHome={onExit}
-          journeyReveal={journeyReveal}
+          journeyReveal={enriched}
         />
       </div>
     )
@@ -308,7 +324,14 @@ export function JourneySim({ script, name, passionLabel, scenario, journeyReveal
             <p className="jsim-ending-body">
               {fill(script.endings[tier].body.replaceAll('{neglectLine}', neglectLine(neglected)))}
             </p>
-            <button type="button" className="jsim-continue" onClick={() => setPhase({ kind: 'report' })}>
+            <button
+              type="button"
+              className="jsim-continue"
+              onClick={() => {
+                journeyReveal.onAnalytics?.({ skillCounts, score })
+                setPhase({ kind: 'report' })
+              }}
+            >
               See what you showed →
             </button>
           </div>
