@@ -21,6 +21,8 @@ import { useEffect, useRef, useState } from 'react'
 import { LaunchWordmark } from '@/components/launch-wordmark'
 import { LaunchTransition } from '@/components/launch-transition'
 import { ScenarioPlay } from '@/components/play'
+import { JourneySim } from '@/components/journey/JourneySim'
+import { FOOTY_SIM } from '@/lib/play/journeySim'
 import type { CompletionResult, Scenario } from '@/lib/play/types'
 import {
   JOURNEYS,
@@ -144,7 +146,10 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
   }
 
   const handleQuickPlay = () => {
+    // The footy grand final is the node-journey exemplar — lead with it.
+    const footy = JOURNEYS.find((j) => j.id === 'journey-footy')
     const next =
+      (footy && !stamps.some((s) => s.journeyId === footy.id) ? footy : undefined) ||
       JOURNEYS.find((j) => !stamps.some((s) => s.journeyId === j.id)) ||
       JOURNEYS[stamps.length % JOURNEYS.length]
     startJourney(next, next.role)
@@ -184,23 +189,39 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     // Before the report is reached the current run isn't stamped yet — count
     // it in so the report always reads "including this one".
     const completedCount = stampedThisRun.current ? stamps.length : stamps.length + 1
+    const journeyReveal = {
+      passionLabel: current.passionLabel,
+      capabilities: reveal?.capabilities || [],
+      subjects: reveal?.subjects || [],
+      directions: reveal?.directions || [],
+      completedCount,
+      workUnlocked: completedCount >= WORK_UNLOCK_AT,
+      onReached: stampCurrent,
+      onWorkScenarios,
+      onAnotherJourney: closePlay,
+    }
+    // The footy grand final runs on the node-journey sim — the Sims-style
+    // hub-and-threads exemplar. Other journeys stay on the cinema arcs
+    // until their node scripts are authored.
+    if (current.scenario.id === 'journey-footy') {
+      return (
+        <JourneySim
+          script={FOOTY_SIM}
+          name={name.trim() || 'Explorer'}
+          passionLabel={current.passionLabel}
+          scenario={current.scenario}
+          journeyReveal={journeyReveal}
+          onExit={closePlay}
+        />
+      )
+    }
     return (
       <ScenarioPlay
         scenario={current.scenario}
         profile={{ name: name.trim() || 'Explorer' }}
         onComplete={handlePlayComplete}
         onExit={closePlay}
-        journeyReveal={{
-          passionLabel: current.passionLabel,
-          capabilities: reveal?.capabilities || [],
-          subjects: reveal?.subjects || [],
-          directions: reveal?.directions || [],
-          completedCount,
-          workUnlocked: completedCount >= WORK_UNLOCK_AT,
-          onReached: stampCurrent,
-          onWorkScenarios,
-          onAnotherJourney: closePlay,
-        }}
+        journeyReveal={journeyReveal}
       />
     )
   }

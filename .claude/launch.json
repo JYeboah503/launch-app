@@ -3,13 +3,10 @@
   "configurations": [
     {
       "name": "launch-app",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev"
-      ],
+      "runtimeExecutable": "/tmp/launch-app-dev.sh",
+      "runtimeArgs": [],
       "port": 3000,
-      "autoPort": true
+      "autoPort": false
     }
   ]
 }
