@@ -4,13 +4,15 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { HeroSection } from '@/components/hero-section'
 import { JourneyFlow } from '@/components/journey/JourneyFlow'
 import { StudentDashboard } from '@/components/student-dashboard'
+import { SchoolChooser } from '@/components/school-chooser'
+import { StudentScorecardView } from '@/components/student-scorecard-view'
 import { EducatorDashboard } from '@/components/educator/EducatorDashboard'
 import { CorporateTopBar } from '@/components/corporate-top-bar'
 import { PartnerLogoTag } from '@/components/partner-logo-tag'
 import { PartnerAccountPage } from '@/components/partner-account-page'
 import { RoleApplicantFilters, applyApplicantFilters, DEFAULT_FILTERS, type ApplicantFilters } from '@/components/role-applicant-filters'
 import { RoleShortlistTools } from '@/components/role-shortlist-tools'
-import type { AppMode } from '@/lib/roles'
+import type { AppMode, ScenarioSection } from '@/lib/roles'
 import { addCustomScenarioStub, setScenarioStatus, deleteCustomScenario } from '@/lib/scenarioStore'
 import { listSubmissions, listSubmissionsForCode, submissionsForRole, type Submission } from '@/lib/submissionStore'
 import { seedIfNeeded, loadActiveRoles, submissionsToStudents, type SeedRole } from '@/lib/seedData'
@@ -30,14 +32,18 @@ import type { Student } from '@/components/student-list'
 import { AnimatedCounter } from '@/components/motion'
 
 export default function Page() {
-  // Three-door entry: 'landing' shows Scenario / Partner access / Educator
-  // access. Each door routes directly to its surface — there is no
-  // intermediate selector. The legacy isStudent/isPartner flags still gate
-  // the existing dashboards; appMode is a thin layer on top.
+  // Two-door entry: 'landing' shows Schools / Companies. Companies routes
+  // straight into the corporate dashboard (isPartnerLoggedIn gates that).
+  // Schools opens the student/advisor chooser ('schoolChoice'); advisor
+  // routes to 'teacher'; student sets isStudentLoggedIn and picks a
+  // studentScenarioMode (Work scenarios vs Journeys), toggled freely
+  // thereafter via the header on either surface.
   const [appMode, setAppMode] = useState<AppMode>('landing')
   const [isPartnerLoggedIn, setIsPartnerLoggedIn] = useState(false)
   const [isStudentLoggedIn, setIsStudentLoggedIn] = useState(false)
   const [studentName, setStudentName] = useState('')
+  const [studentScenarioMode, setStudentScenarioMode] = useState<ScenarioSection>('work')
+  const [showScorecard, setShowScorecard] = useState(false)
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [selectedCapability, setSelectedCapability] = useState<{ key: string; name: string } | null>(null)
   const [showChallenges, setShowChallenges] = useState(false)
@@ -277,27 +283,42 @@ export default function Page() {
 
   const studentChallenges = selectedStudentId ? CHALLENGES[selectedStudentId] || [] : []
 
-  // Journeys — the passion-led school path. No login, no test energy;
-  // finishing can funnel straight into work scenarios.
-  if (appMode === 'journey') {
-    return (
+  // Student is logged in — Work scenarios or Journeys, freely toggled via
+  // the header on either surface (studentScenarioMode), except mid-scenario.
+  // The Scorecard is mode-agnostic — both modes measure the same
+  // capabilities, so it's a separate destination, not a third mode.
+  if (isStudentLoggedIn) {
+    if (showScorecard) {
+      return <StudentScorecardView onBack={() => setShowScorecard(false)} />
+    }
+    return studentScenarioMode === 'journey' ? (
       <JourneyFlow
-        onExit={() => setAppMode('landing')}
-        onWorkScenarios={() => {
-          setStudentName('Explorer')
-          setIsStudentLoggedIn(true)
-          setAppMode('play')
-        }}
+        onExit={signOut}
+        onWorkScenarios={() => setStudentScenarioMode('work')}
+        onScenarioModeChange={setStudentScenarioMode}
+        onOpenScorecard={() => setShowScorecard(true)}
+      />
+    ) : (
+      <StudentDashboard
+        studentName={studentName}
+        onLogout={signOut}
+        onScenarioModeChange={setStudentScenarioMode}
+        onOpenScorecard={() => setShowScorecard(true)}
       />
     )
   }
 
-  // If student is logged in, show their dashboard
-  if (isStudentLoggedIn) {
+  // Schools chooser — student or careers advisor/leader.
+  if (appMode === 'schoolChoice') {
     return (
-      <StudentDashboard
-        studentName={studentName}
-        onLogout={signOut}
+      <SchoolChooser
+        onSelectStudent={(mode) => {
+          setStudentName('Student')
+          setIsStudentLoggedIn(true)
+          setStudentScenarioMode(mode)
+        }}
+        onSelectAdvisor={() => setAppMode('teacher')}
+        onBack={() => setAppMode('landing')}
       />
     )
   }
@@ -1496,37 +1517,23 @@ export default function Page() {
     )
   }
 
-  // Landing page view — single editorial scroll. Three direct doors:
-  //   Scenario        → student/candidate play flow
-  //   Partner access  → corporate dashboard (no real auth in this front-end build)
-  //   Educator access → teacher dashboard stub
-  const enterScenario = () => {
-    setStudentName('Student')
-    setIsStudentLoggedIn(true)
-    setAppMode('play')
-  }
-  const enterPartner = () => {
-    setIsPartnerLoggedIn(true)
-    setAppMode('corporate')
-  }
-  const enterEducator = () => setAppMode('teacher')
-  const enterJourney = () => setAppMode('journey')
+  // Landing page view — single editorial scroll. Two direct doors:
+  //   Schools    → student/advisor chooser (lib/school-chooser.tsx)
+  //   Companies  → corporate dashboard (no real auth in this front-end build)
+  const enterCompanies = () => setIsPartnerLoggedIn(true)
+  const enterSchools = () => setAppMode('schoolChoice')
 
   return (
     <main className="min-h-screen bg-background">
       <HeroSection
-        onScenarioClick={enterScenario}
-        onJourneyClick={enterJourney}
-        onPartnerClick={enterPartner}
-        onEducatorClick={enterEducator}
+        onSchoolsClick={enterSchools}
+        onCompaniesClick={enterCompanies}
       />
       <ResultsSection />
       <CapabilitiesSection />
       <CTASection
-        onPrimaryClick={enterScenario}
-        onJourneyClick={enterJourney}
-        onPartnerClick={enterPartner}
-        onEducatorClick={enterEducator}
+        onSchoolsClick={enterSchools}
+        onCompaniesClick={enterCompanies}
       />
     </main>
   )

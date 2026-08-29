@@ -1151,19 +1151,11 @@ function JourneyReportScreen({
               </button>
             )}
 
-            <button
-              className="rec-card"
-              onClick={jr.workUnlocked ? jr.onWorkScenarios : undefined}
-              style={jr.workUnlocked ? undefined : { opacity: 0.65, cursor: 'default' }}
-            >
+            <button className="rec-card" onClick={jr.onWorkScenarios}>
               <div className="rec-role mono">Work scenarios</div>
               <div className="rec-title">The real thing.</div>
-              <div className="rec-blurb">
-                {jr.workUnlocked
-                  ? 'Bigger rooms, real roles, real companies — and you’ve earned the door.'
-                  : `Bigger rooms, real roles, real companies. Unlocks after 2 journeys · ${Math.min(jr.completedCount, 2)}/2.`}
-              </div>
-              <div className="rec-arrow">{jr.workUnlocked ? 'Step in →' : 'Locked for now'}</div>
+              <div className="rec-blurb">Bigger rooms, real roles, real companies — same capabilities, different door.</div>
+              <div className="rec-arrow">Step in →</div>
             </button>
 
             <button

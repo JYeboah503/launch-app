@@ -12,13 +12,14 @@ import { evaluateAll } from '@/lib/aiEvaluator'
 import { addSubmission } from '@/lib/submissionStore'
 import type { GenericIntakeQuestion } from '@/lib/play/types'
 import type { CompletionResult } from '@/lib/play/types'
-import type { ScenarioVariant } from '@/lib/roles'
+import type { ScenarioVariant, ScenarioSection } from '@/lib/roles'
 import { ProjectOverviewPage } from '@/components/project-overview-page'
 import { BrandSelector } from '@/components/brand-selector'
 import { ProjectsGallery } from '@/components/projects-gallery'
 import { TrendingUp, Award, Zap, Clock } from 'lucide-react'
 import { Mission } from '@/components/mission-structure'
-import { LaunchWordmark } from '@/components/launch-wordmark'
+import { StudentScenarioHeader } from '@/components/student-scenario-header'
+import { appendCapabilityEvents, normalizeCapability } from '@/lib/capabilityProfile'
 
 interface Project {
   id: string
@@ -32,6 +33,11 @@ interface Project {
 interface StudentDashboardProps {
   studentName: string
   onLogout?: () => void
+  /** Header toggle — freely switches Work scenarios ⇄ Journeys any time a
+   *  scenario isn't actively being played. */
+  onScenarioModeChange: (mode: ScenarioSection) => void
+  /** Opens the mode-agnostic capability Scorecard. */
+  onOpenScorecard?: () => void
 }
 
 const CAPABILITIES = [
@@ -68,7 +74,7 @@ function useTypewriter(text: string, speed: number = 100) {
   return { displayedText, isComplete }
 }
 
-export function StudentDashboard({ studentName, onLogout }: StudentDashboardProps) {
+export function StudentDashboard({ studentName, onLogout, onScenarioModeChange, onOpenScorecard }: StudentDashboardProps) {
   const [projects, setProjects] = useState<Project[]>([
     {
       id: '1',
@@ -437,6 +443,23 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
           }}
           onComplete={handlePlayComplete}
           onExit={handlePlayExit}
+          onScenarioComplete={({ scenarioId, scenarioTitle, history }) => {
+            const at = new Date().toISOString()
+            appendCapabilityEvents(
+              history
+                .filter((h) => h.skill)
+                .map((h) => ({
+                  id: `cap-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                  source: 'work' as const,
+                  scenarioId,
+                  scenarioTitle,
+                  capability: normalizeCapability(h.skill!),
+                  rawLabel: h.skill,
+                  evidenceLine: h.label,
+                  at,
+                })),
+            )
+          }}
         />
       )}
       {showBrandSelector && (
@@ -462,25 +485,15 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
           onClose={() => setShowBrandSelector(false)}
         />
       )}
-      <div className="fixed top-0 left-0 right-0 z-40 border-b" style={{ borderColor: 'rgba(146, 184, 255, 0.12)', background: 'rgba(7, 9, 28, 0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <LaunchWordmark height={40} tone="light" ariaLabel="LAUNCH" />
-            <span className="hidden sm:inline editorial-mono" style={{ color: 'rgba(246, 242, 234, 0.5)' }}>
-              · student
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onLogout}
-              className="editorial-pill editorial-pill-ghost text-xs"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
+      <StudentScenarioHeader
+        subLabel="student"
+        actionLabel="Logout"
+        onAction={onLogout || (() => {})}
+        mode="work"
+        onModeChange={onScenarioModeChange}
+        hideModeToggle={showScenarioPlay}
+        onOpenScorecard={onOpenScorecard}
+      />
 
       <section
         id="hero-section"
@@ -526,34 +539,6 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
           <div className="create-band-inner">
             <div className="quick-create-label">Create your own scenario</div>
 
-            {/* Career-stage register — self-created scenarios let the player pick */}
-            <div
-              role="radiogroup"
-              aria-label="Career stage"
-              className="self-level-toggle mt-4"
-            >
-              {(['playful', 'professional'] as const).map((v) => {
-                const active = currentScenarioVariant === v
-                return (
-                  <button
-                    key={v}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => setCurrentScenarioVariant(v)}
-                    className="self-level-opt"
-                    style={
-                      active
-                        ? { background: 'var(--launch-navy)', color: 'var(--lq-cream)', borderColor: 'var(--launch-navy)' }
-                        : undefined
-                    }
-                  >
-                    {v === 'playful' ? 'Early career' : 'Advanced career'}
-                  </button>
-                )
-              })}
-            </div>
-
             <div className="relative w-full max-w-2xl mt-5 sm:mt-6">
               <input
                 id="create-scenario-input"
@@ -591,7 +576,7 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
 
             {/* "Got a code?" — code-entry path for assigned scenarios */}
             <div className="code-entry">
-              <span className="code-entry-label">Got a code?</span>
+              <span className="code-entry-label">Got a class or company code?</span>
               <input
                 type="text"
                 value={codeInput}
@@ -661,29 +646,6 @@ export function StudentDashboard({ studentName, onLogout }: StudentDashboardProp
             flex-direction: column;
             align-items: center;
           }
-          /* Career-stage register toggle on the cream band */
-          .self-level-toggle {
-            display: inline-flex;
-            padding: 4px;
-            border-radius: 999px;
-            background: rgba(14, 24, 51, 0.05);
-            border: 1px solid rgba(14, 24, 51, 0.12);
-          }
-          .self-level-opt {
-            padding: 8px 16px;
-            border-radius: 999px;
-            border: 1px solid transparent;
-            background: transparent;
-            color: var(--lq-ink-2);
-            font-family: var(--font-body);
-            font-weight: 600;
-            font-size: 13px;
-            letter-spacing: -0.005em;
-            cursor: pointer;
-            transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
-          }
-          .self-level-opt:hover { color: var(--lq-ink); }
-
           /* "Create your own scenario" — navy ink on the cream band,
              bigger and centred, front-page display font. */
           .quick-create-label {

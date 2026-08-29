@@ -3,14 +3,10 @@
 import { RevealOnScroll } from '@/components/motion'
 
 interface CTASectionProps {
-  /** "Work scenarios" CTA — student/candidate play flow. */
-  onPrimaryClick?: () => void
-  /** "Journeys" CTA — the passion-led path for younger students. */
-  onJourneyClick?: () => void
-  /** "Partner access" CTA — corporate dashboard. */
-  onPartnerClick?: () => void
-  /** "Educator access" CTA — teacher dashboard. */
-  onEducatorClick?: () => void
+  /** "Schools" CTA — student/advisor chooser. */
+  onSchoolsClick?: () => void
+  /** "Companies" CTA — corporate dashboard. */
+  onCompaniesClick?: () => void
 }
 
 /**
@@ -21,7 +17,7 @@ interface CTASectionProps {
  * and the two CTAs the visitor came to find. Echoes the hero language so the
  * page feels like one breath, not five sections.
  */
-export function CTASection({ onPrimaryClick, onJourneyClick, onPartnerClick, onEducatorClick }: CTASectionProps = {}) {
+export function CTASection({ onSchoolsClick, onCompaniesClick }: CTASectionProps = {}) {
   return (
     <section
       id="beat-03"
@@ -82,40 +78,22 @@ export function CTASection({ onPrimaryClick, onJourneyClick, onPartnerClick, onE
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center">
-            {onJourneyClick && (
+            {onSchoolsClick && (
               <button
                 type="button"
-                onClick={onJourneyClick}
+                onClick={onSchoolsClick}
                 className="cta-pill cta-pill-primary"
               >
-                Journeys
+                Schools
               </button>
             )}
-            {onPrimaryClick && (
+            {onCompaniesClick && (
               <button
                 type="button"
-                onClick={onPrimaryClick}
+                onClick={onCompaniesClick}
                 className="cta-pill cta-pill-secondary"
               >
-                Work scenarios
-              </button>
-            )}
-            {onPartnerClick && (
-              <button
-                type="button"
-                onClick={onPartnerClick}
-                className="cta-pill cta-pill-secondary"
-              >
-                Partner access
-              </button>
-            )}
-            {onEducatorClick && (
-              <button
-                type="button"
-                onClick={onEducatorClick}
-                className="cta-pill cta-pill-secondary"
-              >
-                Educator access
+                Companies
               </button>
             )}
           </div>

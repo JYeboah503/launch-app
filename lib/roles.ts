@@ -9,20 +9,29 @@
 export type UserRole = 'player' | 'teacher' | 'corporate'
 
 /** Top-level app surface the user is currently in.
- *  The hero offers three direct doors — Scenario, Partner access, Educator
- *  access — each routing straight to its surface. No intermediate selector. */
+ *  The hero offers two direct doors — Schools and Companies. Companies
+ *  routes straight into the corporate dashboard (isPartnerLoggedIn gates
+ *  that, not this enum). Schools opens the student/advisor chooser
+ *  ('schoolChoice'); advisor routes to 'teacher'; student sets
+ *  isStudentLoggedIn and never touches this enum again — see
+ *  ScenarioSection for which surface a logged-in student sees. */
 export type AppMode =
   | 'landing'
-  | 'play'
-  | 'journey'
+  | 'schoolChoice'
   | 'teacher'
-  | 'corporate'
 
 /** Who authored a scenario — drives the locked/unlocked variant rule. */
 export type CreatorType = 'student-self' | 'teacher' | 'corporate'
 
 /** The visual register the play flow renders in. */
 export type ScenarioVariant = 'playful' | 'professional'
+
+/** Which student-facing surface is showing — Work scenarios (the classic
+ *  candidate-style play flow) or Journeys (passion-led node sim). Orthogonal
+ *  to ScenarioVariant/ScenarioLevel above: this picks the SURFACE, not the
+ *  narrative register within it. Freely toggled by the student except while
+ *  a scenario/journey is actively being played. */
+export type ScenarioSection = 'work' | 'journey'
 
 export interface ScenarioMeta {
   creatorType: CreatorType

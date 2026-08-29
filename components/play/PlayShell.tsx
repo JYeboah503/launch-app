@@ -233,6 +233,13 @@ export interface ScenarioPlayProps {
   /** Journey mode — the final report keeps its layout but carries journey
    *  copy (capabilities shown, subject shepherding, funnel, credential). */
   journeyReveal?: import('@/lib/play/types').JourneyRevealData
+  /** Fires once, when the report is reached — the candidate's full skill-
+   *  tagged decision history, so the host can feed the shared cross-mode
+   *  capability layer. Separate from onComplete/onExit: those fire on
+   *  "the candidate chose to leave," this fires on "the scenario produced
+   *  data," and a candidate can reach the report via either Restart or
+   *  Done — this only needs to fire the first time. */
+  onScenarioComplete?: (data: { scenarioId: string; scenarioTitle: string; history: HistoryEntry[] }) => void
 }
 
 export function ScenarioPlay({
@@ -244,6 +251,7 @@ export function ScenarioPlay({
   genericQuestions,
   onIntakeComplete,
   journeyReveal,
+  onScenarioComplete,
 }: ScenarioPlayProps) {
   const [scenario, setScenario] = useState<Scenario>(initialScenario)
   const [profile, setProfile] = useState<Profile>({
@@ -277,6 +285,13 @@ export function ScenarioPlay({
   const [candidateProfile, setCandidateProfile] = useState<import('@/lib/candidateProfile').CandidateProfile | null>(null)
   const [genericAnswers, setGenericAnswers] = useState<Record<string, string>>({})
   const [history, setHistory] = useState<HistoryEntry[]>([])
+  const reportedOnce = useRef(false)
+  useEffect(() => {
+    if (phase === 'report' && !reportedOnce.current) {
+      reportedOnce.current = true
+      onScenarioComplete?.({ scenarioId: scenario.id, scenarioTitle: scenario.role, history })
+    }
+  }, [phase])
   const [lastSkill, setLastSkill] = useState<string | null>(null)
   const [reflectDone, setReflectDone] = useState<Set<number>>(new Set())
   const [audioOn, setAudioOn] = useState(false)
@@ -490,6 +505,7 @@ export function ScenarioPlay({
     setMeterValue(50)
     setMeterDelta(null)
     setLastEcho(null)
+    reportedOnce.current = false
     transitionTo('intake')
   }
 

@@ -5,14 +5,11 @@ import { ScrollIndicator } from '@/components/motion'
 import { LaunchWordmark } from '@/components/launch-wordmark'
 
 interface HeroSectionProps {
-  /** "Work scenarios" door — the existing candidate play flow. */
-  onScenarioClick: () => void
-  /** "Journeys" door — the passion-led path for younger students. */
-  onJourneyClick: () => void
-  /** "Partner access" door — corporate dashboard. */
-  onPartnerClick: () => void
-  /** "Educator access" door — teacher dashboard. */
-  onEducatorClick: () => void
+  /** "Schools" door — asks student vs careers advisor/leader, then routes
+   *  into Work scenarios / Journeys (student) or the educator dashboard. */
+  onSchoolsClick: () => void
+  /** "Companies" door — corporate dashboard. */
+  onCompaniesClick: () => void
 }
 
 /**
@@ -33,11 +30,11 @@ interface HeroSectionProps {
  *   - LAUNCH wordmark (custom letterforms) in cream
  *   - Display headline "Launch talent. See how someone actually thinks."
  *   - Italic Newsreader lede about reading the texture of decisions
- *   - Four bold pills — Journeys (lime, primary) + Work scenarios / Partner access /
- *     Educator access (cream-edged glass). Each routes directly to its
- *     surface; there is no intermediate Manage selector.
+ *   - Two bold pills — Schools (lime, primary) + Companies (cream-edged
+ *     glass). Schools opens the student/advisor chooser; Companies routes
+ *     straight into the corporate dashboard.
  */
-export function HeroSection({ onScenarioClick, onJourneyClick, onPartnerClick, onEducatorClick }: HeroSectionProps) {
+export function HeroSection({ onSchoolsClick, onCompaniesClick }: HeroSectionProps) {
   const [mounted, setMounted] = useState(false)
   const [logoH, setLogoH] = useState(52)
   useEffect(() => {
@@ -148,31 +145,17 @@ export function HeroSection({ onScenarioClick, onJourneyClick, onPartnerClick, o
         >
           <button
             type="button"
-            onClick={onJourneyClick}
+            onClick={onSchoolsClick}
             className="hero-pill hero-pill-primary self-start"
           >
-            Journeys
+            Schools
           </button>
           <button
             type="button"
-            onClick={onScenarioClick}
+            onClick={onCompaniesClick}
             className="hero-pill hero-pill-secondary self-start"
           >
-            Work scenarios
-          </button>
-          <button
-            type="button"
-            onClick={onPartnerClick}
-            className="hero-pill hero-pill-secondary self-start"
-          >
-            Partner access
-          </button>
-          <button
-            type="button"
-            onClick={onEducatorClick}
-            className="hero-pill hero-pill-secondary self-start"
-          >
-            Educator access
+            Companies
           </button>
         </div>
       </div>

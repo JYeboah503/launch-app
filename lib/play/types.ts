@@ -171,16 +171,17 @@ export type CompletionResult =
 
 /** Journey-mode payload for the final ReportScreen. When present the report
  *  keeps its exact layout but carries journey copy instead of the employer
- *  copy: capabilities shown, subject/direction shepherding, the funnel into
- *  work scenarios, and the payment-locked Launch Credential. */
+ *  copy: capabilities shown, subject/direction shepherding, an always-open
+ *  door into Work scenarios (an equal mode, not a graduation), and the
+ *  payment-locked Launch Credential. */
 export interface JourneyRevealData {
   passionLabel: string
   capabilities: { name: string; level: number; line: string }[]
   subjects: string[]
   directions: string[]
-  /** Journeys completed including this one — drives the work-scenarios lock. */
+  /** Journeys completed including this one — drives the credential's
+   *  stamp-slot progress display (out of 5), not a work-scenarios gate. */
   completedCount: number
-  workUnlocked: boolean
   /** "How you decide" — pattern lines derived from the choices made. */
   styleLines?: string[]
   /** Next-scenario suggestions: skill-matched + deliberately different. */

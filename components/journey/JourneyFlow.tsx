@@ -5,8 +5,8 @@
  *
  * Deliberately the SAME surface as the work-scenarios student flow:
  * the navy moon hero, the giant Quick play sign, the cream create band
- * with the animated italic input, the rocket LaunchTransition, and the
- * full cinema ScenarioPlay engine. Only the content differs — stories
+ * with the animated italic input. Clicking a journey cuts straight to
+ * that journey's own themed arrival — no generic transition. Stories
  * are journey-based (a Saturday, not a screening), generated from
  * whatever the student says they love, and the final report carries
  * journey copy: capabilities shown, subject shepherding, the funnel
@@ -19,9 +19,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { LaunchWordmark } from '@/components/launch-wordmark'
-import { LaunchTransition } from '@/components/launch-transition'
+import { StudentScenarioHeader } from '@/components/student-scenario-header'
 import { JourneySim } from '@/components/journey/JourneySim'
+import { jinStyles } from '@/components/journey/jin-styles'
 import { SIM_SCRIPTS } from '@/lib/play/journeySimScripts'
+import type { ScenarioSection } from '@/lib/roles'
 import {
   type JourneyProfile,
   type ScenarioProposal,
@@ -43,6 +45,14 @@ import {
   generateJourney,
   journeyById,
 } from '@/lib/play/journeyScenarios'
+import {
+  appendCapabilityEvents,
+  aggregateByCapability,
+  loadCapabilityStore,
+  normalizeCapability,
+  syncSelfAssessed,
+  topCapabilityFrom,
+} from '@/lib/capabilityProfile'
 
 /* ---------- Completed-journey stamps (localStorage) ---------- */
 
@@ -76,8 +86,6 @@ function saveStamp(stamp: JourneyStamp): JourneyStamp[] {
   return next
 }
 
-const WORK_UNLOCK_AT = 2
-
 /* ---------- Journey example lines for the animated input ---------- */
 
 const JOURNEY_EXAMPLES = [
@@ -91,16 +99,25 @@ const JOURNEY_EXAMPLES = [
 
 interface JourneyFlowProps {
   onExit: () => void
-  /** Funnel — the student steps up into the work-scenarios flow. */
+  /** Funnel — the student steps up into the work-scenarios flow (the
+   *  gated "summit" card / journey-report nudge, earned after 2 journeys).
+   *  Separate from onScenarioModeChange below — that's the ambient header
+   *  toggle, always available; this is the in-story earned funnel. */
   onWorkScenarios: () => void
+  /** Header toggle — freely switches Work scenarios ⇄ Journeys any time
+   *  a scenario isn't actively being played. */
+  onScenarioModeChange: (mode: ScenarioSection) => void
+  /** Opens the mode-agnostic capability Scorecard. */
+  onOpenScorecard?: () => void
 }
 
-export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
+export function JourneyFlow({ onExit, onWorkScenarios, onScenarioModeChange, onOpenScorecard }: JourneyFlowProps) {
   const [name, setName] = useState('')
   const [interest, setInterest] = useState('')
   const [stamps, setStamps] = useState<JourneyStamp[]>([])
-  const [showLaunchTransition, setShowLaunchTransition] = useState(false)
   const [showPlay, setShowPlay] = useState(false)
+  // Quick play — a pre-selection board of scenarios, rotated daily.
+  const [showDaily, setShowDaily] = useState(false)
   const [current, setCurrent] = useState<{ scenario: Scenario; passionLabel: string } | null>(null)
 
   // Typing animation — same mechanic as the work-scenarios create band.
@@ -124,14 +141,18 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     setStamps(loadStamps())
     const p = loadProfile()
     setProfile(p)
-    // The selection conversation runs EVERY time the journeys door opens —
-    // prior answers prefill so a returning student moves through fast.
+    // Prefill the guided path from the saved profile — but don't force it.
+    // Entry lands on the map: Quick play = today's pre-selected scenarios
+    // (updated daily); creating your own offers guided OR free-text.
     if (p) {
       setInPassion(p.passion || '')
       setInStrengths(p.strengths || [])
     }
-    setIntakeStage('passion')
   }, [])
+
+  /** The guided create path — passion → strengths → paid-for → proposal.
+   *  Opt-in from the create band now, not a forced gate on entry. */
+  const startGuided = () => setIntakeStage('passion')
 
   useEffect(() => {
     if (interest.trim()) {
@@ -159,20 +180,22 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     return () => clearTimeout(timeout)
   }, [animatedText, isTyping, exampleIdx, interest])
 
-  /* ---------- Launch mechanics — rocket transition, then cinema ---------- */
+  /* ---------- Launch mechanics — straight into the journey's own arrival ---------- */
 
   const stampedThisRun = useRef(false)
+  // Bumped per run and used as JourneySim's key: without the remount,
+  // play-next batches setShowPlay(false)+true into a no-op and the
+  // previous run's day/streams/ledger state leaks into the new one.
+  const runSeq = useRef(0)
 
   const startJourney = (scenario: Scenario, passionLabel: string) => {
     stampedThisRun.current = false
     runAnalytics.current = null
+    runSeq.current += 1
     setIntakeStage(null)
+    setShowDaily(false)
     setCurrent({ scenario, passionLabel })
-    setShowLaunchTransition(true)
-    setTimeout(() => {
-      setShowLaunchTransition(false)
-      setShowPlay(true)
-    }, 4000)
+    setShowPlay(true)
   }
 
   const handleCreate = () => {
@@ -181,15 +204,12 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     startJourney(g.scenario, g.passionLabel)
   }
 
-  const handleQuickPlay = () => {
-    // The footy grand final is the node-journey exemplar — lead with it.
-    const footy = JOURNEYS.find((j) => j.id === 'journey-footy')
-    const next =
-      (footy && !stamps.some((s) => s.journeyId === footy.id) ? footy : undefined) ||
-      JOURNEYS.find((j) => !stamps.some((s) => s.journeyId === j.id)) ||
-      JOURNEYS[stamps.length % JOURNEYS.length]
-    startJourney(next, next.role)
-  }
+  // Quick play = pre-selection, updated daily. The rotation is
+  // deterministic by date so "today's scenarios" genuinely change each
+  // day (mocked — the real build curates this server-side).
+  const dayIndex = Math.floor(Date.now() / 86_400_000)
+  const dailyPicks = [0, 1, 2].map((i) => JOURNEYS[(dayIndex + i) % JOURNEYS.length])
+  const handleQuickPlay = () => setShowDaily(true)
 
   const handleFlagship = (j: Scenario) => startJourney(j, j.role)
 
@@ -197,7 +217,8 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     if (!current || stampedThisRun.current) return
     // Guard against double-writes: one stamp per completed run.
     stampedThisRun.current = true
-    const caps = (JOURNEY_REVEALS[current.scenario.id]?.capabilities || []).map((c) => c.name)
+    const revealCaps = JOURNEY_REVEALS[current.scenario.id]?.capabilities || []
+    const caps = revealCaps.map((c) => c.name)
     setStamps(
       saveStamp({
         id: `stamp-${Date.now().toString(36)}`,
@@ -210,16 +231,31 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     )
     // Record the run on the profile — live analytics from the sim when
     // available, otherwise the journey's known capability exercise.
+    const skillCounts = runAnalytics.current?.skillCounts ?? Object.fromEntries(caps.map((c) => [c, 1]))
     appendRun({
       journeyId: current.scenario.id,
       passionLabel: current.passionLabel,
-      skillCounts:
-        runAnalytics.current?.skillCounts ??
-        Object.fromEntries(caps.map((c) => [c, 1])),
+      skillCounts,
       score: runAnalytics.current?.score ?? 70,
       completedAt: new Date().toISOString(),
     })
     setProfile(loadProfile())
+    // Feed the shared cross-mode capability layer — same data, one event
+    // per capability touched, evidence line pulled from the journey's
+    // known reveal copy where the name matches.
+    const at = new Date().toISOString()
+    appendCapabilityEvents(
+      Object.keys(skillCounts).map((capability) => ({
+        id: `cap-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        source: 'journey',
+        scenarioId: current.scenario.id,
+        scenarioTitle: current.scenario.role,
+        capability: normalizeCapability(capability),
+        rawLabel: capability,
+        evidenceLine: revealCaps.find((c) => c.name === capability)?.line || `Demonstrated in ${current.scenario.role}.`,
+        at,
+      })),
+    )
   }
 
   const closePlay = () => {
@@ -236,7 +272,12 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     // Before the report is reached the current run isn't stamped yet — count
     // it in so the report always reads "including this one".
     const completedCount = stampedThisRun.current ? stamps.length : stamps.length + 1
-    const topCap = reveal?.capabilities?.[0]?.name || 'Judgement & Decision-Making'
+    // Prefer what the student actually did this run over the journey's
+    // static metadata — falls back only if analytics aren't in yet.
+    const topCap =
+      topCapabilityFrom(runAnalytics.current?.skillCounts) ||
+      reveal?.capabilities?.[0]?.name ||
+      'Judgement & Decision-Making'
     const playedIds = stamps.map((s) => s.journeyId)
     const journeyReveal = {
       passionLabel: current.passionLabel,
@@ -244,7 +285,6 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
       subjects: reveal?.subjects || [],
       directions: reveal?.directions || [],
       completedCount,
-      workUnlocked: completedCount >= WORK_UNLOCK_AT,
       // Arcs get static pattern lines from the journey's capability profile;
       // the sim overrides these with lines from the player's actual picks.
       styleLines: styleLinesFromCounts(
@@ -271,6 +311,7 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     const script = SIM_SCRIPTS[current.scenario.id] || SIM_SCRIPTS['journey-footy']
     return (
       <JourneySim
+        key={runSeq.current}
         script={script}
         name={name.trim() || 'Explorer'}
         passionLabel={current.passionLabel}
@@ -297,15 +338,20 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
   const acceptProposal = () => {
     if (!proposal) return
     const strengthCaps = STRENGTH_CHIPS.filter((c) => inStrengths.includes(c.label)).map((c) => c.cap)
+    // Intake re-runs every visit by design — preserve run history rather
+    // than resetting it, or a student's accumulated profile would be wiped
+    // before every single new journey.
+    const existing = loadProfile()
     saveProfile({
       passion: inPassion.trim(),
       strengths: inStrengths,
       strengthCaps,
       payFor: inPay?.label || '',
-      createdAt: new Date().toISOString(),
-      runs: [],
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      runs: existing?.runs || [],
     })
     setProfile(loadProfile())
+    syncSelfAssessed(strengthCaps)
     const target = journeyById(proposal.journeyId)
     if (!target) return
     const label = inPassion.trim()
@@ -336,7 +382,6 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
   if (intakeStage) {
     return (
       <main className="jin-root">
-        <LaunchTransition isActive={showLaunchTransition} onComplete={() => setShowLaunchTransition(false)} />
         <div className="jin-top">
           <LaunchWordmark height={34} tone="light" ariaLabel="LAUNCH" />
           <span className="jin-top-meta">· journeys</span>
@@ -478,15 +523,68 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
     )
   }
 
+  /* ---------- Quick play — today's scenarios, updated daily ---------- */
+
+  if (showDaily) {
+    return (
+      <main className="jin-root">
+        <div className="jin-top">
+          <LaunchWordmark height={34} tone="light" ariaLabel="LAUNCH" />
+          <span className="jin-top-meta">· quick play</span>
+          <span style={{ flex: 1 }} />
+          <button type="button" className="jin-ghost" onClick={() => setShowDaily(false)}>← Back</button>
+        </div>
+        <section className="jin-stage">
+          <div className="jin-card" style={{ maxWidth: 920 }}>
+            <div className="jin-eyebrow">
+              Today&rsquo;s scenarios ·{' '}
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
+            <h1 className="jin-q">Three fresh picks. New ones tomorrow.</h1>
+            <p className="jin-sub">Step straight into one — or go back and build your own.</p>
+            <div className="chooser-options" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+              {dailyPicks.map((j, i) => {
+                const done = stamps.some((s) => s.journeyId === j.id)
+                return (
+                  <button
+                    key={j.id}
+                    type="button"
+                    className="chooser-option"
+                    onClick={() => {
+                      setShowDaily(false)
+                      startJourney(j, j.role)
+                    }}
+                  >
+                    <span className="chooser-option-eyebrow">
+                      {i === 0 ? "⭐ Today's pick" : 'Fresh today'}
+                    </span>
+                    <span className="chooser-option-title">{j.role}</span>
+                    <span className="chooser-option-blurb">{j.opening.title}</span>
+                    {SIM_SCRIPTS[j.id]?.mechanicLabel && (
+                      <span className="chooser-option-meta">⏱ ~10 min · {SIM_SCRIPTS[j.id].mechanicLabel}</span>
+                    )}
+                    <span className="chooser-option-arrow">{done ? 'Play again →' : 'Step in →'}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+        <style>{jinStyles}</style>
+      </main>
+    )
+  }
+
   /* ---------- Journey home — clone of the student-dashboard surface ---------- */
 
-  const workUnlocked = stamps.length >= WORK_UNLOCK_AT
   const lastRun = profile?.runs?.length ? profile.runs[profile.runs.length - 1] : null
+  // Driven by everything demonstrated across every journey played, not just
+  // the single most recent run — the actual fix for "smarter sequencing."
+  const accumulatedTopCap = aggregateByCapability(loadCapabilityStore())[0]?.capability
   const homeRecs = lastRun
     ? recommendNext(
         lastRun.journeyId,
-        Object.entries(lastRun.skillCounts || {}).sort((a, b) => b[1] - a[1])[0]?.[0] ||
-          'Judgement & Decision-Making',
+        accumulatedTopCap || 'Judgement & Decision-Making',
         stamps.map((s) => s.journeyId),
       )
     : null
@@ -499,35 +597,15 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
         color: 'var(--lq-cream)',
       }}
     >
-      <LaunchTransition
-        isActive={showLaunchTransition}
-        onComplete={() => setShowLaunchTransition(false)}
+      <StudentScenarioHeader
+        subLabel="journeys"
+        actionLabel="Exit"
+        onAction={onExit}
+        mode="journey"
+        onModeChange={onScenarioModeChange}
+        hideModeToggle={false}
+        onOpenScorecard={onOpenScorecard}
       />
-
-      {/* Top bar — same chrome as the student dashboard */}
-      <div
-        className="fixed top-0 left-0 right-0 z-40 border-b"
-        style={{
-          borderColor: 'rgba(146, 184, 255, 0.12)',
-          background: 'rgba(7, 9, 28, 0.72)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <LaunchWordmark height={40} tone="light" ariaLabel="LAUNCH" />
-            <span className="hidden sm:inline editorial-mono" style={{ color: 'rgba(246, 242, 234, 0.5)' }}>
-              · journeys
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={onExit} className="editorial-pill editorial-pill-ghost text-xs">
-              Exit
-            </button>
-          </div>
-        </div>
-      </div>
 
       <section
         className="relative min-h-screen flex flex-col px-4 sm:px-8 md:px-12 overflow-hidden pt-20"
@@ -632,6 +710,11 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
                 Go →
               </button>
             </div>
+
+            {/* Or take the guided path — passion → strengths → proposal */}
+            <button type="button" className="guided-link mt-4" onClick={startGuided}>
+              Not sure what to type? <span>Take the guided path →</span>
+            </button>
 
             {/* Scroll cue — down to the flagship journeys */}
             <button
@@ -759,6 +842,24 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
           }
           .code-entry-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
+          /* Guided-path link — the second create route on the cream band */
+          .guided-link {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: var(--font-body);
+            font-size: 13.5px;
+            color: rgba(14, 24, 51, 0.55);
+            transition: color 200ms ease;
+          }
+          .guided-link span {
+            color: var(--launch-navy);
+            font-weight: 650;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+          }
+          .guided-link:hover { color: var(--lq-ink); }
+
           .scroll-cue {
             color: rgba(10, 42, 107, 0.45);
             background: none;
@@ -835,12 +936,17 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
             text-transform: uppercase;
             color: rgba(190, 227, 178, 0.85);
           }
+          .jy-card-meta {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(246, 242, 234, 0.45);
+          }
           .jy-summit {
             background: rgba(146, 184, 255, 0.08);
             border-color: rgba(146, 184, 255, 0.28);
           }
-          .jy-summit.is-locked { cursor: default; opacity: 0.75; }
-          .jy-summit.is-locked:hover { transform: none; box-shadow: none; }
         `}</style>
       </section>
 
@@ -919,9 +1025,14 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
             const passion = PASSIONS.find((p) => p.journeyId === j.id)
             return (
               <button key={j.id} type="button" className="jy-card" onClick={() => handleFlagship(j)}>
-                <span className="jy-card-role">{passion ? `${passion.emoji} ${passion.label}` : 'Journey'}</span>
+                <span className="jy-card-role">
+                  {passion ? `${passion.emoji} ${passion.label}` : 'Journey'}
+                </span>
                 <span className="jy-card-title">{j.role}</span>
                 <span className="jy-card-blurb">{j.opening.title}</span>
+                {SIM_SCRIPTS[j.id]?.mechanicLabel && (
+                  <span className="jy-card-meta">⏱ ~10 min · {SIM_SCRIPTS[j.id].mechanicLabel}</span>
+                )}
                 {done ? (
                   <span className="jy-card-done">✓ Completed · {new Date(done.completedAt).toLocaleDateString()}</span>
                 ) : null}
@@ -930,19 +1041,12 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
             )
           })}
 
-          {/* The summit — work scenarios, visible from day one */}
-          <button
-            type="button"
-            className={`jy-card jy-summit ${workUnlocked ? '' : 'is-locked'}`}
-            onClick={workUnlocked ? onWorkScenarios : undefined}
-          >
-            <span className="jy-card-role">⛰ The next room</span>
+          {/* Work scenarios — an equal mode, not a graduation. Always open. */}
+          <button type="button" className="jy-card jy-summit" onClick={onWorkScenarios}>
+            <span className="jy-card-role">⛰ The other mode</span>
             <span className="jy-card-title">Work scenarios</span>
-            <span className="jy-card-blurb">
-              Bigger rooms, real roles, real companies.
-              {workUnlocked ? ' You’ve earned the door.' : ` Unlocks after ${WORK_UNLOCK_AT} journeys · ${Math.min(stamps.length, WORK_UNLOCK_AT)}/${WORK_UNLOCK_AT}.`}
-            </span>
-            <span className="jy-card-arrow">{workUnlocked ? 'Step in →' : '🔒 Locked for now'}</span>
+            <span className="jy-card-blurb">Bigger rooms, real roles, real companies — same capabilities, different door.</span>
+            <span className="jy-card-arrow">Step in →</span>
           </button>
         </div>
       </section>
@@ -950,180 +1054,5 @@ export function JourneyFlow({ onExit, onWorkScenarios }: JourneyFlowProps) {
   )
 }
 
-/* Intake conversation — one question per screen, chips as inspiration,
-   free text as the hero. Navy register consistent with the sim. */
-const jinStyles = `
-  .jin-root {
-    min-height: 100vh;
-    background: linear-gradient(180deg, #07091c 0%, #0e1737 55%, #182046 100%);
-    color: var(--lq-cream, #f6f2ea);
-    display: flex;
-    flex-direction: column;
-  }
-  .jin-top {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px clamp(16px, 4vw, 40px);
-    border-bottom: 1px solid rgba(146, 184, 255, 0.12);
-  }
-  .jin-top-meta {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: rgba(246,242,234,0.5);
-  }
-  .jin-ghost {
-    background: rgba(0,0,0,0.35);
-    border: 1px solid rgba(255,255,255,0.14);
-    color: rgba(246,242,234,0.85);
-    border-radius: 999px;
-    padding: 8px 16px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    cursor: pointer;
-  }
-  .jin-stage {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: clamp(24px, 6vh, 64px) clamp(16px, 4vw, 40px) 90px;
-  }
-  .jin-card { width: 100%; max-width: 760px; animation: jinIn 500ms cubic-bezier(0.2,0.7,0.2,1) both; }
-  @keyframes jinIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-  .jin-eyebrow {
-    font-family: var(--font-mono);
-    font-size: 10.5px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: #92b8ff;
-    margin-bottom: 16px;
-  }
-  .jin-q {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: clamp(26px, 4.4vw, 42px);
-    letter-spacing: -0.022em;
-    line-height: 1.15;
-    color: var(--lq-cream, #f6f2ea);
-    margin: 0 0 10px;
-    max-width: 24ch;
-  }
-  .jin-sub {
-    font-size: 15.5px;
-    color: rgba(246,242,234,0.6);
-    margin: 0 0 22px;
-  }
-  .jin-framing {
-    font-family: var(--font-display);
-    font-style: italic;
-    font-size: clamp(16px, 2vw, 19px);
-    color: rgba(246,242,234,0.75);
-    margin: 0 0 14px;
-    max-width: 52ch;
-  }
-  .jin-chips { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 20px; }
-  .jin-chip {
-    padding: 11px 18px;
-    border-radius: 999px;
-    border: 1px solid rgba(246,242,234,0.25);
-    background: rgba(246,242,234,0.05);
-    color: rgba(246,242,234,0.9);
-    font-size: 14.5px;
-    font-weight: 550;
-    cursor: pointer;
-    transition: background 200ms ease, border-color 200ms ease, transform 200ms cubic-bezier(0.2,0.7,0.2,1);
-  }
-  .jin-chip:hover { transform: translateY(-1px); border-color: rgba(146,184,255,0.6); }
-  .jin-chip.is-on {
-    background: var(--lq-cream, #f6f2ea);
-    color: #131b33;
-    border-color: var(--lq-cream, #f6f2ea);
-  }
-  .jin-input {
-    width: 100%;
-    background: transparent;
-    border: none;
-    border-bottom: 1.5px solid rgba(246,242,234,0.28);
-    padding: 10px 2px 12px;
-    color: var(--lq-cream, #f6f2ea);
-    font-family: var(--font-display);
-    font-style: italic;
-    font-size: clamp(17px, 2.2vw, 21px);
-    outline: none;
-    margin-bottom: 22px;
-    transition: border-color 200ms ease;
-  }
-  .jin-input:focus { border-color: #92b8ff; }
-  .jin-input::placeholder { color: rgba(246,242,234,0.35); }
-  .jin-row { display: flex; align-items: center; gap: 14px; }
-  .jin-name {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 6px 6px 16px;
-    border: 1px solid rgba(246,242,234,0.2);
-    border-radius: 999px;
-  }
-  .jin-name em {
-    font-family: var(--font-mono);
-    font-style: normal;
-    font-size: 10px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: rgba(246,242,234,0.5);
-  }
-  .jin-name input {
-    background: transparent;
-    border: none;
-    outline: none;
-    color: var(--lq-cream, #f6f2ea);
-    font-size: 14px;
-    width: 130px;
-    padding: 6px 4px;
-  }
-  .jin-next {
-    margin-left: auto;
-    border: none;
-    border-radius: 999px;
-    padding: 13px 26px;
-    background: var(--lq-cream, #f6f2ea);
-    color: #131b33;
-    font-weight: 700;
-    font-size: 15px;
-    cursor: pointer;
-    transition: transform 200ms cubic-bezier(0.2,0.7,0.2,1), opacity 200ms ease;
-  }
-  .jin-next:hover:not(:disabled) { transform: translateY(-1px); }
-  .jin-next:disabled { opacity: 0.35; cursor: default; }
-  .jin-redirect { display: flex; gap: 8px; margin-top: 26px; }
-  .jin-redirect input {
-    flex: 1;
-    background: transparent;
-    border: 1.5px dashed rgba(246,242,234,0.3);
-    border-radius: 999px;
-    padding: 12px 18px;
-    color: var(--lq-cream, #f6f2ea);
-    font-family: var(--font-display);
-    font-style: italic;
-    font-size: 15px;
-    outline: none;
-  }
-  .jin-redirect input:focus { border-color: rgba(146,184,255,0.7); border-style: solid; }
-  .jin-redirect input::placeholder { color: rgba(246,242,234,0.4); }
-  .jin-redirect button {
-    border: 1px solid rgba(246,242,234,0.3);
-    border-radius: 999px;
-    padding: 12px 20px;
-    background: transparent;
-    color: rgba(246,242,234,0.9);
-    font-weight: 650;
-    font-size: 13.5px;
-    cursor: pointer;
-  }
-  .jin-redirect button:disabled { opacity: 0.35; cursor: default; }
-`
+// jinStyles moved to ./jin-styles.ts — shared with SchoolChooser, which
+// reuses this dark-register CSS verbatim.
