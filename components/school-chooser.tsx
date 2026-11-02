@@ -45,7 +45,7 @@ export function SchoolChooser({ onSelectStudent, onSelectAdvisor, onBack }: Scho
     <main className="jin-root">
       <div className="jin-top">
         <LaunchWordmark height={34} tone="light" ariaLabel="LAUNCH" />
-        <span className="jin-top-meta">· schools</span>
+        <span className="jin-top-meta">· education</span>
         <span style={{ flex: 1 }} />
         <button type="button" className="jin-ghost" onClick={stage === 'mode' ? () => setStage('role') : onBack}>
           ← Back
@@ -55,7 +55,7 @@ export function SchoolChooser({ onSelectStudent, onSelectAdvisor, onBack }: Scho
       <section className="jin-stage">
         {stage === 'role' ? (
           <div className="jin-card" key="role">
-            <div className="jin-eyebrow">Schools</div>
+            <div className="jin-eyebrow">Education</div>
             <h1 className="jin-q">Are you a student, or a careers advisor/leader?</h1>
             <p className="jin-sub">Pick the door that&rsquo;s yours.</p>
             <div className="chooser-options">

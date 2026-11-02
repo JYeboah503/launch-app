@@ -84,7 +84,7 @@ export function CTASection({ onSchoolsClick, onCompaniesClick }: CTASectionProps
                 onClick={onSchoolsClick}
                 className="cta-pill cta-pill-primary"
               >
-                Schools
+                Education
               </button>
             )}
             {onCompaniesClick && (

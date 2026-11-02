@@ -148,7 +148,7 @@ export function HeroSection({ onSchoolsClick, onCompaniesClick }: HeroSectionPro
             onClick={onSchoolsClick}
             className="hero-pill hero-pill-primary self-start"
           >
-            Schools
+            Education
           </button>
           <button
             type="button"
