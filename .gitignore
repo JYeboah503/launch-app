@@ -10,3 +10,6 @@ node_modules/
 .DS_Store
 *.tsbuildinfo
 .vercel
+
+# static export output (deployed to gh-pages, not tracked here)
+/out/
