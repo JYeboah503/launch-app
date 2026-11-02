@@ -61,7 +61,7 @@ export function CapabilitiesSection() {
           position: absolute;
           inset: 0;
           z-index: 0;
-          background-image: url('/images/capabilities-mosaic.png');
+          background-image: url('./images/capabilities-mosaic.png');
           background-size: cover;
           background-position: center;
           opacity: 0.55;

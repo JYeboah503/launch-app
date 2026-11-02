@@ -106,7 +106,7 @@ const heatStyles = `
   .ed-heat-ini {
     display: inline-flex; align-items: center; justify-content: center;
     width: 26px; height: 26px; border-radius: 999px; flex-shrink: 0;
-    background: var(--launch-teal-soft); color: var(--launch-teal-3);
+    background: rgba(10,42,107,0.08); color: var(--launch-navy);
     font-family: var(--font-mono); font-size: 10px; font-weight: 700;
   }
   .ed-heat-nm { font-size: 13px; color: var(--lq-ink); font-weight: 500; }
@@ -118,7 +118,7 @@ const heatStyles = `
   }
   .ed-heat-cell.is-below { outline: 2px solid var(--launch-danger); outline-offset: -2px; }
   .ed-heat-row { cursor: pointer; transition: background 120ms ease; }
-  .ed-heat-row:hover td { background: rgba(27, 158, 143, 0.05); }
+  .ed-heat-row:hover td { background: rgba(10, 42, 107, 0.05); }
   .ed-heat tfoot td { padding: 8px 5px; text-align: center; background: #fbfaf7; }
   .ed-heat-avg-lbl { justify-content: flex-start; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-3); border-bottom: none; }
   .ed-heat-avg { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--lq-ink-2); }
@@ -162,22 +162,22 @@ export function CapabilityRadar({
         const [x, y] = pt(i, 100)
         return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="var(--lq-line)" strokeWidth="1" />
       })}
-      {/* target ring */}
+      {/* target ring — a goal, not a success: dashed navy */}
       {target != null && (
         <polygon
           points={CAPABILITIES.map((_, i) => pt(i, target).join(',')).join(' ')}
-          fill="none" stroke="var(--launch-teal-3)" strokeWidth="1.5" strokeDasharray="3 3"
+          fill="none" stroke="var(--launch-navy-2)" strokeWidth="1.5" strokeDasharray="3 3"
         />
       )}
-      {/* compare (cohort avg) */}
+      {/* compare (cohort avg) — neutral ink so the student polygon owns navy */}
       {compare && (
-        <polygon points={poly(compare)} fill="rgba(10,42,107,0.06)" stroke="rgba(10,42,107,0.35)" strokeWidth="1.5" />
+        <polygon points={poly(compare)} fill="rgba(14,24,51,0.05)" stroke="rgba(14,24,51,0.28)" strokeWidth="1.5" />
       )}
       {/* student */}
-      <polygon points={poly(scores)} fill="rgba(27,158,143,0.20)" stroke="var(--launch-teal)" strokeWidth="2" />
+      <polygon points={poly(scores)} fill="rgba(10,42,107,0.18)" stroke="var(--launch-navy)" strokeWidth="2" />
       {CAPABILITIES.map((c, i) => {
         const [x, y] = pt(i, scores[c] ?? 0)
-        return <circle key={c} cx={x} cy={y} r="2.5" fill="var(--launch-teal-3)" />
+        return <circle key={c} cx={x} cy={y} r="2.5" fill="var(--launch-navy)" />
       })}
       {/* short labels */}
       {CAPABILITIES.map((c, i) => {
@@ -343,7 +343,7 @@ export function DistributionBars({ bands, counts }: { bands: { label: string }[]
         .ed-dist-col { display: flex; flex-direction: column; align-items: center; height: 100%; }
         .ed-dist-bar-wrap { flex: 1; width: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 5px; }
         .ed-dist-count { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--lq-ink-2); }
-        .ed-dist-bar { width: 100%; max-width: 54px; background: linear-gradient(180deg, var(--ed-accent), color-mix(in oklab, var(--ed-accent), #fff 30%)); border-radius: 8px 8px 0 0; min-height: 4px; }
+        .ed-dist-bar { width: 100%; max-width: 54px; background: linear-gradient(180deg, var(--launch-navy), color-mix(in oklab, var(--launch-navy), #fff 35%)); border-radius: 8px 8px 0 0; min-height: 4px; }
         .ed-dist-lbl { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; color: var(--lq-ink-3); margin-top: 8px; }
       `}</style>
     </div>

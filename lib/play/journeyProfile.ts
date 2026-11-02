@@ -22,12 +22,26 @@ import type { Scenario } from '@/lib/play/types'
 
 /* ---------------- Storage ---------------- */
 
+/** One choice made during a run — enough to replay the decision path in
+ *  the educator dashboard. All optional/additive: old saves still parse. */
+export interface RunPick {
+  eyebrow: string
+  prompt: string
+  choiceLabel: string
+  skill?: string
+  options?: string[]
+}
+
 export interface RunRecord {
   journeyId: string
   passionLabel: string
   skillCounts: Record<string, number>
   score: number
   completedAt: string
+  /** The choices made, in order (newer runs only). */
+  picks?: RunPick[]
+  /** How the student entered: pre-existing journey / guided / own adventure. */
+  origin?: 'journey' | 'guided' | 'own'
 }
 
 export interface JourneyProfile {
@@ -65,8 +79,12 @@ export function clearProfile() {
 }
 
 export function appendRun(run: RunRecord) {
-  const p = loadProfile()
-  if (!p) return
+  // Quick-play runs can happen before any intake — record them anyway on a
+  // minimal profile rather than silently dropping the run.
+  const p = loadProfile() ?? {
+    passion: '', strengths: [], strengthCaps: [], payFor: '',
+    createdAt: new Date().toISOString(), runs: [],
+  }
   p.runs = [...(p.runs || []), run]
   saveProfile(p)
 }

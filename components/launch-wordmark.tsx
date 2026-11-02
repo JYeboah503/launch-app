@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 
 /**
  * LaunchWordmark — the official LAUNCH wordmark (custom letterforms with
@@ -40,18 +39,19 @@ export function LaunchWordmark({
   className,
 }: LaunchWordmarkProps) {
   const width = Math.round(height * ASPECT)
+  // Page-relative src (single-route app) so the static export works at any
+  // base path — localhost root AND subpath hosts like GitHub Pages.
   const src =
     tone === 'dark'
-      ? '/images/launch-wordmark-dark.png'
-      : '/images/launch-wordmark-light.png'
+      ? 'images/launch-wordmark-dark.png'
+      : 'images/launch-wordmark-light.png'
   return (
-    <Image
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
       src={src}
       alt={ariaLabel}
       width={width}
       height={height}
-      priority
-      unoptimized
       className={className}
       style={{ height, width: 'auto', display: 'block' }}
     />

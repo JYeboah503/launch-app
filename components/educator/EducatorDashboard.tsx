@@ -1,25 +1,28 @@
 'use client'
 
 /**
- * EducatorDashboard — the careers-advisor surface. Notion-warm register:
- * an editable cover "art piece", school logo + accent (school-managed), a
- * greeting, today's snapshot, and cohorts as rich blocks. Routes into a
- * cohort view and a per-student guidance view.
+ * EducatorDashboard — the careers-advisor surface, CORPORATE register.
+ * One product, two audiences: this shell mirrors the corporate dashboard
+ * (cream canvas, frosted top bar, left rail, white navy-accented cards,
+ * drill-ins that drop the rail behind a ghost back button) with the
+ * school's functions: classes, groups, assignments, guidance, library.
  *
- * Everything is design-complete + wired at the UI level (create cohort,
- * enrol, assign, edit subjects, export, brand the space). The tech team
+ * Everything is design-complete + wired at the UI level. The tech team
  * swaps the seeded workspace for real data.
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { LaunchWordmark } from '@/components/launch-wordmark'
 import {
-  buildEducatorSeed, overallScore, cohortAverageScores, completionFor,
-  needsAttention, standouts, isForStudent, assignmentStateFor,
+  overallScore, completionFor, needsAttention, standouts,
   generateClassCodeLike,
-  type Cohort,
+  ASSIGNABLE_SCENARIOS, GENERAL_PACKS,
+  UNI_ASSIGNABLE_SCENARIOS, UNI_GENERAL_PACKS,
+  type Cohort, type EdAssignment,
 } from '@/lib/educator'
-import { ED_NOW, ACCENT_PRESETS, type EdWorkspace, type EdBranding } from '@/components/educator/types'
+import { loadEducatorWorkspace, saveEducatorWorkspace, freshWorkspace, loadInstitution, saveInstitution } from '@/lib/educatorStore'
+import { ED_NOW, type EdWorkspace, type EdBranding, type Institution } from '@/components/educator/types'
+import { edShared } from '@/components/educator/edStyles'
+import { EducatorTopBar } from '@/components/educator/EducatorTopBar'
 import { ProgressRing } from '@/components/educator/charts'
 import { ModalShell, fmtDate } from '@/components/educator/ui'
 import { CohortView } from '@/components/educator/CohortView'
@@ -33,32 +36,29 @@ import { ScenarioBuilderV2 } from '@/components/scenario-builder-v2'
 import { ScenarioPlay } from '@/components/play'
 import { SCENARIOS } from '@/lib/play/sampleScenarios'
 import { addCustomScenarioStub } from '@/lib/scenarioStore'
-import { ASSIGNABLE_SCENARIOS, GENERAL_PACKS, type EdAssignment } from '@/lib/educator'
 import { AnimatedCounter } from '@/components/motion'
 import {
-  Image as ImageIcon, Settings, Plus, ArrowLeft, Upload,
-  AlertTriangle, Star, CalendarClock, GitCompare, Command,
+  Image as ImageIcon, Plus, Upload, AlertTriangle, Star, CalendarClock, GitCompare,
+  LayoutDashboard, Users, Library, Hammer, Eye, ArrowLeft, GraduationCap, Archive, ArchiveRestore,
 } from 'lucide-react'
+import { StudentsDirectory } from '@/components/educator/StudentsDirectory'
 import type { EdScenario, BuilderLens, FreePlaySession } from '@/components/educator/types'
 
-const KEY = 'launch.educator.v1'
-
-const DEFAULT_BRANDING: EdBranding = {
-  schoolName: 'Northbridge College',
-  accent: '#1B9E8F',
-  logoUrl: null,
-  coverUrl: null,
-}
-
 type Route =
-  | { view: 'home' }
+  | { view: 'overview' }
+  | { view: 'students' }
+  | { view: 'classes' }
   | { view: 'library' }
   | { view: 'cohort'; cohortId: string }
-  | { view: 'student'; cohortId: string; studentId: string }
+  /** cohortId null = opened from the whole-school Students directory. */
+  | { view: 'student'; cohortId: string | null; studentId: string }
+
+const RAIL_VIEWS = ['overview', 'students', 'classes', 'library'] as const
 
 export function EducatorDashboard({ onBack }: { onBack: () => void }) {
-  const [ws, setWs] = useState<EdWorkspace>(() => ({ branding: DEFAULT_BRANDING, ...seedWorkspace() }))
-  const [route, setRoute] = useState<Route>({ view: 'home' })
+  const [ws, setWs] = useState<EdWorkspace>(() => freshWorkspace())
+  const [route, setRoute] = useState<Route>({ view: 'overview' })
+  const uni = ws.branding.institution === 'university'
   const [showSettings, setShowSettings] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showCompare, setShowCompare] = useState(false)
@@ -68,20 +68,24 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
   const [previewPlay, setPreviewPlay] = useState(false)
   const [hydrated, setHydrated] = useState(false)
 
-  // Hydrate / persist the whole workspace.
+  // Hydrate / persist the whole workspace (shape-checked, old saves backfilled).
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (parsed && Array.isArray(parsed.cohorts)) {
-          // Older saves may predate newer workspace fields — default them in.
-          setWs({ customScenarios: [], freePlaySessions: [], ...parsed })
-        }
-      }
-    } catch { /* ignore */ }
+    setWs(loadEducatorWorkspace(loadInstitution()))
     setHydrated(true)
   }, [])
+  useEffect(() => {
+    if (!hydrated) return
+    saveEducatorWorkspace(ws)
+  }, [ws, hydrated])
+
+  /** The top-bar persona toggle — save the current world, load the other. */
+  const switchInstitution = (inst: Institution) => {
+    if (inst === ws.branding.institution) return
+    saveEducatorWorkspace(ws)
+    saveInstitution(inst)
+    setWs(loadEducatorWorkspace(inst))
+    setRoute({ view: 'overview' })
+  }
 
   // ⌘K / Ctrl+K opens the command palette from anywhere in the workspace.
   useEffect(() => {
@@ -94,21 +98,18 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
-  useEffect(() => {
-    if (!hydrated) return
-    try { localStorage.setItem(KEY, JSON.stringify(ws)) } catch { /* ignore */ }
-  }, [ws, hydrated])
 
   const patch = (p: Partial<EdWorkspace>) => setWs((w) => ({ ...w, ...p }))
   const setBranding = (b: Partial<EdBranding>) => setWs((w) => ({ ...w, branding: { ...w.branding, ...b } }))
 
   /** "General practice" — assign every scenario in a pack to the cohort. */
   const assignPack = (cohortId: string, packId: string, dueIso?: string): number => {
+    const isUni = ws.branding.institution === 'university'
     const cohort = ws.cohorts.find((c) => c.id === cohortId)
-    const pack = GENERAL_PACKS.find((p) => p.id === packId)
+    const pack = (isUni ? UNI_GENERAL_PACKS : GENERAL_PACKS).find((p) => p.id === packId)
     if (!cohort || !pack) return 0
     const fresh: EdAssignment[] = pack.scenarioIds.flatMap((sid, i) => {
-      const scen = ASSIGNABLE_SCENARIOS.find((s) => s.id === sid)
+      const scen = (isUni ? UNI_ASSIGNABLE_SCENARIOS : ASSIGNABLE_SCENARIOS).find((s) => s.id === sid)
       if (!scen) return []
       return [{
         id: `as-${Date.now().toString(36)}-${i}`,
@@ -125,7 +126,7 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
     return fresh.length
   }
 
-  /** "Free play" — start a timed open session; the card lands on home. */
+  /** "Free play" — start a timed open session; the card lands on Overview. */
   const startFreePlay = (cohortId: string, durationMins: number): FreePlaySession => {
     const session: FreePlaySession = {
       id: `fp-${Date.now().toString(36)}`,
@@ -139,82 +140,147 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
     return session
   }
 
-  const activeCohort = (route.view === 'cohort' || route.view === 'student') ? ws.cohorts.find((c) => c.id === route.cohortId) || null : null
+  const activeCohort = (route.view === 'cohort' || route.view === 'student') && route.cohortId ? ws.cohorts.find((c) => c.id === route.cohortId) || null : null
   const activeStudent = route.view === 'student' ? ws.students.find((s) => s.id === route.studentId) || null : null
+  const onRail = (RAIL_VIEWS as readonly string[]).includes(route.view)
+  const activeCohorts = ws.cohorts.filter((c) => !c.archivedAt)
 
   // Scroll to top on route change.
   useEffect(() => { if (typeof window !== 'undefined') window.scrollTo({ top: 0 }) }, [route.view, (route as any).cohortId, (route as any).studentId])
 
-  const rootStyle = { ['--ed-accent' as string]: ws.branding.accent } as React.CSSProperties
+  // Drill-ins get a ghost back in the top bar; rail views get the build CTA.
+  const topActions =
+    route.view === 'cohort' ? (
+      <button type="button" className="ed-btn ed-btn-ghost" onClick={() => setRoute({ view: 'classes' })}>
+        <ArrowLeft className="w-4 h-4" /> All {uni ? 'units' : 'classes'}
+      </button>
+    ) : route.view === 'student' ? (
+      <button
+        type="button"
+        className="ed-btn ed-btn-ghost"
+        onClick={() => activeCohort ? setRoute({ view: 'cohort', cohortId: activeCohort.id }) : setRoute({ view: 'students' })}
+      >
+        <ArrowLeft className="w-4 h-4" /> {activeCohort?.name ?? 'Students'}
+      </button>
+    ) : (
+      <button type="button" className="ed-btn ed-btn-primary" onClick={() => setFlowOpen(true)}>
+        <Plus className="w-4 h-4" /> Create scenario
+      </button>
+    )
+
+  // The missed-reference safety net: anything still reading --ed-accent
+  // renders navy, never the old teal.
+  const rootStyle = {
+    background: 'var(--corp-canvas)',
+    minHeight: '100vh',
+    ['--ed-accent' as string]: 'var(--launch-navy)',
+    ['--ed-accent-soft' as string]: 'rgba(10,42,107,0.08)',
+  } as React.CSSProperties
+
+  const railItem = (view: Route['view'] & string, label: string, Icon: any) => (
+    <button
+      type="button"
+      className={`corp-rail-item ${route.view === view ? 'corp-rail-item-active' : ''}`}
+      onClick={() => setRoute({ view } as Route)}
+    >
+      <Icon className="w-4 h-4" /> {label}
+    </button>
+  )
 
   return (
-    <main className="ed-root" style={rootStyle}>
-      {/* Top bar */}
-      <header className="ed-topbar">
-        <div className="ed-topbar-in">
-          <div className="ed-brand">
-            {ws.branding.logoUrl
-              ? <img src={ws.branding.logoUrl} alt={ws.branding.schoolName} className="ed-logo" />
-              : <LaunchWordmark height={30} tone="dark" ariaLabel="LAUNCH" />}
-            <span className="ed-brand-sep" />
-            <span className="ed-brand-name">{ws.branding.schoolName}</span>
-            <span className="ed-brand-tag">Careers</span>
-          </div>
-          <nav className="ed-nav" aria-label="Workspace">
-            <button type="button" className={`ed-nav-tab ${route.view === 'home' || route.view === 'cohort' || route.view === 'student' ? 'is-on' : ''}`} onClick={() => setRoute({ view: 'home' })}>Home</button>
-            <button type="button" className={`ed-nav-tab ${route.view === 'library' ? 'is-on' : ''}`} onClick={() => setRoute({ view: 'library' })}>Library</button>
-          </nav>
-          <div className="ed-topbar-actions">
-            <button type="button" className="ed-kbd-hint" onClick={() => setShowPalette(true)} title="Command palette">
-              <Command className="w-3.5 h-3.5" /> K
-            </button>
-            <button type="button" className="ed-btn ed-btn-ghost" onClick={() => setShowSettings(true)}>
-              <Settings className="w-4 h-4" /> School settings
-            </button>
-            <button type="button" className="ed-btn ed-btn-ghost" onClick={onBack}>
-              <ArrowLeft className="w-4 h-4" /> Exit
-            </button>
-          </div>
+    <main style={rootStyle}>
+      <EducatorTopBar
+        branding={ws.branding}
+        actions={topActions}
+        onOpenSettings={() => setShowSettings(true)}
+        onExit={onBack}
+        onPalette={() => setShowPalette(true)}
+        onInstitution={switchInstitution}
+      />
+
+      <div className={onRail ? 'corp-body' : undefined}>
+        {onRail && (
+          <aside className="corp-rail">
+            <nav className="corp-rail-nav" aria-label="Workspace">
+              <div className="corp-rail-group">{uni ? 'Your university' : 'Your school'}</div>
+              {railItem('overview', 'Overview', LayoutDashboard)}
+              {railItem('students', 'Students', Users)}
+              {railItem('classes', uni ? 'Units' : 'Classes', GraduationCap)}
+              {railItem('library', 'Library', Library)}
+              <button type="button" className="corp-rail-item" onClick={() => setFlowOpen(true)}>
+                <Hammer className="w-4 h-4" /> Create scenario
+              </button>
+              <div className="corp-rail-group corp-rail-group-2">Launch tools</div>
+              <button type="button" className="corp-rail-item" onClick={() => setShowCompare(true)}>
+                <GitCompare className="w-4 h-4" /> {uni ? 'Compare units' : 'Compare classes'}
+              </button>
+              <button type="button" className="corp-rail-item" onClick={() => setPreviewPlay(true)}>
+                <Eye className="w-4 h-4" /> Student view
+              </button>
+            </nav>
+          </aside>
+        )}
+
+        <div className={onRail ? 'corp-work' : undefined}>
+          {route.view === 'overview' && (
+            <OverviewView
+              ws={ws}
+              onOpenCohort={(cohortId) => setRoute({ view: 'cohort', cohortId })}
+              onOpenStudent={(cohortId, studentId) => setRoute({ view: 'student', cohortId, studentId })}
+              onAllClasses={() => setRoute({ view: 'classes' })}
+              onEndSession={(id) => patch({ freePlaySessions: ws.freePlaySessions.filter((s) => s.id !== id) })}
+              onPreviewPlay={() => setPreviewPlay(true)}
+            />
+          )}
+
+          {route.view === 'students' && (
+            <StudentsDirectory
+              ws={ws}
+              onOpenStudent={(studentId) => setRoute({ view: 'student', cohortId: null, studentId })}
+            />
+          )}
+
+          {route.view === 'classes' && (
+            <ClassesView
+              ws={ws}
+              onOpenCohort={(cohortId) => setRoute({ view: 'cohort', cohortId })}
+              onCreate={() => setShowCreate(true)}
+              onCompare={() => setShowCompare(true)}
+              onRestore={(cohortId) => patch({ cohorts: ws.cohorts.map((c) => c.id === cohortId ? { ...c, archivedAt: undefined } : c) })}
+            />
+          )}
+
+          {route.view === 'library' && (
+            <div className="ed-page" style={{ paddingTop: 34 }}>
+              <ScenarioLibrary ws={ws} onAssign={(a) => patch({ assignments: [a, ...ws.assignments] })} onNewScenario={() => setFlowOpen(true)} />
+            </div>
+          )}
+
+          {route.view === 'cohort' && activeCohort && (
+            <CohortView
+              ws={ws}
+              cohort={activeCohort}
+              onBack={() => setRoute({ view: 'classes' })}
+              onOpenStudent={(studentId) => setRoute({ view: 'student', cohortId: activeCohort.id, studentId })}
+              onPatch={patch}
+              onArchive={() => {
+                patch({ cohorts: ws.cohorts.map((c) => c.id === activeCohort.id ? { ...c, archivedAt: new Date(ED_NOW).toISOString() } : c) })
+                setRoute({ view: 'classes' })
+              }}
+            />
+          )}
+
+          {route.view === 'student' && activeStudent && (
+            <StudentView
+              ws={ws}
+              cohort={activeCohort}
+              student={activeStudent}
+              onBack={() => activeCohort ? setRoute({ view: 'cohort', cohortId: activeCohort.id }) : setRoute({ view: 'students' })}
+              onPatch={patch}
+            />
+          )}
         </div>
-      </header>
-
-      {route.view === 'home' && (
-        <HomeView
-          ws={ws}
-          onOpenCohort={(cohortId) => setRoute({ view: 'cohort', cohortId })}
-          onCreate={() => setShowCreate(true)}
-          onCompare={() => setShowCompare(true)}
-          onReplaceCover={(url) => setBranding({ coverUrl: url })}
-          onRegenerateCover={() => setBranding({ coverUrl: null })}
-          onEndSession={(id) => patch({ freePlaySessions: ws.freePlaySessions.filter((s) => s.id !== id) })}
-          onPreviewPlay={() => setPreviewPlay(true)}
-        />
-      )}
-
-      {route.view === 'library' && (
-        <div className="ed-page" style={{ paddingTop: 34 }}>
-          <ScenarioLibrary ws={ws} onAssign={(a) => patch({ assignments: [a, ...ws.assignments] })} onNewScenario={() => setFlowOpen(true)} />
-        </div>
-      )}
-
-      {route.view === 'cohort' && activeCohort && (
-        <CohortView
-          ws={ws}
-          cohort={activeCohort}
-          onBack={() => setRoute({ view: 'home' })}
-          onOpenStudent={(studentId) => setRoute({ view: 'student', cohortId: activeCohort.id, studentId })}
-          onPatch={patch}
-        />
-      )}
-
-      {route.view === 'student' && activeCohort && activeStudent && (
-        <StudentView
-          ws={ws}
-          cohort={activeCohort}
-          student={activeStudent}
-          onBack={() => setRoute({ view: 'cohort', cohortId: activeCohort.id })}
-        />
-      )}
+      </div>
 
       {showSettings && (
         <SchoolSettings
@@ -232,6 +298,9 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
         <CommandPalette
           ws={ws}
           onClose={() => setShowPalette(false)}
+          onOverview={() => setRoute({ view: 'overview' })}
+          onStudents={() => setRoute({ view: 'students' })}
+          onClasses={() => setRoute({ view: 'classes' })}
           onOpenCohort={(cohortId) => setRoute({ view: 'cohort', cohortId })}
           onOpenStudent={(cohortId, studentId) => setRoute({ view: 'student', cohortId, studentId })}
           onNewCohort={() => setShowCreate(true)}
@@ -319,6 +388,7 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
 
       {showCreate && (
         <CreateCohortModal
+          uni={uni}
           onClose={() => setShowCreate(false)}
           onCreate={(name, term) => {
             const c: Cohort = {
@@ -327,6 +397,7 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
               term: term || 'New term',
               code: generateClassCodeLike(),
               studentIds: [],
+              groups: [],
               createdAt: new Date(ED_NOW).toISOString(),
             }
             patch({ cohorts: [c, ...ws.cohorts] })
@@ -336,152 +407,286 @@ export function EducatorDashboard({ onBack }: { onBack: () => void }) {
         />
       )}
 
-      <style>{edStyles}</style>
+      <style>{edShared}</style>
+      <style>{shellStyles}</style>
     </main>
   )
 }
 
-function seedWorkspace() {
-  const s = buildEducatorSeed()
-  return {
-    students: s.students, cohorts: s.cohorts, assignments: s.assignments, subjects: s.subjects,
-    customScenarios: [] as EdScenario[], freePlaySessions: [] as FreePlaySession[],
-  }
-}
-
 /* ══════════════════════════════════════════════════════════════════
-   HOME
+   OVERVIEW — corporate "at a glance" page
    ══════════════════════════════════════════════════════════════════ */
 
-function HomeView({
-  ws, onOpenCohort, onCreate, onCompare, onReplaceCover, onRegenerateCover, onEndSession, onPreviewPlay,
+function OverviewView({
+  ws, onOpenCohort, onOpenStudent, onAllClasses, onEndSession, onPreviewPlay,
 }: {
   ws: EdWorkspace
   onOpenCohort: (id: string) => void
-  onCreate: () => void
-  onCompare: () => void
-  onReplaceCover: (url: string) => void
-  onRegenerateCover: () => void
+  onOpenStudent: (cohortId: string, studentId: string) => void
+  onAllClasses: () => void
   onEndSession: (id: string) => void
   onPreviewPlay: () => void
 }) {
+  const uni = ws.branding.institution === 'university'
+  const cohorts = useMemo(() => ws.cohorts.filter((c) => !c.archivedAt), [ws.cohorts])
   const totalStudents = ws.students.length
-  const attention = needsAttention(ws.students, ws.assignments, ED_NOW)
+  // Scope attention per class — a student is only measured against their
+  // own class's assignments, not every cohort's overdue list.
+  const attention = useMemo(() => {
+    const seen = new Set<string>()
+    return cohorts.flatMap((c) => {
+      const students = ws.students.filter((s) => c.studentIds.includes(s.id))
+      const assignments = ws.assignments.filter((a) => a.cohortId === c.id)
+      return needsAttention(students, assignments, ED_NOW).filter((f) => {
+        if (seen.has(f.student.id)) return false
+        seen.add(f.student.id)
+        return true
+      })
+    })
+  }, [ws, cohorts])
   const shining = standouts(ws.students, 4)
 
-  // Overall completion across every assignment.
+  // Overall completion across every active class's assignments.
   const completion = useMemo(() => {
     let done = 0, total = 0
     for (const a of ws.assignments) {
-      const cohort = ws.cohorts.find((c) => c.id === a.cohortId)
+      const cohort = cohorts.find((c) => c.id === a.cohortId)
       if (!cohort) continue
       const st = completionFor(a, cohort)
       done += st.completed + st.reviewed
       total += st.total
     }
     return total ? Math.round((done / total) * 100) : 0
-  }, [ws])
+  }, [ws, cohorts])
 
   const dueSoon = useMemo(() => {
     const now = Date.parse(ED_NOW)
     return ws.assignments
+      .filter((a) => cohorts.some((c) => c.id === a.cohortId))
       .filter((a) => a.dueAt && Date.parse(a.dueAt) >= now && Date.parse(a.dueAt) < now + 7 * 864e5)
       .sort((a, b) => Date.parse(a.dueAt!) - Date.parse(b.dueAt!))
-  }, [ws])
+  }, [ws, cohorts])
+
+  const cohortOf = (studentId: string) => cohorts.find((c) => c.studentIds.includes(studentId))
 
   return (
-    <>
-      <Cover branding={ws.branding} onReplace={onReplaceCover} onRegenerate={onRegenerateCover} />
+    <div className="ed-page">
+      {/* Page header — corporate recipe, headline ends in a full stop */}
+      <div className="pt-10 sm:pt-12 pb-2">
+        <div className="ed-eyebrow">Your careers workspace</div>
+        <h1 className="ed-h1">Good morning.</h1>
+        <p className="ed-lede">
+          {totalStudents.toLocaleString()} students across {uni ? '1st–3rd year and Honours' : 'Years 10–12'} · {cohorts.length} active {uni ? 'units' : 'classes'}.
+          {attention.length > 0 ? ` ${attention.length} need a nudge.` : ' All on track.'}
+        </p>
+      </div>
 
-      <div className="ed-page">
-        {/* Greeting */}
-        <div className="ed-greeting">
-          <div className="ed-eyebrow">Your careers workspace</div>
-          <h1 className="ed-h1">Good morning.</h1>
-          <p className="ed-lede">
-            {totalStudents} students across {ws.cohorts.length} cohorts.
-            {attention.length > 0 ? ` ${attention.length} need a nudge.` : ' All on track.'}
-          </p>
-        </div>
-
-        {/* Live free-play sessions — front and centre while running */}
+      {/* Live free-play sessions — front and centre while running */}
+      <div className="mt-6">
         {ws.freePlaySessions.map((s) => (
           <FreePlayCard key={s.id} ws={ws} session={s} onEnd={() => onEndSession(s.id)} onPreview={onPreviewPlay} />
         ))}
-
-        {/* Snapshot row */}
-        <div className="ed-snapshot">
-          <div className="ed-snap-card ed-snap-ring">
-            <ProgressRing pct={completion} label="Completed" />
-            <div>
-              <div className="ed-snap-num"><AnimatedCounter value={completion} suffix="%" duration={900} /></div>
-              <div className="ed-snap-lbl">Completion</div>
-            </div>
-          </div>
-
-          <div className="ed-snap-card">
-            <div className="ed-snap-head"><AlertTriangle className="w-4 h-4" style={{ color: 'var(--launch-danger)' }} /> Needs attention</div>
-            {attention.length === 0
-              ? <div className="ed-snap-empty">Nobody flagged. Nice.</div>
-              : <ul className="ed-snap-list">
-                  {attention.slice(0, 4).map((f) => (
-                    <li key={f.student.id}><span className="ed-snap-name">{f.student.name}</span><span className="ed-snap-reason">{f.reason}</span></li>
-                  ))}
-                  {attention.length > 4 && <li className="ed-snap-more">+{attention.length - 4} more</li>}
-                </ul>}
-          </div>
-
-          <div className="ed-snap-card">
-            <div className="ed-snap-head"><Star className="w-4 h-4" style={{ color: 'var(--ed-accent)' }} /> Shining this week</div>
-            <ul className="ed-snap-list">
-              {shining.map((f) => (
-                <li key={f.student.id}><span className="ed-snap-name">{f.student.name}</span><span className="ed-snap-reason">{f.reason}</span></li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="ed-snap-card">
-            <div className="ed-snap-head"><CalendarClock className="w-4 h-4" style={{ color: 'var(--lq-ink-3)' }} /> Due this week</div>
-            {dueSoon.length === 0
-              ? <div className="ed-snap-empty">Nothing due soon.</div>
-              : <ul className="ed-snap-list">
-                  {dueSoon.slice(0, 4).map((a) => {
-                    const cohort = ws.cohorts.find((c) => c.id === a.cohortId)
-                    return <li key={a.id}><span className="ed-snap-name">{a.title}</span><span className="ed-snap-reason">{cohort?.name} · {fmtDate(a.dueAt!)}</span></li>
-                  })}
-                </ul>}
-          </div>
-        </div>
-
-        {/* Cohorts */}
-        <div className="ed-section-head">
-          <h2 className="ed-h2">Your cohorts</h2>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {ws.cohorts.length >= 2 && (
-              <button type="button" className="ed-btn ed-btn-ghost" onClick={onCompare}>
-                <GitCompare className="w-4 h-4" /> Compare
-              </button>
-            )}
-            <button type="button" className="ed-btn ed-btn-primary" onClick={onCreate}>
-              <Plus className="w-4 h-4" /> New cohort
-            </button>
-          </div>
-        </div>
-
-        {ws.cohorts.length === 0 ? (
-          <div className="ed-empty">
-            <p>No cohorts yet — create your first one.</p>
-            <button type="button" className="ed-btn ed-btn-primary" onClick={onCreate}><Plus className="w-4 h-4" /> New cohort</button>
-          </div>
-        ) : (
-          <div className="ed-cohort-grid">
-            {ws.cohorts.map((c) => (
-              <CohortBlock key={c.id} ws={ws} cohort={c} onOpen={() => onOpenCohort(c.id)} />
-            ))}
-          </div>
-        )}
       </div>
-    </>
+
+      {/* KPI band — completion floats boxless as the row's stylistic lead;
+          the donut IS the number, label underneath. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+        <div className="ed-kpi-free">
+          <ProgressRing pct={completion} size={104} label="Completed" />
+          <div className="ed-eyebrow" style={{ margin: '12px 0 0' }}>Completion</div>
+          <div className="ed-kpi-foot" style={{ marginTop: 4 }}>across every assignment</div>
+        </div>
+        <div className="ed-kpi">
+          <div className="ed-kpi-top"><span className="ed-eyebrow" style={{ margin: 0 }}>Students</span></div>
+          {/* key: AnimatedCounter animates once per mount — remount on mode switch */}
+          <div className="ed-kpi-stat"><AnimatedCounter key={`st-${ws.branding.institution}`} value={totalStudents} duration={1100} group /></div>
+          <div className="ed-kpi-foot">{uni ? `1st–3rd yr + honours · ${cohorts.length} units` : `years 10–12 · ${cohorts.length} classes`}</div>
+        </div>
+        <div className="ed-kpi">
+          <div className="ed-kpi-top"><span className="ed-eyebrow" style={{ margin: 0 }}>Need attention</span></div>
+          <div className="ed-kpi-stat" style={{ color: attention.length ? 'var(--launch-danger)' : undefined }}>
+            <AnimatedCounter key={`att-${ws.branding.institution}`} value={attention.length} duration={1100} />
+          </div>
+          <div className="ed-kpi-foot">overdue · stalled · below the bar</div>
+        </div>
+        <div className="ed-kpi">
+          <div className="ed-kpi-top"><span className="ed-eyebrow" style={{ margin: 0 }}>Shining</span></div>
+          <div className="ed-kpi-stat" style={{ color: 'var(--launch-teal)' }}>
+            <AnimatedCounter key={`sh-${ws.branding.institution}`} value={shining.length} duration={1100} />
+          </div>
+          <div className="ed-kpi-foot">standouts this week</div>
+        </div>
+      </div>
+
+      {/* Attention + shining panels */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div className="ed-scard">
+          <div className="ed-scard-head">
+            <span className="ed-eyebrow" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+              <AlertTriangle className="w-3.5 h-3.5" style={{ color: 'var(--launch-danger)' }} /> Needs attention
+            </span>
+          </div>
+          {attention.length === 0
+            ? <div className="ed-dim" style={{ fontStyle: 'italic' }}>Nobody flagged. Nice.</div>
+            : <ul className="ed-rowlist">
+                {attention.slice(0, 5).map((f) => {
+                  const co = cohortOf(f.student.id)
+                  return (
+                    <li key={f.student.id}>
+                      <button type="button" className="ed-rowbtn" onClick={() => co && onOpenStudent(co.id, f.student.id)}>
+                        <span className="ed-row-name">{f.student.name}</span>
+                        <span className="ed-row-meta" style={{ color: 'var(--launch-danger)' }}>{f.reason}</span>
+                      </button>
+                    </li>
+                  )
+                })}
+                {attention.length > 5 && <li className="ed-dim" style={{ padding: '8px 0 0' }}>+{attention.length - 5} more</li>}
+              </ul>}
+        </div>
+        <div className="ed-scard">
+          <div className="ed-scard-head">
+            <span className="ed-eyebrow" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+              <Star className="w-3.5 h-3.5" style={{ color: 'var(--launch-teal)' }} /> Shining this week
+            </span>
+          </div>
+          <ul className="ed-rowlist">
+            {shining.map((f) => {
+              const co = cohortOf(f.student.id)
+              return (
+                <li key={f.student.id}>
+                  <button type="button" className="ed-rowbtn" onClick={() => co && onOpenStudent(co.id, f.student.id)}>
+                    <span className="ed-row-name">{f.student.name}</span>
+                    <span className="ed-row-meta">{f.reason}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      </div>
+
+      {/* Due this week */}
+      <div className="ed-scard mt-4">
+        <div className="ed-scard-head">
+          <span className="ed-eyebrow" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+            <CalendarClock className="w-3.5 h-3.5" /> Due this week
+          </span>
+        </div>
+        {dueSoon.length === 0
+          ? <div className="ed-dim" style={{ fontStyle: 'italic' }}>Nothing due soon.</div>
+          : <ul className="ed-rowlist">
+              {dueSoon.slice(0, 5).map((a) => {
+                const cohort = ws.cohorts.find((c) => c.id === a.cohortId)
+                return (
+                  <li key={a.id}>
+                    <button type="button" className="ed-rowbtn" onClick={() => cohort && onOpenCohort(cohort.id)}>
+                      <span className="ed-row-name">{a.title}</span>
+                      <span className="ed-row-meta">{cohort?.name} · {fmtDate(a.dueAt!)}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>}
+      </div>
+
+      {/* Classes mini-grid */}
+      <div className="flex items-center justify-between mt-10 mb-4">
+        <h2 className="ed-h2">{uni ? 'Your units.' : 'Your classes.'}</h2>
+        <button type="button" className="ed-seeall" onClick={onAllClasses}>See all →</button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {cohorts.slice(0, 3).map((c) => (
+          <CohortBlock key={c.id} ws={ws} cohort={c} onOpen={() => onOpenCohort(c.id)} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   CLASSES
+   ══════════════════════════════════════════════════════════════════ */
+
+function ClassesView({
+  ws, onOpenCohort, onCreate, onCompare, onRestore,
+}: {
+  ws: EdWorkspace
+  onOpenCohort: (id: string) => void
+  onCreate: () => void
+  onCompare: () => void
+  onRestore: (id: string) => void
+}) {
+  const uni = ws.branding.institution === 'university'
+  const noun = uni ? 'unit' : 'class'
+  const nounPlural = uni ? 'units' : 'classes'
+  const active = ws.cohorts.filter((c) => !c.archivedAt)
+  const archived = ws.cohorts.filter((c) => !!c.archivedAt)
+  const [showArchive, setShowArchive] = useState(false)
+
+  return (
+    <div className="ed-page">
+      <div className="pt-10 sm:pt-12 pb-2 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="ed-eyebrow">{uni ? 'Units' : 'Classes'}</div>
+          <h1 className="ed-h1">Every {noun}, one view.</h1>
+          <p className="ed-lede">Open a {noun} for its heatmap, groups, assignments and {uni ? 'course' : 'subject'} fit.</p>
+        </div>
+        <div className="flex gap-2 pb-1">
+          {active.length >= 2 && (
+            <button type="button" className="ed-btn ed-btn-ghost" onClick={onCompare}>
+              <GitCompare className="w-4 h-4" /> Compare
+            </button>
+          )}
+          <button type="button" className="ed-btn ed-btn-primary" onClick={onCreate}>
+            <Plus className="w-4 h-4" /> New {noun}
+          </button>
+        </div>
+      </div>
+
+      {active.length === 0 ? (
+        <div className="ed-empty mt-6">
+          <p>No active {nounPlural} — create one, or restore from the archive below.</p>
+          <button type="button" className="ed-btn ed-btn-primary" onClick={onCreate}><Plus className="w-4 h-4" /> New {noun}</button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+          {active.map((c) => (
+            <CohortBlock key={c.id} ws={ws} cohort={c} onOpen={() => onOpenCohort(c.id)} />
+          ))}
+        </div>
+      )}
+
+      {/* Archive — past classes stay queryable, never deleted */}
+      {archived.length > 0 && (
+        <div className="mt-10">
+          <button type="button" className="ed-arch-toggle" onClick={() => setShowArchive((v) => !v)} aria-expanded={showArchive}>
+            <Archive className="w-3.5 h-3.5" /> Archive · {archived.length} {showArchive ? '▴' : '▾'}
+          </button>
+          {showArchive && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+              {archived.map((c) => {
+                const n = ws.students.filter((s) => c.studentIds.includes(s.id)).length
+                return (
+                  <article key={c.id} className="ed-arch-card corp-card">
+                    <div className="ed-eyebrow" style={{ marginBottom: 5 }}>{c.term} · archived</div>
+                    <h3 className="ed-cblock-name">{c.name}</h3>
+                    <div className="ed-dim" style={{ margin: '8px 0 14px' }}>{n} students · {c.code}</div>
+                    <div className="flex gap-2">
+                      <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onRestore(c.id)}>
+                        <ArchiveRestore className="w-4 h-4" /> Restore
+                      </button>
+                      <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onOpenCohort(c.id)}>
+                        Open
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -496,18 +701,18 @@ function CohortBlock({ ws, cohort, onOpen }: { ws: EdWorkspace; cohort: Cohort; 
   const avg = students.length ? Math.round(students.reduce((n, s) => n + overallScore(s.scores), 0) / students.length) : 0
 
   return (
-    <article className="ed-cblock" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen() }}>
+    <article className="ed-cblock corp-card" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen() }}>
       <div className="ed-cblock-top">
         <div>
-          <div className="ed-cblock-term">{cohort.term}</div>
+          <div className="ed-eyebrow" style={{ marginBottom: 5 }}>{cohort.term}</div>
           <h3 className="ed-cblock-name">{cohort.name}</h3>
         </div>
-        <span className="ed-cblock-code">{cohort.code}</span>
+        <span className="corp-chip">{cohort.code}</span>
       </div>
       <div className="ed-cblock-avatars">
         {students.slice(0, 6).map((s) => <span key={s.id} className="ed-cblock-ava">{s.initials}</span>)}
         {students.length > 6 && <span className="ed-cblock-ava ed-cblock-ava-more">+{students.length - 6}</span>}
-        {students.length === 0 && <span className="ed-cblock-empty">No students yet</span>}
+        {students.length === 0 && <span className="ed-dim" style={{ fontStyle: 'italic' }}>No students yet</span>}
       </div>
       <div className="ed-cblock-foot">
         <span><strong>{students.length}</strong> students</span>
@@ -520,74 +725,11 @@ function CohortBlock({ ws, cohort, onOpen }: { ws: EdWorkspace; cohort: Cohort; 
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   COVER — Notion-style, generative default + school replace
-   ══════════════════════════════════════════════════════════════════ */
-
-function Cover({ branding, onReplace, onRegenerate }: { branding: EdBranding; onReplace: (url: string) => void; onRegenerate: () => void }) {
-  // The permanent default is the Launch rocket artwork at
-  // public/educator-cover.png. If the file isn't in the build yet, we fall
-  // back to the generative mesh so the cover is never broken.
-  const [defaultMissing, setDefaultMissing] = useState(false)
-  const onFile = (file: File | null) => {
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => onReplace(String(reader.result || ''))
-    reader.readAsDataURL(file)
-  }
-  return (
-    <div className="ed-cover">
-      {branding.coverUrl
-        ? <img src={branding.coverUrl} alt="" className="ed-cover-img" />
-        : defaultMissing
-          ? <GenerativeCover accent={branding.accent} />
-          : <img src="/educator-cover.png" alt="" className="ed-cover-img" onError={() => setDefaultMissing(true)} />}
-      <div className="ed-cover-tools">
-        <label className="ed-cover-btn">
-          <Upload className="w-3.5 h-3.5" /> Replace cover
-          <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => onFile(e.target.files?.[0] || null)} />
-        </label>
-        {branding.coverUrl && (
-          <button type="button" className="ed-cover-btn" onClick={onRegenerate}>
-            <ImageIcon className="w-3.5 h-3.5" /> Use default
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/** Soft generative gradient-mesh cover in the school accent. Pure CSS/SVG. */
-export function GenerativeCover({ accent }: { accent: string }) {
-  return (
-    <div className="ed-gencover" aria-hidden>
-      <svg viewBox="0 0 1200 260" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
-        <defs>
-          <radialGradient id="edg1" cx="20%" cy="30%" r="60%">
-            <stop offset="0%" stopColor={accent} stopOpacity="0.55" />
-            <stop offset="100%" stopColor={accent} stopOpacity="0" />
-          </radialGradient>
-          <radialGradient id="edg2" cx="80%" cy="70%" r="55%">
-            <stop offset="0%" stopColor={accent} stopOpacity="0.35" />
-            <stop offset="100%" stopColor={accent} stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <rect width="1200" height="260" fill="#f4f0e6" />
-        <rect width="1200" height="260" fill="url(#edg1)" />
-        <rect width="1200" height="260" fill="url(#edg2)" />
-        {[...Array(7)].map((_, i) => (
-          <circle key={i} cx={120 + i * 165} cy={40 + (i % 3) * 70} r={30 + (i % 4) * 16}
-            fill="none" stroke={accent} strokeOpacity={0.12} strokeWidth="1.5" />
-        ))}
-      </svg>
-    </div>
-  )
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   School settings + create-cohort modal
+   School settings + create-class modal
    ══════════════════════════════════════════════════════════════════ */
 
 function SchoolSettings({ branding, onClose, onChange }: { branding: EdBranding; onClose: () => void; onChange: (b: Partial<EdBranding>) => void }) {
+  const inst = branding.institution === 'university' ? 'University' : 'School'
   const onLogo = (file: File | null) => {
     if (!file) return
     const reader = new FileReader()
@@ -595,13 +737,13 @@ function SchoolSettings({ branding, onClose, onChange }: { branding: EdBranding;
     reader.readAsDataURL(file)
   }
   return (
-    <ModalShell title="School settings" onClose={onClose}>
+    <ModalShell title={`${inst} settings`} onClose={onClose}>
       <div className="ed-field">
-        <label className="ed-label">School name</label>
+        <label className="ed-label">{inst} name</label>
         <input className="ed-input" value={branding.schoolName} onChange={(e) => onChange({ schoolName: e.target.value })} />
       </div>
       <div className="ed-field">
-        <label className="ed-label">School logo</label>
+        <label className="ed-label">{inst} logo</label>
         <div className="ed-logo-row">
           <span className="ed-logo-prev">
             {branding.logoUrl ? <img src={branding.logoUrl} alt="Logo" /> : <ImageIcon className="w-5 h-5" style={{ color: 'var(--lq-ink-3)' }} />}
@@ -610,171 +752,81 @@ function SchoolSettings({ branding, onClose, onChange }: { branding: EdBranding;
           {branding.logoUrl && <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange({ logoUrl: null })}>Remove</button>}
         </div>
       </div>
-      <div className="ed-field">
-        <label className="ed-label">Accent colour</label>
-        <div className="ed-accent-row">
-          {ACCENT_PRESETS.map((a) => (
-            <button
-              key={a.hex}
-              type="button"
-              className={`ed-accent-dot ${branding.accent === a.hex ? 'is-on' : ''}`}
-              style={{ background: a.hex }}
-              title={a.name}
-              aria-label={a.name}
-              onClick={() => onChange({ accent: a.hex })}
-            />
-          ))}
-        </div>
-      </div>
     </ModalShell>
   )
 }
 
-function CreateCohortModal({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string, term: string) => void }) {
+function CreateCohortModal({ uni, onClose, onCreate }: { uni: boolean; onClose: () => void; onCreate: (name: string, term: string) => void }) {
   const [name, setName] = useState('')
   const [term, setTerm] = useState('')
+  const noun = uni ? 'unit' : 'class'
   return (
-    <ModalShell title="New cohort" onClose={onClose}>
+    <ModalShell title={`New ${noun}`} onClose={onClose}>
       <div className="ed-field">
-        <label className="ed-label">Cohort name</label>
-        <input className="ed-input" autoFocus value={name} placeholder="2026 Graduates" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim(), term.trim()) }} />
+        <label className="ed-label">{uni ? 'Unit name' : 'Class name'}</label>
+        <input className="ed-input" autoFocus value={name} placeholder={uni ? 'PROP301 Property Development' : '2026 Graduates'} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim(), term.trim()) }} />
       </div>
       <div className="ed-field">
-        <label className="ed-label">Term / intake <span style={{ color: 'var(--lq-ink-3)' }}>(optional)</span></label>
-        <input className="ed-input" value={term} placeholder="Semester 2 · 2026" onChange={(e) => setTerm(e.target.value)} />
+        <label className="ed-label">{uni ? 'Session' : 'Term / intake'} <span style={{ color: 'var(--lq-ink-3)' }}>(optional)</span></label>
+        <input className="ed-input" value={term} placeholder={uni ? 'Spring session · 2026' : 'Semester 2 · 2026'} onChange={(e) => setTerm(e.target.value)} />
       </div>
       <div className="ed-modal-foot">
         <button type="button" className="ed-btn ed-btn-ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="ed-btn ed-btn-primary" disabled={!name.trim()} onClick={() => onCreate(name.trim(), term.trim())}>Create cohort</button>
+        <button type="button" className="ed-btn ed-btn-primary" disabled={!name.trim()} onClick={() => onCreate(name.trim(), term.trim())}>Create {noun}</button>
       </div>
     </ModalShell>
   )
 }
 
-/* ── styles ───────────────────────────────────────────────────────── */
+/* ── shell-local styles ──────────────────────────────────────────── */
 
-const edStyles = `
-  .ed-root {
-    min-height: 100vh; background: #f6f5f1; color: var(--lq-ink);
-    /* Superpower-inspired register: near-black ink, hairline lines, bone
-       canvas. Scoping these token overrides here restyles every educator
-       rule at once without touching the corporate/student surfaces. */
-    --lq-ink: #131417;
-    --lq-ink-2: #55575e;
-    --lq-ink-3: #8f9197;
-    --lq-line: rgba(19, 20, 23, 0.08);
-    --lq-line-2: rgba(19, 20, 23, 0.16);
-    --ed-accent-soft: color-mix(in oklab, var(--ed-accent), transparent 88%);
-  }
-  .ed-topbar { position: sticky; top: 0; z-index: 40; background: rgba(246, 242, 234, 0.82); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--lq-line); }
-  .ed-topbar-in { max-width: 1180px; margin: 0 auto; padding: 0 24px; height: 62px; display: flex; align-items: center; justify-content: space-between; }
-  .ed-brand { display: flex; align-items: center; gap: 12px; }
-  .ed-logo { height: 30px; max-width: 130px; object-fit: contain; }
-  .ed-brand-sep { width: 1px; height: 20px; background: var(--lq-line-2); }
-  .ed-brand-name { font-family: var(--font-display); font-weight: 500; font-size: 15px; color: var(--lq-ink); }
-  .ed-brand-tag { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ed-accent); border: 1px solid var(--ed-accent); border-radius: 999px; padding: 2px 8px; }
-  .ed-topbar-actions { display: flex; gap: 8px; align-items: center; }
-  .ed-nav { display: flex; gap: 4px; margin-left: 26px; margin-right: auto; }
-  .ed-nav-tab { padding: 8px 16px; border-radius: 999px; border: none; background: none; cursor: pointer; font-family: var(--font-body); font-size: 13.5px; font-weight: 600; color: var(--lq-ink-3); transition: color 140ms ease, background 140ms ease; }
-  .ed-nav-tab:hover { color: var(--lq-ink); }
-  .ed-nav-tab.is-on { background: var(--lq-ink); color: #fff; }
-  .ed-kbd-hint { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--lq-line-2); background: #fff; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--lq-ink-3); cursor: pointer; transition: border-color 140ms ease, color 140ms ease; }
-  .ed-kbd-hint:hover { border-color: var(--ed-accent); color: var(--ed-accent); }
+const shellStyles = `
+  /* Boxless completion donut — a stylistic value, not a card */
+  .ed-kpi-free { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 8px 0; animation: ed-rise 440ms cubic-bezier(0.2,0.7,0.2,1) both; }
 
-  /* Light motion — gentle rise on the main blocks, staggered a touch. */
-  @keyframes ed-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .ed-snap-card, .ed-cblock, .ed-lib-card, .ed-lib-build { animation: ed-rise 440ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-  .ed-snapshot .ed-snap-card:nth-child(2) { animation-delay: 60ms; }
-  .ed-snapshot .ed-snap-card:nth-child(3) { animation-delay: 120ms; }
-  .ed-snapshot .ed-snap-card:nth-child(4) { animation-delay: 180ms; }
-  .ed-cohort-grid .ed-cblock:nth-child(2) { animation-delay: 60ms; }
-  .ed-cohort-grid .ed-cblock:nth-child(3) { animation-delay: 120ms; }
-  .ed-cohort-grid .ed-cblock:nth-child(4) { animation-delay: 180ms; }
+  /* KPI cards — the corporate Overview recipe */
+  .ed-kpi { background: #fff; border: 1px solid var(--lq-line); border-radius: 16px; padding: 20px; transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease; animation: ed-rise 440ms cubic-bezier(0.2,0.7,0.2,1) both; }
+  .ed-kpi:hover { border-color: var(--lq-line-2); box-shadow: 0 10px 30px rgba(14,24,51,0.06); transform: translateY(-2px); }
+  .ed-kpi:nth-child(2) { animation-delay: 60ms; }
+  .ed-kpi:nth-child(3) { animation-delay: 120ms; }
+  .ed-kpi:nth-child(4) { animation-delay: 180ms; }
+  .ed-kpi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; min-height: 28px; }
+  .ed-kpi-stat { font-family: var(--font-display); font-weight: 500; font-size: clamp(28px, 3vw, 44px); letter-spacing: -0.03em; line-height: 1; color: var(--launch-navy); }
+  .ed-kpi-foot { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-3); margin-top: 10px; }
 
-  .ed-btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 17px; border-radius: 999px; font-family: var(--font-body); font-weight: 600; font-size: 13px; border: 1px solid transparent; cursor: pointer; transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
-  .ed-btn-primary { background: var(--lq-ink); color: #fff; }
-  .ed-btn-primary:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.88; }
-  .ed-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
-  .ed-btn-ghost { background: transparent; color: var(--lq-ink-2); border-color: var(--lq-line-2); }
-  .ed-btn-ghost:hover { color: var(--lq-ink); border-color: var(--lq-ink); }
+  /* Divided row lists inside panels */
+  .ed-rowlist { list-style: none; margin: 0; padding: 0; }
+  .ed-rowlist > li { border-top: 1px solid var(--lq-line); }
+  .ed-rowlist > li:first-child { border-top: none; }
+  .ed-rowbtn { display: flex; width: 100%; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 2px; background: none; border: none; text-align: left; cursor: pointer; border-radius: 8px; transition: background 140ms ease; }
+  .ed-rowbtn:hover { background: rgba(10,42,107,0.04); }
+  .ed-row-name { font-size: 13.5px; font-weight: 600; color: var(--lq-ink); }
+  .ed-row-meta { font-size: 11.5px; color: var(--lq-ink-3); text-align: right; }
 
-  .ed-cover { position: relative; height: 248px; overflow: hidden; }
-  .ed-cover-img, .ed-gencover { width: 100%; height: 100%; object-fit: cover; }
-  .ed-gencover { display: block; }
-  .ed-cover-tools { position: absolute; right: 18px; bottom: 14px; display: flex; gap: 8px; opacity: 0; transition: opacity 200ms ease; }
-  .ed-cover:hover .ed-cover-tools { opacity: 1; }
-  .ed-cover:hover .ed-cover-tools { opacity: 1; }
-  .ed-cover-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.92); border: 1px solid var(--lq-line); font-family: var(--font-body); font-size: 12px; font-weight: 600; color: var(--lq-ink); cursor: pointer; }
-  .ed-cover-btn:hover { border-color: var(--ed-accent); }
+  .ed-seeall { background: none; border: none; cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; color: var(--launch-navy); padding: 6px 2px; }
+  .ed-seeall:hover { text-decoration: underline; }
 
-  .ed-page { max-width: 1180px; margin: 0 auto; padding: 0 28px 110px; }
-  .ed-greeting { padding: 46px 0 36px; }
-  .ed-eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ed-accent); font-weight: 600; margin-bottom: 12px; }
-  .ed-h1 { font-family: var(--font-display); font-weight: 450; font-size: clamp(34px, 4.6vw, 58px); letter-spacing: -0.032em; line-height: 1.02; color: var(--lq-ink); max-width: 22ch; margin: 0 0 14px; }
-  .ed-lede { font-size: 16px; color: var(--lq-ink-2); line-height: 1.55; max-width: 60ch; }
-
-  .ed-snapshot { display: grid; grid-template-columns: 1.1fr 1fr 1fr 1fr; gap: 0; margin-bottom: 64px; background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; overflow: hidden; }
-  @media (max-width: 940px) { .ed-snapshot { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 560px) { .ed-snapshot { grid-template-columns: 1fr; } }
-  .ed-snap-card { background: transparent; border: none; border-left: 1px solid var(--lq-line); border-radius: 0; padding: 26px 24px; min-height: 172px; box-shadow: none; }
-  .ed-snap-card:first-child { border-left: none; }
-  .ed-snap-ring { display: flex; align-items: center; gap: 16px; }
-  .ed-snap-num { font-family: var(--font-display); font-weight: 550; font-size: 44px; letter-spacing: -0.03em; color: var(--lq-ink); line-height: 1; }
-  .ed-snap-lbl { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; color: var(--lq-ink-3); margin-top: 8px; }
-  .ed-snap-head { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; color: var(--lq-ink-3); margin-bottom: 12px; }
-  .ed-snap-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
-  .ed-snap-list li { display: flex; flex-direction: column; gap: 1px; }
-  .ed-snap-name { font-size: 13px; font-weight: 600; color: var(--lq-ink); line-height: 1.2; }
-  .ed-snap-reason { font-size: 11px; color: var(--lq-ink-3); }
-  .ed-snap-more { font-family: var(--font-mono); font-size: 10px; color: var(--lq-ink-3); }
-  .ed-snap-empty { font-size: 13px; color: var(--lq-ink-3); font-style: italic; }
-
-  .ed-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 16px; }
-  .ed-h2 { font-family: var(--font-display); font-weight: 500; font-size: clamp(20px, 2.4vw, 28px); letter-spacing: -0.02em; color: var(--lq-ink); }
-
-  .ed-cohort-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 18px; }
-  .ed-cblock { background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; padding: 26px; cursor: pointer; transition: border-color 180ms ease, transform 180ms ease; }
-  .ed-cblock:hover { border-color: var(--lq-ink); transform: translateY(-2px); }
+  /* Class cards */
+  .ed-cblock { padding: 24px; cursor: pointer; animation: ed-rise 440ms cubic-bezier(0.2,0.7,0.2,1) both; }
+  .ed-cblock:hover { border-color: var(--launch-navy); }
+  .ed-cblock:nth-child(2) { animation-delay: 60ms; }
+  .ed-cblock:nth-child(3) { animation-delay: 120ms; }
   .ed-cblock-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
-  .ed-cblock-term { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-3); margin-bottom: 5px; }
   .ed-cblock-name { font-family: var(--font-display); font-weight: 500; font-size: 21px; letter-spacing: -0.015em; color: var(--lq-ink); line-height: 1.15; }
-  .ed-cblock-code { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--ed-accent); background: var(--ed-accent-soft); border-radius: 999px; padding: 4px 9px; white-space: nowrap; }
-  .ed-cblock-avatars { display: flex; align-items: center; gap: -6px; margin-bottom: 16px; min-height: 30px; }
-  .ed-cblock-ava { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 999px; background: var(--ed-accent-soft); color: var(--ed-accent); font-family: var(--font-mono); font-size: 10px; font-weight: 700; border: 2px solid #fff; margin-left: -6px; }
+  .ed-cblock-avatars { display: flex; align-items: center; margin-bottom: 16px; min-height: 30px; }
+  .ed-cblock-ava { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 999px; background: rgba(10,42,107,0.08); color: var(--launch-navy); font-family: var(--font-mono); font-size: 10px; font-weight: 700; border: 2px solid #fff; margin-left: -6px; }
   .ed-cblock-ava:first-child { margin-left: 0; }
   .ed-cblock-ava-more { background: var(--lq-line); color: var(--lq-ink-2); }
-  .ed-cblock-empty { font-size: 12px; color: var(--lq-ink-3); font-style: italic; }
   .ed-cblock-foot { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 14px; border-top: 1px solid var(--lq-line); font-size: 12px; color: var(--lq-ink-3); }
-  .ed-cblock-foot strong { color: var(--lq-ink); font-family: var(--font-mono); }
+  .ed-cblock-foot strong { color: var(--launch-navy); font-family: var(--font-mono); }
 
-  .ed-empty { text-align: center; padding: 48px; background: #fff; border: 1px dashed var(--lq-line-2); border-radius: 20px; }
-  .ed-empty p { color: var(--lq-ink-2); margin-bottom: 16px; font-style: italic; font-family: var(--font-display); font-size: 17px; }
+  /* Classes archive */
+  .ed-arch-toggle { display: inline-flex; align-items: center; gap: 7px; background: none; border: none; cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700; color: var(--lq-ink-3); padding: 6px 0; }
+  .ed-arch-toggle:hover { color: var(--launch-navy); }
+  .ed-arch-card { padding: 22px; opacity: 0.82; }
+  .ed-arch-card:hover { opacity: 1; }
 
-  /* Shared content cards — used by cohort Insights + student view */
-  .ed-scard { background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; padding: 26px; }
-  .ed-scard-accent { border-color: var(--ed-accent); box-shadow: 0 0 0 3px var(--ed-accent-soft); }
-  .ed-scard-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
-  .ed-guide-note { font-size: 12.5px; color: var(--lq-ink-2); line-height: 1.55; margin-bottom: 14px; }
-
-  /* Modals + fields (shared across educator views) */
-  .ed-modal-root { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
-  .ed-modal-backdrop { position: absolute; inset: 0; background: rgba(14, 24, 51, 0.42); backdrop-filter: blur(4px); }
-  .ed-modal-card { position: relative; background: #fff; border-radius: 20px; width: 100%; max-width: 460px; max-height: 86vh; overflow-y: auto; padding: 22px 24px 24px; box-shadow: 0 30px 70px -24px rgba(14,24,51,0.4); }
-  .ed-modal-wide { max-width: 760px; }
-  .ed-modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-  .ed-modal-title { font-family: var(--font-display); font-weight: 500; font-size: 21px; letter-spacing: -0.015em; color: var(--lq-ink); }
-  .ed-modal-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-  .ed-x { appearance: none; background: transparent; border: 1px solid var(--lq-line-2); border-radius: 999px; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; color: var(--lq-ink-2); cursor: pointer; }
-  .ed-x:hover { color: var(--lq-ink); border-color: var(--ed-accent); }
-  .ed-field { margin-bottom: 16px; }
-  .ed-label { display: block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--lq-ink-3); font-weight: 600; margin-bottom: 7px; }
-  .ed-input { width: 100%; border: 1px solid var(--lq-line-2); border-radius: 11px; padding: 11px 14px; font-family: var(--font-body); font-size: 14px; color: var(--lq-ink); background: #fff; }
-  .ed-input:focus { outline: none; border-color: var(--ed-accent); box-shadow: 0 0 0 4px var(--ed-accent-soft); }
   .ed-logo-row { display: flex; align-items: center; gap: 12px; }
-  .ed-logo-prev { width: 52px; height: 52px; border-radius: 12px; border: 1px solid var(--lq-line); display: inline-flex; align-items: center; justify-content: center; overflow: hidden; background: #fbfaf7; flex-shrink: 0; }
+  .ed-logo-prev { width: 52px; height: 52px; border-radius: 12px; border: 1px solid var(--lq-line); display: inline-flex; align-items: center; justify-content: center; overflow: hidden; background: #fbf8f1; flex-shrink: 0; }
   .ed-logo-prev img { width: 100%; height: 100%; object-fit: contain; }
-  .ed-accent-row { display: flex; gap: 10px; }
-  .ed-accent-dot { width: 30px; height: 30px; border-radius: 999px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--lq-line); cursor: pointer; transition: transform 140ms ease, box-shadow 140ms ease; }
-  .ed-accent-dot:hover { transform: scale(1.08); }
-  .ed-accent-dot.is-on { box-shadow: 0 0 0 2px var(--lq-ink); }
 `

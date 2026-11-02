@@ -26,7 +26,7 @@ import type {
   StreamStatus,
 } from '@/lib/play/journeySim'
 import { neglectLine } from '@/lib/play/journeySim'
-import { styleLinesFromCounts } from '@/lib/play/journeyProfile'
+import { styleLinesFromCounts, type RunPick } from '@/lib/play/journeyProfile'
 import type { JourneyRevealData, Scenario } from '@/lib/play/types'
 import { ReportScreen } from '@/components/play/screens'
 import { RevealText } from '@/components/play/parts'
@@ -182,9 +182,20 @@ export function JourneySim({ script, name, passionLabel, scenario, journeyReveal
     setSkillCounts((c) => ({ ...c, [skill]: (c[skill] || 0) + 1 }))
   }
 
+  // Light run log — every pick, in order. Flows out with onAnalytics so
+  // the educator dashboard can replay the student's real decision path.
+  const picksRef = useRef<RunPick[]>([])
+
   const pickOption = (node: SimNode, opt: SimOption) => {
     setCustomText('')
     trackSkill(opt.skill)
+    picksRef.current = [...picksRef.current, {
+      eyebrow: node.eyebrow,
+      prompt: fill(node.prompt),
+      choiceLabel: fill(opt.label),
+      skill: opt.skill,
+      options: node.options.map((o) => fill(o.label)),
+    }]
     echoConsumed.current = false
     setPhase({ kind: 'echo', text: fill(opt.response), skill: opt.skill, effects: opt.effects, to: opt.to })
   }
@@ -194,6 +205,12 @@ export function JourneySim({ script, name, passionLabel, scenario, journeyReveal
     if (!text) return
     setCustomText('')
     trackSkill('Self-direction')
+    picksRef.current = [...picksRef.current, {
+      eyebrow: node ? node.eyebrow : 'Your own move',
+      prompt: node ? fill(node.prompt) : 'Where do you start?',
+      choiceLabel: `In your own words: “${text}”`,
+      skill: 'Self-direction',
+    }]
     echoConsumed.current = false
     if (!node) {
       // Own-words move from the hub — a self-made thread.
@@ -587,7 +604,7 @@ export function JourneySim({ script, name, passionLabel, scenario, journeyReveal
               type="button"
               className="jsim-continue"
               onClick={() => {
-                journeyReveal.onAnalytics?.({ skillCounts, score })
+                journeyReveal.onAnalytics?.({ skillCounts, score, picks: picksRef.current })
                 setPhase({ kind: 'report' })
               }}
             >

@@ -8,6 +8,7 @@ import { LaunchTransition } from '@/components/launch-transition'
 import { ScenarioPlay } from '@/components/play'
 import { pickScenarioForTitle } from '@/lib/play/sampleScenarios'
 import { getCustomScenarioByCode } from '@/lib/scenarioStore'
+import { findCohortByCode, joinClassByCode, loadEducatorWorkspace } from '@/lib/educatorStore'
 import { evaluateAll } from '@/lib/aiEvaluator'
 import { addSubmission } from '@/lib/submissionStore'
 import type { GenericIntakeQuestion } from '@/lib/play/types'
@@ -174,6 +175,11 @@ export function StudentDashboard({ studentName, onLogout, onScenarioModeChange, 
   const [currentScenarioVariant, setCurrentScenarioVariant] = useState<ScenarioVariant>('playful')
   const [codeInput, setCodeInput] = useState('')
   const [codeError, setCodeError] = useState<string | null>(null)
+  // Class-code join flow: a recognised CLASS- code asks for a name, then
+  // enrols this student into the advisor's roster.
+  const [pendingClass, setPendingClass] = useState<{ code: string; cohortName: string } | null>(null)
+  const [joinedClass, setJoinedClass] = useState<{ name: string } | null>(null)
+  const [joinName, setJoinName] = useState('')
   const [currentGenericQuestions, setCurrentGenericQuestions] = useState<GenericIntakeQuestion[] | undefined>(undefined)
   const [currentScenarioCode, setCurrentScenarioCode] = useState<string | null>(null)
   const [jobTitle, setJobTitle] = useState('')
@@ -287,6 +293,16 @@ export function StudentDashboard({ studentName, onLogout, onScenarioModeChange, 
   const handleCodeSubmit = () => {
     const code = codeInput.trim()
     if (!code) return
+    // CLASS- codes join a careers-advisor class (same-browser educator
+    // workspace — the advisor really does see you in their roster).
+    const cohort = findCohortByCode(loadEducatorWorkspace(), code)
+    if (cohort) {
+      setCodeError(null)
+      setJoinedClass(null)
+      setPendingClass({ code, cohortName: cohort.name })
+      setJoinName(studentName && studentName !== 'Student' ? studentName : '')
+      return
+    }
     const stub = getCustomScenarioByCode(code)
     if (!stub) {
       setCodeError('Code not recognised. Check spelling.')
@@ -602,6 +618,48 @@ export function StudentDashboard({ studentName, onLogout, onScenarioModeChange, 
               <p className="code-entry-error" role="alert">{codeError}</p>
             )}
 
+            {/* Class join — name prompt, then confirmation. Same-browser
+                demo glue: the advisor's roster really gains this student. */}
+            {pendingClass && (
+              <div className="code-join" role="dialog" aria-label="Join class">
+                <span className="code-join-line">Joining <strong>{pendingClass.cohortName}</strong> — what&rsquo;s your name?</span>
+                <div className="code-join-row">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={joinName}
+                    onChange={(e) => setJoinName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && joinName.trim()) {
+                        const res = joinClassByCode(pendingClass.code, joinName.trim())
+                        if (res.ok) { setJoinedClass({ name: res.cohortName }); setPendingClass(null); setCodeInput('') }
+                      }
+                    }}
+                    placeholder="Your name"
+                    className="code-entry-input"
+                    aria-label="Your name"
+                  />
+                  <button
+                    type="button"
+                    className="code-entry-btn"
+                    disabled={!joinName.trim()}
+                    onClick={() => {
+                      const res = joinClassByCode(pendingClass.code, joinName.trim())
+                      if (res.ok) { setJoinedClass({ name: res.cohortName }); setPendingClass(null); setCodeInput('') }
+                    }}
+                  >
+                    Confirm →
+                  </button>
+                  <button type="button" className="code-join-cancel" onClick={() => setPendingClass(null)}>Cancel</button>
+                </div>
+              </div>
+            )}
+            {joinedClass && (
+              <p className="code-join-success" role="status">
+                <span className="code-join-check">✓</span> You&rsquo;re in. You&rsquo;ve joined <strong>{joinedClass.name}</strong> — your advisor can now see your progress.
+              </p>
+            )}
+
             {/* Scroll cue — navy ink on cream */}
             <button
               type="button"
@@ -633,7 +691,7 @@ export function StudentDashboard({ studentName, onLogout, onScenarioModeChange, 
                 rgba(246, 242, 234, 0.86) 0%,
                 rgba(246, 242, 234, 0.78) 45%,
                 rgba(246, 242, 234, 0.88) 100%),
-              url('/images/capabilities-mosaic.png');
+              url('./images/capabilities-mosaic.png');
             background-size: cover, cover;
             background-position: center, center;
             background-repeat: no-repeat, no-repeat;
@@ -745,6 +803,46 @@ export function StudentDashboard({ studentName, onLogout, onScenarioModeChange, 
             letter-spacing: 0.14em;
             text-transform: uppercase;
             color: var(--launch-danger);
+          }
+
+          /* Class-join flow */
+          .code-join {
+            margin-top: 14px;
+            display: inline-flex;
+            flex-direction: column;
+            gap: 10px;
+            background: #fff;
+            border: 1px solid rgba(10, 42, 107, 0.18);
+            border-radius: 14px;
+            padding: 14px 18px;
+            text-align: left;
+          }
+          .code-join-line { font-size: 14px; color: var(--lq-ink-2); }
+          .code-join-line strong { color: var(--launch-navy); }
+          .code-join-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+          .code-join-cancel {
+            background: none; border: none; cursor: pointer;
+            font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+            text-transform: uppercase; color: var(--lq-ink-3);
+          }
+          .code-join-cancel:hover { color: var(--lq-ink); }
+          .code-join-success {
+            margin-top: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            background: rgba(27, 158, 143, 0.10);
+            border: 1px solid rgba(27, 158, 143, 0.30);
+            border-radius: 999px;
+            padding: 9px 18px;
+            font-size: 13.5px;
+            color: var(--lq-ink-2);
+          }
+          .code-join-success strong { color: var(--lq-ink); }
+          .code-join-check {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 20px; height: 20px; border-radius: 999px; flex-shrink: 0;
+            background: var(--launch-teal); color: #fff; font-size: 12px; font-weight: 700;
           }
 
           /* Scroll cue — navy ink on the cream band, gently bobbing */

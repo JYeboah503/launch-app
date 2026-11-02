@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type EdWorkspace } from '@/components/educator/types'
-import { Search, Users, GraduationCap, Plus, GitCompare, Settings, PencilRuler } from 'lucide-react'
+import { Search, Users, GraduationCap, Plus, GitCompare, Settings, PencilRuler, LayoutDashboard } from 'lucide-react'
 
 export interface PaletteItem {
   id: string
@@ -16,52 +16,63 @@ export interface PaletteItem {
 }
 
 export function CommandPalette({
-  ws, onClose, onOpenCohort, onOpenStudent, onNewCohort, onCompare, onSettings, onBuild, onLibrary,
+  ws, onClose, onOpenCohort, onOpenStudent, onNewCohort, onCompare, onSettings, onBuild, onLibrary, onOverview, onClasses, onStudents,
 }: {
   ws: EdWorkspace
   onClose: () => void
   onOpenCohort: (id: string) => void
-  onOpenStudent: (cohortId: string, studentId: string) => void
+  onOpenStudent: (cohortId: string | null, studentId: string) => void
   onNewCohort: () => void
   onCompare: () => void
   onSettings: () => void
   onBuild: () => void
   onLibrary: () => void
+  onOverview: () => void
+  onClasses: () => void
+  onStudents: () => void
 }) {
   const [q, setQ] = useState('')
   const [idx, setIdx] = useState(0)
   const listRef = useRef<HTMLDivElement | null>(null)
 
   const items = useMemo<PaletteItem[]>(() => {
+    const uni = ws.branding.institution === 'university'
+    const Noun = uni ? 'Unit' : 'Class'
+    const nouns = uni ? 'units' : 'classes'
     const actions: PaletteItem[] = [
-      { id: 'act-new', label: 'New cohort', hint: 'Action', icon: <Plus className="w-4 h-4" />, run: onNewCohort },
+      { id: 'act-overview', label: 'Overview', hint: 'Page', icon: <LayoutDashboard className="w-4 h-4" />, run: onOverview },
+      { id: 'act-students', label: 'Students', hint: 'Page', icon: <Users className="w-4 h-4" />, run: onStudents },
+      { id: 'act-classes', label: uni ? 'Units' : 'Classes', hint: 'Page', icon: <GraduationCap className="w-4 h-4" />, run: onClasses },
+      { id: 'act-new', label: `New ${Noun.toLowerCase()}`, hint: 'Action', icon: <Plus className="w-4 h-4" />, run: onNewCohort },
       { id: 'act-build', label: 'Create scenario', hint: 'Action', icon: <PencilRuler className="w-4 h-4" />, run: onBuild },
       { id: 'act-lib', label: 'Scenario library', hint: 'Page', icon: <GraduationCap className="w-4 h-4" />, run: onLibrary },
-      { id: 'act-compare', label: 'Compare cohorts', hint: 'Action', icon: <GitCompare className="w-4 h-4" />, run: onCompare },
-      { id: 'act-settings', label: 'School settings', hint: 'Action', icon: <Settings className="w-4 h-4" />, run: onSettings },
+      { id: 'act-compare', label: `Compare ${nouns}`, hint: 'Action', icon: <GitCompare className="w-4 h-4" />, run: onCompare },
+      { id: 'act-settings', label: uni ? 'University settings' : 'School settings', hint: 'Action', icon: <Settings className="w-4 h-4" />, run: onSettings },
     ]
-    const cohorts: PaletteItem[] = ws.cohorts.map((c) => ({
+    const activeCohorts = ws.cohorts.filter((c) => !c.archivedAt)
+    const cohorts: PaletteItem[] = activeCohorts.map((c) => ({
       id: `co-${c.id}`,
       label: c.name,
-      hint: `Cohort · ${c.studentIds.length} students`,
+      hint: `${Noun} · ${c.studentIds.length} students`,
       icon: <GraduationCap className="w-4 h-4" />,
       run: () => onOpenCohort(c.id),
     }))
     const students: PaletteItem[] = ws.students.map((s) => {
-      const cohort = ws.cohorts.find((c) => c.studentIds.includes(s.id))
+      const cohort = activeCohorts.find((c) => c.studentIds.includes(s.id))
+      const yearHint = uni ? (s.yearGroup >= 4 ? 'Honours' : `${s.yearGroup}${['st', 'nd', 'rd'][s.yearGroup - 1] ?? 'th'} year`) : `Year ${s.yearGroup}`
       return {
         id: `st-${s.id}`,
         label: s.name,
-        hint: `Student · ${cohort?.name ?? 'Unassigned'}`,
+        hint: `Student · ${cohort?.name ?? yearHint}`,
         icon: <Users className="w-4 h-4" />,
-        run: cohort ? () => onOpenStudent(cohort.id, s.id) : () => {},
+        run: () => onOpenStudent(cohort?.id ?? null, s.id),
       }
     })
     const all = [...actions, ...cohorts, ...students]
     const needle = q.trim().toLowerCase()
     if (!needle) return [...actions, ...cohorts, ...students.slice(0, 6)]
     return all.filter((i) => i.label.toLowerCase().includes(needle)).slice(0, 12)
-  }, [q, ws, onNewCohort, onBuild, onCompare, onSettings, onOpenCohort, onOpenStudent, onLibrary])
+  }, [q, ws, onNewCohort, onBuild, onCompare, onSettings, onOpenCohort, onOpenStudent, onLibrary, onOverview, onClasses, onStudents])
 
   useEffect(() => { setIdx(0) }, [q])
 
@@ -114,16 +125,16 @@ export function CommandPalette({
       </div>
       <style>{`
         .ed-pal-root { position: fixed; inset: 0; z-index: 120; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 20px 20px; }
-        .ed-pal-backdrop { position: absolute; inset: 0; background: rgba(14, 24, 51, 0.38); backdrop-filter: blur(3px); }
-        .ed-pal { position: relative; width: 100%; max-width: 560px; background: #fff; border-radius: 16px; box-shadow: 0 30px 80px -20px rgba(14,24,51,0.5); overflow: hidden; }
+        .ed-pal-backdrop { position: absolute; inset: 0; background: rgba(10, 42, 107, 0.42); backdrop-filter: blur(4px); }
+        .ed-pal { position: relative; width: 100%; max-width: 560px; background: #fff; border-radius: 16px; box-shadow: 0 24px 60px -18px rgba(10,42,107,0.32); overflow: hidden; }
         .ed-pal-input { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--lq-line); }
         .ed-pal-input input { flex: 1; border: none; outline: none; font-family: var(--font-body); font-size: 15px; color: var(--lq-ink); background: transparent; }
         .ed-pal-input kbd { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; color: var(--lq-ink-3); border: 1px solid var(--lq-line-2); border-radius: 5px; padding: 2px 6px; }
         .ed-pal-list { max-height: 330px; overflow-y: auto; padding: 6px; }
         .ed-pal-item { width: 100%; display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 10px; border: none; background: none; cursor: pointer; text-align: left; }
-        .ed-pal-item.is-on { background: var(--ed-accent-soft); }
+        .ed-pal-item.is-on { background: rgba(10,42,107,0.08); }
         .ed-pal-ico { color: var(--lq-ink-3); display: inline-flex; }
-        .ed-pal-item.is-on .ed-pal-ico { color: var(--ed-accent); }
+        .ed-pal-item.is-on .ed-pal-ico { color: var(--launch-navy); }
         .ed-pal-lbl { flex: 1; font-size: 14px; font-weight: 500; color: var(--lq-ink); }
         .ed-pal-hint { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--lq-ink-3); }
         .ed-pal-none { padding: 22px; text-align: center; font-size: 13px; color: var(--lq-ink-3); font-style: italic; }

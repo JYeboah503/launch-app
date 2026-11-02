@@ -4,39 +4,47 @@
 
 import { useMemo, useRef, useState } from 'react'
 import {
-  CAPABILITIES, CAPABILITY_SHORT, SUBJECT_TEMPLATES, ASSIGNABLE_SCENARIOS,
-  overallScore, cohortAverageScores, completionFor, needsAttention, standouts,
+  CAPABILITIES, CAPABILITY_SHORT, SUBJECT_TEMPLATES, UNI_SUBJECT_TEMPLATES,
+  ASSIGNABLE_SCENARIOS, UNI_ASSIGNABLE_SCENARIOS, ADVISOR_TARGET,
+  overallScore, cohortAverageScores, completionFor, needsAttention, standouts, weakestCapabilities,
   subjectFit, growthSince, makePlaceholderStudent, cohortCsv, downloadText, heatColor, heatTextLight,
   isForStudent, assignmentStateFor,
-  type Cohort, type EdStudent, type EdAssignment, type SubjectProfile, type AssignmentState,
+  type Cohort, type EdStudent, type EdAssignment, type SubjectProfile, type AssignmentState, type StudentGroup,
 } from '@/lib/educator'
 import { ED_NOW, type EdWorkspace, type EdScenario } from '@/components/educator/types'
 import { CapabilityHeatmap, ProgressRing } from '@/components/educator/charts'
 import { InsightsTab } from '@/components/educator/InsightsTab'
 import { ModalShell, fmtDate, dueLabel } from '@/components/educator/ui'
 import {
-  ArrowLeft, Plus, X, Copy, Check, Search, Upload, Download, FileText,
-  Users, ClipboardList, GraduationCap, LayoutGrid, AlertTriangle, Star, Link2,
+  Plus, X, Copy, Check, Search, Upload, Download, FileText, Boxes, Pencil, Trash2, Send,
+  Users, ClipboardList, GraduationCap, LayoutGrid, AlertTriangle, Star, Link2, Archive as ArchiveIcon,
 } from 'lucide-react'
 
-type Tab = 'overview' | 'students' | 'assignments' | 'subjects'
+type Tab = 'overview' | 'students' | 'groups' | 'assignments' | 'subjects'
 
 export function CohortView({
-  ws, cohort, onBack, onOpenStudent, onPatch,
+  ws, cohort, onBack, onOpenStudent, onPatch, onArchive,
 }: {
   ws: EdWorkspace
   cohort: Cohort
   onBack: () => void
   onOpenStudent: (id: string) => void
   onPatch: (p: Partial<EdWorkspace>) => void
+  onArchive: () => void
 }) {
   const [tab, setTab] = useState<Tab>('overview')
+  const uni = ws.branding.institution === 'university'
   const students = useMemo(() => ws.students.filter((s) => cohort.studentIds.includes(s.id)), [ws.students, cohort.studentIds])
   const assignments = useMemo(() => ws.assignments.filter((a) => a.cohortId === cohort.id), [ws.assignments, cohort.id])
   const average = useMemo(() => cohortAverageScores(students), [students])
 
   const [enrolOpen, setEnrolOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
+  // Groups: null = closed · 'new' = create · a group = edit; assignGroup
+  // pre-fills the assign modal with that group's members.
+  const [groupModal, setGroupModal] = useState<StudentGroup | 'new' | null>(null)
+  const [assignGroup, setAssignGroup] = useState<StudentGroup | null>(null)
+  const groups = cohort.groups ?? []
 
   const completion = useMemo(() => {
     let done = 0, total = 0
@@ -63,29 +71,43 @@ export function CohortView({
   }
   const addAssignment = (a: EdAssignment) => onPatch({ assignments: [a, ...ws.assignments] })
   const setSubjects = (subjects: SubjectProfile[]) => onPatch({ subjects })
+  const setGroups = (next: StudentGroup[]) => {
+    onPatch({ cohorts: ws.cohorts.map((c) => c.id === cohort.id ? { ...c, groups: next } : c) })
+  }
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Overview', icon: <LayoutGrid className="w-4 h-4" /> },
     { key: 'students', label: `Students · ${students.length}`, icon: <Users className="w-4 h-4" /> },
+    { key: 'groups', label: `Groups · ${groups.length}`, icon: <Boxes className="w-4 h-4" /> },
     { key: 'assignments', label: `Assignments · ${assignments.length}`, icon: <ClipboardList className="w-4 h-4" /> },
-    { key: 'subjects', label: 'Subject fit', icon: <GraduationCap className="w-4 h-4" /> },
+    { key: 'subjects', label: uni ? 'Course fit' : 'Subject fit', icon: <GraduationCap className="w-4 h-4" /> },
   ]
 
   return (
     <div className="ed-page">
-      <button type="button" className="ed-back" onClick={onBack}><ArrowLeft className="w-4 h-4" /> All cohorts</button>
-
-      {/* Header */}
-      <div className="ed-cohead">
+      {/* Header — the back affordance lives in the top bar now */}
+      <div className="ed-cohead pt-10 sm:pt-12">
         <div>
           <div className="ed-eyebrow">{cohort.term}</div>
-          <h1 className="ed-h1" style={{ marginBottom: 10 }}>{cohort.name}</h1>
+          <h1 className="ed-h1" style={{ marginBottom: 10 }}>{cohort.name}.</h1>
           <div className="ed-cohead-meta">
             <CodePill code={cohort.code} />
             <span className="ed-dim">{students.length} students · {assignments.length} scenarios</span>
           </div>
         </div>
         <div className="ed-cohead-actions">
+          {cohort.archivedAt ? (
+            <span className="corp-chip">Archived</span>
+          ) : (
+            <button
+              type="button"
+              className="ed-btn ed-btn-ghost ed-archive-btn"
+              title={`Move this ${uni ? 'unit' : 'class'} to the archive — restorable any time from the ${uni ? 'Units' : 'Classes'} page`}
+              onClick={onArchive}
+            >
+              <ArchiveIcon className="w-4 h-4" /> Archive {uni ? 'unit' : 'class'}
+            </button>
+          )}
           <ExportMenu
             onCsv={() => downloadText(`${cohort.code.toLowerCase()}-gradebook.csv`, cohortCsv(cohort, students))}
             onPdf={() => window.print()}
@@ -116,7 +138,7 @@ export function CohortView({
                 <div className="ed-kpi ed-kpi-ring"><ProgressRing pct={completion} label="Completed" /><div><div className="ed-kpi-sub">Across all assignments</div></div></div>
                 <div className="ed-kpi"><div className="ed-kpi-num">{avgScore}</div><div className="ed-kpi-lbl">Average overall</div></div>
                 <div className="ed-kpi"><div className="ed-kpi-num" style={{ color: 'var(--launch-danger)' }}>{attention.length}</div><div className="ed-kpi-lbl">Need attention</div></div>
-                <div className="ed-kpi"><div className="ed-kpi-num" style={{ color: 'var(--ed-accent)' }}>{shining.length}</div><div className="ed-kpi-lbl">Shining this week</div></div>
+                <div className="ed-kpi"><div className="ed-kpi-num" style={{ color: 'var(--launch-teal)' }}>{shining.length}</div><div className="ed-kpi-lbl">Shining this week</div></div>
               </div>
 
               <div className="ed-attn-grid">
@@ -128,18 +150,18 @@ export function CohortView({
                     </button>
                   ))}
                 </AttnCard>
-                <AttnCard icon={<Star className="w-4 h-4" style={{ color: 'var(--ed-accent)' }} />} title="Shining this week" empty="—">
+                <AttnCard icon={<Star className="w-4 h-4" style={{ color: 'var(--launch-teal)' }} />} title="Shining this week" empty="—">
                   {shining.map((f) => (
                     <button key={f.student.id} className="ed-attn-row" onClick={() => onOpenStudent(f.student.id)}>
-                      <span className="ed-attn-ini" style={{ background: 'var(--ed-accent-soft)', color: 'var(--ed-accent)' }}>{f.student.initials}</span>
+                      <span className="ed-attn-ini" style={{ background: 'rgba(27,158,143,0.14)', color: 'var(--launch-teal-3)' }}>{f.student.initials}</span>
                       <span className="ed-attn-body"><span className="ed-attn-name">{f.student.name}</span><span className="ed-attn-reason">{f.reason}</span></span>
                     </button>
                   ))}
                 </AttnCard>
               </div>
 
-              <div className="ed-block-head"><h3 className="ed-h3">Capability heatmap</h3><span className="ed-dim">Tap a student to open their guidance</span></div>
-              <CapabilityHeatmap students={students} average={average} onSelectStudent={onOpenStudent} />
+              <div className="ed-block-head"><h3 className="ed-h3">Capability heatmap</h3><span className="ed-dim">Outlined cells sit below the {ADVISOR_TARGET} target · tap a student to open their guidance</span></div>
+              <CapabilityHeatmap students={students} average={average} target={ADVISOR_TARGET} onSelectStudent={onOpenStudent} />
 
               {/* Trends + distributions live here too — one confident page,
                   no guessing which tab holds which chart. */}
@@ -173,6 +195,19 @@ export function CohortView({
             </div>
       )}
 
+      {/* ── GROUPS ── */}
+      {tab === 'groups' && (
+        <GroupsTab
+          groups={groups}
+          students={students}
+          uni={uni}
+          onNew={() => setGroupModal('new')}
+          onEdit={(g) => setGroupModal(g)}
+          onAssign={(g) => setAssignGroup(g)}
+          onDelete={(g) => setGroups(groups.filter((x) => x.id !== g.id))}
+        />
+      )}
+
       {/* ── ASSIGNMENTS ── */}
       {tab === 'assignments' && (
         <>
@@ -188,9 +223,9 @@ export function CohortView({
         </>
       )}
 
-      {/* ── SUBJECT FIT ── */}
+      {/* ── SUBJECT / COURSE FIT ── */}
       {tab === 'subjects' && (
-        <SubjectFitTab students={students} subjects={ws.subjects} setSubjects={setSubjects} onOpenStudent={onOpenStudent} />
+        <SubjectFitTab students={students} subjects={ws.subjects} setSubjects={setSubjects} onOpenStudent={onOpenStudent} uni={uni} />
       )}
 
       {enrolOpen && (
@@ -202,14 +237,30 @@ export function CohortView({
           onImport={(rows) => { enrolImported(rows); setEnrolOpen(false) }}
         />
       )}
-      {assignOpen && (
+      {(assignOpen || assignGroup) && (
         <AssignModal
           cohort={cohort}
           students={students}
-          /* Teacher-authored scenarios lead the list, then the pre-built library. */
-          scenarios={[...ws.customScenarios, ...ASSIGNABLE_SCENARIOS]}
-          onClose={() => setAssignOpen(false)}
-          onAssign={(a) => { addAssignment(a); setAssignOpen(false); setTab('assignments') }}
+          /* Advisor-authored scenarios lead the list, then the mode's library —
+             classroom scenarios for schools, internships for universities. */
+          scenarios={[...ws.customScenarios, ...(uni ? UNI_ASSIGNABLE_SCENARIOS : ASSIGNABLE_SCENARIOS)]}
+          uni={uni}
+          initialPicked={assignGroup?.studentIds}
+          initialLabel={assignGroup?.name}
+          onClose={() => { setAssignOpen(false); setAssignGroup(null) }}
+          onAssign={(a) => { addAssignment(a); setAssignOpen(false); setAssignGroup(null); setTab('assignments') }}
+        />
+      )}
+      {groupModal && (
+        <GroupModal
+          group={groupModal === 'new' ? null : groupModal}
+          students={students}
+          onClose={() => setGroupModal(null)}
+          onSave={(g) => {
+            const exists = groups.some((x) => x.id === g.id)
+            setGroups(exists ? groups.map((x) => (x.id === g.id ? g : x)) : [...groups, g])
+            setGroupModal(null)
+          }}
         />
       )}
       <style>{cohortStyles}</style>
@@ -287,7 +338,10 @@ function AssignmentRow({ a, cohort, students, onOpenStudent }: { a: EdAssignment
     <div className="ed-assign">
       <button type="button" className="ed-assign-head" onClick={() => setOpen((v) => !v)}>
         <div className="ed-assign-title">
-          <span className="ed-assign-name">{a.title}</span>
+          <span className="ed-assign-name">
+            {a.title}
+            {a.groupName && <span className="corp-chip" style={{ marginLeft: 10, verticalAlign: 'middle' }}>Group · {a.groupName}</span>}
+          </span>
           <span className="ed-assign-caps">{a.capabilities.map((c) => CAPABILITY_SHORT[c]).join(' · ')}</span>
         </div>
         <div className="ed-assign-meta">
@@ -325,26 +379,150 @@ function AssignmentRow({ a, cohort, students, onOpenStudent }: { a: EdAssignment
   )
 }
 
+/* ── Groups tab — little groups for targeted practice ─────────────── */
+
+function GroupsTab({
+  groups, students, uni, onNew, onEdit, onAssign, onDelete,
+}: {
+  groups: StudentGroup[]
+  students: EdStudent[]
+  uni: boolean
+  onNew: () => void
+  onEdit: (g: StudentGroup) => void
+  onAssign: (g: StudentGroup) => void
+  onDelete: (g: StudentGroup) => void
+}) {
+  const membersOf = (g: StudentGroup) => students.filter((s) => g.studentIds.includes(s.id))
+  return (
+    <>
+      <div className="ed-block-head">
+        <h3 className="ed-h3">Groups</h3>
+        <span className="ed-dim">Split the {uni ? 'unit' : 'class'} for targeted practice — then assign straight to a group</span>
+      </div>
+      {groups.length === 0 ? (
+        <div className="ed-empty">
+          <div className="ed-eyebrow" style={{ marginBottom: 8 }}>No groups yet</div>
+          <p>Split this {uni ? 'unit' : 'class'} into small groups to target practice.</p>
+          <button type="button" className="ed-btn ed-btn-primary" onClick={onNew}><Plus className="w-4 h-4" /> New group</button>
+        </div>
+      ) : (
+        <div className="ed-grp-grid">
+          {groups.map((g) => {
+            const members = membersOf(g)
+            const avg = members.length ? Math.round(members.reduce((n, s) => n + overallScore(s.scores), 0) / members.length) : 0
+            const weakest = members.length ? weakestCapabilities(cohortAverageScores(members), 1)[0] : null
+            return (
+              <article key={g.id} className="ed-grp">
+                <div className="ed-grp-top">
+                  <h4 className="ed-grp-name">{g.name}</h4>
+                  <div className="ed-grp-actions">
+                    <button type="button" className="ed-grp-ico" title="Edit group" aria-label={`Edit ${g.name}`} onClick={() => onEdit(g)}><Pencil className="w-3.5 h-3.5" /></button>
+                    <button type="button" className="ed-grp-ico is-danger" title="Delete group" aria-label={`Delete ${g.name}`} onClick={() => onDelete(g)}><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
+                <div className="ed-grp-avas">
+                  {members.slice(0, 7).map((s) => <span key={s.id} className="ed-grp-ava" title={s.name}>{s.initials}</span>)}
+                  {members.length > 7 && <span className="ed-grp-ava ed-grp-ava-more">+{members.length - 7}</span>}
+                  {members.length === 0 && <span className="ed-dim" style={{ fontStyle: 'italic' }}>No members yet</span>}
+                </div>
+                <div className="ed-grp-stats">
+                  <span><strong>{members.length}</strong> students</span>
+                  <span><strong>{avg || '—'}</strong> avg</span>
+                  {weakest && <span className="ed-grp-weak">focus · {CAPABILITY_SHORT[weakest.name] ?? weakest.name}</span>}
+                </div>
+                <div className="ed-grp-foot">
+                  <button type="button" className="ed-btn ed-btn-primary" style={{ padding: '7px 14px', fontSize: 13 }} disabled={members.length === 0} onClick={() => onAssign(g)}>
+                    <Send className="w-3.5 h-3.5" /> Assign scenario
+                  </button>
+                </div>
+              </article>
+            )
+          })}
+          <button type="button" className="ed-grp ed-grp-new" onClick={onNew}>
+            <Plus className="w-5 h-5" />
+            <span>New group</span>
+          </button>
+        </div>
+      )}
+    </>
+  )
+}
+
+function GroupModal({
+  group, students, onClose, onSave,
+}: {
+  group: StudentGroup | null
+  students: EdStudent[]
+  onClose: () => void
+  onSave: (g: StudentGroup) => void
+}) {
+  const [name, setName] = useState(group?.name || '')
+  const [picked, setPicked] = useState<Set<string>>(new Set(group?.studentIds || []))
+  return (
+    <ModalShell title={group ? 'Edit group' : 'New group'} onClose={onClose} wide>
+      <div className="ed-field">
+        <label className="ed-label">Group name</label>
+        <input className="ed-input" autoFocus value={name} placeholder="Stretch squad" onChange={(e) => setName(e.target.value)} />
+      </div>
+      <label className="ed-label">Members</label>
+      <div className="ed-pick-grid" style={{ maxHeight: 260 }}>
+        {students.map((s) => {
+          const on = picked.has(s.id)
+          return (
+            <button key={s.id} type="button" className={`ed-pick ${on ? 'is-on' : ''}`} onClick={() => setPicked((prev) => { const n = new Set(prev); n.has(s.id) ? n.delete(s.id) : n.add(s.id); return n })}>
+              <span className={`ed-pick-check ${on ? 'is-on' : ''}`}>{on && <Check className="w-3 h-3" />}</span>
+              <span><span className="ed-pick-name">{s.name}</span><span className="ed-pick-email">{overallScore(s.scores)} overall</span></span>
+            </button>
+          )
+        })}
+      </div>
+      <div className="ed-modal-foot">
+        <span className="ed-dim" style={{ marginRight: 'auto' }}>{picked.size} selected</span>
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={onClose}>Cancel</button>
+        <button
+          type="button"
+          className="ed-btn ed-btn-primary"
+          disabled={!name.trim()}
+          onClick={() => onSave({
+            id: group?.id || `grp-${Date.now().toString(36)}`,
+            name: name.trim(),
+            studentIds: [...picked],
+            createdAt: group?.createdAt || new Date(ED_NOW).toISOString(),
+          })}
+        >
+          Save group
+        </button>
+      </div>
+    </ModalShell>
+  )
+}
+
 /* ── Subject fit tab ──────────────────────────────────────────────── */
 
-function SubjectFitTab({ students, subjects, setSubjects, onOpenStudent }: { students: EdStudent[]; subjects: SubjectProfile[]; setSubjects: (s: SubjectProfile[]) => void; onOpenStudent: (id: string) => void }) {
+function SubjectFitTab({ students, subjects, setSubjects, onOpenStudent, uni }: { students: EdStudent[]; subjects: SubjectProfile[]; setSubjects: (s: SubjectProfile[]) => void; onOpenStudent: (id: string) => void; uni: boolean }) {
   const [editing, setEditing] = useState<SubjectProfile | null>(null)
   const [creating, setCreating] = useState(false)
+  const noun = uni ? 'pathway' : 'subject'
 
   const cohortFit = (subj: SubjectProfile) => students.length
     ? Math.round(students.reduce((n, s) => n + subjectFit(s.scores, subj), 0) / students.length) : 0
 
-  const templatesToAdd = SUBJECT_TEMPLATES.filter((t) => !subjects.some((s) => s.name === t.name))
+  const templates = uni ? UNI_SUBJECT_TEMPLATES : SUBJECT_TEMPLATES
+  const templatesToAdd = templates.filter((t) => !subjects.some((s) => s.name === t.name))
 
   return (
     <>
       <div className="ed-subj-intro">
-        <p>Define the capabilities each subject leans on. Launch then shows how every student measures against those attributes — so you can steer them toward subjects (and away from mismatches) with evidence.</p>
+        <p>
+          {uni
+            ? 'Define the capabilities each career pathway demands — property, consulting, construction and beyond. Launch then shows how every student measures against those attributes, so internship and graduate-program guidance runs on evidence.'
+            : 'Define the capabilities each subject leans on. Launch then shows how every student measures against those attributes — so you can steer them toward subjects (and away from mismatches) with evidence.'}
+        </p>
       </div>
 
       <div className="ed-block-head">
-        <h3 className="ed-h3">Subjects</h3>
-        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => setCreating(true)}><Plus className="w-4 h-4" /> Add subject</button>
+        <h3 className="ed-h3">{uni ? 'Pathways' : 'Subjects'}</h3>
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => setCreating(true)}><Plus className="w-4 h-4" /> Add {noun}</button>
       </div>
       <div className="ed-subj-chips">
         {subjects.map((s) => (
@@ -538,10 +716,20 @@ function EnrolModal({ cohort, poolStudents, onClose, onEnrolExisting, onImport }
 
 /* ── Assign modal ─────────────────────────────────────────────────── */
 
-function AssignModal({ cohort, students, scenarios, onClose, onAssign }: { cohort: Cohort; students: EdStudent[]; scenarios: EdScenario[]; onClose: () => void; onAssign: (a: EdAssignment) => void }) {
+function AssignModal({ cohort, students, scenarios, uni, initialPicked, initialLabel, onClose, onAssign }: {
+  cohort: Cohort
+  students: EdStudent[]
+  scenarios: EdScenario[]
+  uni: boolean
+  /** When set (assigning via a group), starts on specific-students with these preselected. */
+  initialPicked?: string[]
+  initialLabel?: string
+  onClose: () => void
+  onAssign: (a: EdAssignment) => void
+}) {
   const [scenId, setScenId] = useState(scenarios[0].id)
-  const [to, setTo] = useState<'cohort' | 'pick'>('cohort')
-  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [to, setTo] = useState<'cohort' | 'pick'>(initialPicked ? 'pick' : 'cohort')
+  const [picked, setPicked] = useState<Set<string>>(new Set(initialPicked || []))
   const [due, setDue] = useState('')
   const [opens, setOpens] = useState('')
   const scen = scenarios.find((s) => s.id === scenId)!
@@ -554,6 +742,7 @@ function AssignModal({ cohort, students, scenarios, onClose, onAssign }: { cohor
       title: scen.title,
       capabilities: scen.capabilities,
       assignedTo: to === 'cohort' ? 'cohort' : ids,
+      ...(to === 'pick' && initialLabel ? { groupName: initialLabel } : {}),
       dueAt: due ? new Date(due).toISOString() : undefined,
       opensAt: opens ? new Date(opens).toISOString() : undefined,
       createdAt: new Date(ED_NOW).toISOString(),
@@ -578,9 +767,12 @@ function AssignModal({ cohort, students, scenarios, onClose, onAssign }: { cohor
       <div className="ed-assign-config">
         <div className="ed-field">
           <label className="ed-label">Assign to</label>
-          <div className="ed-seg">
-            <button type="button" className={to === 'cohort' ? 'is-on' : ''} onClick={() => setTo('cohort')}>Whole cohort ({cohort.studentIds.length})</button>
-            <button type="button" className={to === 'pick' ? 'is-on' : ''} onClick={() => setTo('pick')}>Specific students</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div className="ed-seg">
+              <button type="button" className={to === 'cohort' ? 'is-on' : ''} onClick={() => setTo('cohort')}>Whole {uni ? 'unit' : 'class'} ({cohort.studentIds.length})</button>
+              <button type="button" className={to === 'pick' ? 'is-on' : ''} onClick={() => setTo('pick')}>Specific students</button>
+            </div>
+            {initialLabel && to === 'pick' && <span className="corp-chip">Group · {initialLabel}</span>}
           </div>
         </div>
         <div className="ed-field">
@@ -620,41 +812,40 @@ function AssignModal({ cohort, students, scenarios, onClose, onAssign }: { cohor
 /* ── styles ───────────────────────────────────────────────────────── */
 
 const cohortStyles = `
-  .ed-back { display: inline-flex; align-items: center; gap: 7px; margin: 36px 0 22px; background: none; border: none; cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-2); }
-  .ed-back:hover { color: var(--ed-accent); }
-  .ed-cohead { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; margin-bottom: 30px; }
+  .ed-cohead { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 30px; }
+  .ed-archive-btn:hover { border-color: var(--launch-danger); color: var(--launch-danger); }
   .ed-cohead-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .ed-cohead-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .ed-dim { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; color: var(--lq-ink-3); }
   .ed-h3 { font-family: var(--font-display); font-weight: 500; font-size: 19px; letter-spacing: -0.015em; color: var(--lq-ink); }
-  .ed-exp-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; width: 210px; background: #fff; border: 1px solid var(--lq-line); border-radius: 14px; padding: 6px; box-shadow: 0 18px 40px -16px rgba(14, 24, 51, 0.28); }
-  .ed-exp-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; border: none; background: none; cursor: pointer; font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--lq-ink); text-align: left; }
-  .ed-exp-item:hover { background: var(--ed-accent-soft); color: var(--ed-accent); }
+  .ed-exp-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; width: 210px; background: #fff; border: 1px solid var(--lq-line); border-radius: 14px; padding: 6px; box-shadow: 0 18px 36px -16px rgba(10,42,107,0.24); }
+  .ed-exp-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: none; background: none; cursor: pointer; font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--lq-ink); text-align: left; }
+  .ed-exp-item:hover { background: rgba(10,42,107,0.05); color: var(--launch-navy); }
   .ed-codepill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--lq-line-2); cursor: pointer; color: var(--lq-ink-3); }
-  .ed-codepill:hover { border-color: var(--ed-accent); }
+  .ed-codepill:hover { border-color: var(--launch-navy); }
   .ed-codepill-lbl { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; }
-  .ed-codepill-code { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--ed-accent); }
+  .ed-codepill-code { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--launch-navy); }
 
   .ed-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--lq-line); margin-bottom: 32px; overflow-x: auto; }
   .ed-tab { display: inline-flex; align-items: center; gap: 7px; padding: 12px 16px; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--lq-ink-3); white-space: nowrap; }
   .ed-tab:hover { color: var(--lq-ink); }
-  .ed-tab.is-on { color: var(--lq-ink); border-bottom-color: var(--lq-ink); }
+  .ed-tab.is-on { color: var(--launch-navy); border-bottom-color: var(--launch-navy); }
 
-  .ed-kpis { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 0; margin-bottom: 36px; background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; overflow: hidden; }
+  .ed-kpis { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 0; margin-bottom: 36px; background: #fff; border: 1px solid var(--lq-line); border-radius: 16px; overflow: hidden; }
   @media (max-width: 820px) { .ed-kpis { grid-template-columns: 1fr 1fr; } }
   .ed-kpi { background: transparent; border: none; border-left: 1px solid var(--lq-line); border-radius: 0; padding: 26px 24px; box-shadow: none; }
   .ed-kpi:first-child { border-left: none; }
   .ed-kpi-ring { display: flex; align-items: center; gap: 16px; }
-  .ed-kpi-num { font-family: var(--font-display); font-weight: 550; font-size: 42px; letter-spacing: -0.03em; color: var(--lq-ink); line-height: 1; }
+  .ed-kpi-num { font-family: var(--font-display); font-weight: 500; font-size: 42px; letter-spacing: -0.03em; color: var(--launch-navy); line-height: 1; }
   .ed-kpi-lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-3); margin-top: 8px; }
   .ed-kpi-sub { font-size: 12px; color: var(--lq-ink-3); max-width: 20ch; }
 
   .ed-attn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 38px; }
   @media (max-width: 720px) { .ed-attn-grid { grid-template-columns: 1fr; } }
-  .ed-attn-card { background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; padding: 22px 24px; }
+  .ed-attn-card { background: #fff; border: 1px solid var(--lq-line); border-radius: 16px; padding: 22px 24px; }
   .ed-attn-rows { display: flex; flex-direction: column; gap: 2px; }
   .ed-attn-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; background: none; border: none; cursor: pointer; text-align: left; transition: background 120ms ease; }
-  .ed-attn-row:hover { background: rgba(27,158,143,0.05); }
+  .ed-attn-row:hover { background: rgba(10,42,107,0.04); }
   .ed-attn-ini { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 999px; background: var(--lq-line); color: var(--lq-ink-2); font-family: var(--font-mono); font-size: 10px; font-weight: 700; flex-shrink: 0; }
   .ed-attn-body { display: flex; flex-direction: column; }
   .ed-attn-name { font-size: 13px; font-weight: 600; color: var(--lq-ink); }
@@ -663,8 +854,8 @@ const cohortStyles = `
   .ed-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
 
   .ed-roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-  .ed-rcard { text-align: left; background: #fff; border: 1px solid var(--lq-line); border-radius: 18px; padding: 20px; cursor: pointer; transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
-  .ed-rcard:hover { border-color: var(--ed-accent); transform: translateY(-2px); box-shadow: 0 12px 26px -16px var(--ed-accent); }
+  .ed-rcard { text-align: left; background: #fff; border: 1px solid var(--lq-line); border-radius: 16px; padding: 20px; cursor: pointer; transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
+  .ed-rcard:hover { border-color: var(--launch-navy); transform: translateY(-2px); box-shadow: 0 10px 30px rgba(14,24,51,0.06); }
   .ed-rcard-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
   .ed-rcard-ini { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; background: var(--ed-accent-soft); color: var(--ed-accent); font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
   .ed-rcard-x { color: var(--lq-ink-3); padding: 4px; border-radius: 6px; }
@@ -673,7 +864,7 @@ const cohortStyles = `
   .ed-rcard-email { font-size: 11px; color: var(--lq-ink-3); margin-top: 2px; margin-bottom: 12px; }
   .ed-rcard-foot { display: flex; justify-content: space-between; align-items: baseline; padding-top: 10px; border-top: 1px solid var(--lq-line); font-size: 12px; color: var(--lq-ink-3); }
   .ed-rcard-foot strong { font-family: var(--font-mono); color: var(--lq-ink); }
-  .ed-rcard-growth { color: var(--ed-accent); font-family: var(--font-mono); font-size: 11px; }
+  .ed-rcard-growth { color: var(--launch-teal); font-family: var(--font-mono); font-size: 11px; }
 
   .ed-assign-list { display: flex; flex-direction: column; gap: 10px; }
   .ed-assign { background: #fff; border: 1px solid var(--lq-line); border-radius: 14px; overflow: hidden; }
@@ -697,9 +888,9 @@ const cohortStyles = `
   .ed-assign-sscore { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--lq-ink-2); }
   .ed-state { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
   .st-ns { background: var(--lq-line); color: var(--lq-ink-3); }
-  .st-ip { background: rgba(201,130,46,0.14); color: #a8641f; }
-  .st-cp { background: var(--ed-accent-soft); color: var(--ed-accent); }
-  .st-rv { background: rgba(10,42,107,0.10); color: var(--launch-navy); }
+  .st-ip { background: rgba(10,42,107,0.08); color: var(--launch-navy); }
+  .st-cp { background: rgba(27,158,143,0.14); color: var(--launch-teal-3); }
+  .st-rv { background: rgba(10,42,107,0.14); color: var(--launch-navy); }
 
   .ed-subj-intro p { font-size: 14px; color: var(--lq-ink-2); line-height: 1.6; max-width: 72ch; margin-bottom: 24px; }
   .ed-subj-chips { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -744,9 +935,30 @@ const cohortStyles = `
   .ed-scen-meta { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.04em; color: var(--lq-ink-3); }
   .ed-assign-config { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
   @media (max-width: 620px) { .ed-assign-config { grid-template-columns: 1fr; } }
-  .ed-seg { display: inline-flex; background: #f2efe8; border-radius: 999px; padding: 3px; }
+  .ed-seg { display: inline-flex; background: rgba(10,42,107,0.04); border: 1px solid var(--lq-line-2); border-radius: 999px; padding: 3px; }
   .ed-seg button { padding: 7px 12px; border-radius: 999px; border: none; background: none; cursor: pointer; font-family: var(--font-body); font-size: 12px; font-weight: 600; color: var(--lq-ink-3); white-space: nowrap; }
-  .ed-seg button.is-on { background: #fff; color: var(--ed-accent); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .ed-seg button.is-on { background: var(--launch-navy); color: var(--lq-cream); }
+
+  /* Groups */
+  .ed-grp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .ed-grp { background: #fff; border: 1px solid var(--lq-line); border-radius: 16px; padding: 20px; transition: border-color 200ms ease, box-shadow 200ms ease; animation: ed-rise 440ms cubic-bezier(0.2,0.7,0.2,1) both; }
+  .ed-grp:hover { border-color: var(--lq-line-2); box-shadow: 0 10px 30px rgba(14,24,51,0.06); }
+  .ed-grp-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .ed-grp-name { font-family: var(--font-display); font-weight: 500; font-size: 18px; letter-spacing: -0.015em; color: var(--lq-ink); }
+  .ed-grp-actions { display: flex; gap: 4px; }
+  .ed-grp-ico { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--lq-line); background: #fff; color: var(--lq-ink-3); cursor: pointer; }
+  .ed-grp-ico:hover { border-color: var(--launch-navy); color: var(--launch-navy); }
+  .ed-grp-ico.is-danger:hover { border-color: var(--launch-danger); color: var(--launch-danger); background: var(--launch-danger-soft); }
+  .ed-grp-avas { display: flex; align-items: center; min-height: 28px; margin-bottom: 12px; }
+  .ed-grp-ava { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 999px; background: rgba(10,42,107,0.08); color: var(--launch-navy); font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; border: 2px solid #fff; margin-left: -6px; }
+  .ed-grp-ava:first-child { margin-left: 0; }
+  .ed-grp-ava-more { background: var(--lq-line); color: var(--lq-ink-2); }
+  .ed-grp-stats { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; font-size: 12px; color: var(--lq-ink-3); padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--lq-line); }
+  .ed-grp-stats strong { font-family: var(--font-mono); color: var(--launch-navy); }
+  .ed-grp-weak { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--launch-danger); }
+  .ed-grp-foot { display: flex; justify-content: flex-end; }
+  .ed-grp-new { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 160px; border: 1px dashed var(--lq-line-2); background: transparent; cursor: pointer; color: var(--lq-ink-3); font-family: var(--font-body); font-weight: 600; font-size: 14px; }
+  .ed-grp-new:hover { border-color: var(--launch-navy); color: var(--launch-navy); box-shadow: none; }
 
   .ed-emoji-row { display: flex; flex-wrap: wrap; gap: 6px; }
   .ed-emoji { width: 38px; height: 38px; border-radius: 10px; border: 1.5px solid var(--lq-line); background: #fff; font-size: 18px; cursor: pointer; }

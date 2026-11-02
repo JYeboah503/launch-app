@@ -12,7 +12,7 @@
 
 import { useState } from 'react'
 import {
-  CAPABILITY_SHORT, ASSIGNABLE_SCENARIOS,
+  CAPABILITY_SHORT, ASSIGNABLE_SCENARIOS, UNI_ASSIGNABLE_SCENARIOS,
   type Cohort, type EdAssignment,
 } from '@/lib/educator'
 import { ED_NOW, type EdWorkspace, type EdScenario } from '@/components/educator/types'
@@ -30,9 +30,10 @@ export function ScenarioLibrary({
   const [preview, setPreview] = useState<EdScenario | null>(null)
   const [assigning, setAssigning] = useState<EdScenario | null>(null)
 
+  const uni = ws.branding.institution === 'university'
   const scenarios: EdScenario[] = [
     ...ws.customScenarios,
-    ...ASSIGNABLE_SCENARIOS.map((s) => ({ ...s })),
+    ...(uni ? UNI_ASSIGNABLE_SCENARIOS : ASSIGNABLE_SCENARIOS).map((s) => ({ ...s })),
   ]
 
   return (
@@ -40,7 +41,7 @@ export function ScenarioLibrary({
       <div className="ed-section-head" style={{ marginTop: 44 }}>
         <div>
           <h2 className="ed-h2">Scenario library</h2>
-          <p className="ed-lib-sub">What your students can play.</p>
+          <p className="ed-lib-sub">{uni ? 'Internship and graduate scenarios your students can play.' : 'What your students can play.'}</p>
         </div>
         <button type="button" className="ed-btn ed-btn-primary" onClick={onNewScenario}>
           <PencilRuler className="w-4 h-4" /> Create scenario
@@ -87,7 +88,8 @@ export function ScenarioLibrary({
 function ArtTile({ seed }: { seed: string }) {
   let h = 0
   for (let i = 0; i < seed.length; i++) h = ((h << 5) - h) + seed.charCodeAt(i) | 0
-  const hues = [172, 208, 24, 262, 340, 96]
+  // Navy-family hues, low saturation — tonal variety inside one register.
+  const hues = [222, 215, 230, 208]
   const h1 = hues[Math.abs(h) % hues.length]
   const h2 = hues[Math.abs(h >> 3) % hues.length]
   const angle = 115 + (Math.abs(h >> 6) % 130)
@@ -95,7 +97,7 @@ function ArtTile({ seed }: { seed: string }) {
     <span
       className="ed-lib-art"
       aria-hidden
-      style={{ background: `linear-gradient(${angle}deg, hsl(${h1} 48% 62%), hsl(${h2} 42% 42%))` }}
+      style={{ background: `linear-gradient(${angle}deg, hsl(${h1} 36% 58%), hsl(${h2} 42% 30%))` }}
     />
   )
 }
@@ -125,10 +127,10 @@ function PreviewModal({ scenario, onClose, onAssign }: { scenario: EdScenario; o
       <style>{`
         .ed-prev-blurb { font-family: var(--font-display); font-style: italic; font-size: 17px; color: var(--lq-ink-2); line-height: 1.5; margin-bottom: 18px; }
         .ed-prev-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
-        .ed-prev-meta > div { background: #fbfaf7; border: 1px solid var(--lq-line); border-radius: 12px; padding: 12px; text-align: center; }
-        .ed-prev-num { display: block; font-family: var(--font-mono); font-weight: 700; font-size: 22px; color: var(--ed-accent); }
+        .ed-prev-meta > div { background: #fbf8f1; border: 1px solid var(--lq-line); border-radius: 12px; padding: 12px; text-align: center; }
+        .ed-prev-num { display: block; font-family: var(--font-mono); font-weight: 700; font-size: 22px; color: var(--launch-navy); }
         .ed-prev-lbl { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lq-ink-3); }
-        .ed-prev-how { background: var(--ed-accent-soft); border-radius: 12px; padding: 14px 16px; margin-top: 4px; }
+        .ed-prev-how { background: rgba(10,42,107,0.06); border: 1px solid rgba(10,42,107,0.18); border-radius: 12px; padding: 14px 16px; margin-top: 4px; }
         .ed-prev-how p { font-size: 13px; color: var(--lq-ink-2); line-height: 1.6; }
       `}</style>
     </ModalShell>
@@ -162,7 +164,7 @@ function AssignToCohort({ scenario, cohorts, onClose, onAssign }: { scenario: Ed
     <ModalShell title={`Assign ${scenario.title}`} onClose={onClose}>
       {done ? (
         <div style={{ textAlign: 'center', padding: '18px 0' }}>
-          <div style={{ fontSize: 34, marginBottom: 10 }}><Check className="w-9 h-9" style={{ display: 'inline', color: 'var(--ed-accent)' }} /></div>
+          <div style={{ fontSize: 34, marginBottom: 10 }}><Check className="w-9 h-9" style={{ display: 'inline', color: 'var(--launch-teal)' }} /></div>
           <p style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 16, color: 'var(--lq-ink-2)' }}>
             Assigned to {cohort?.name}.
           </p>
@@ -196,11 +198,11 @@ function AssignToCohort({ scenario, cohorts, onClose, onAssign }: { scenario: Ed
 const libStyles = `
   .ed-lib-sub { font-size: 13.5px; color: var(--lq-ink-2); margin-top: 6px; max-width: 64ch; line-height: 1.55; }
   .ed-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-  .ed-lib-card { background: #fff; border: 1px solid var(--lq-line); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; transition: border-color 180ms ease, transform 180ms ease; }
-  .ed-lib-card:hover { border-color: var(--lq-ink); transform: translateY(-2px); }
+  .ed-lib-card { background: #fff; border: 1px solid var(--lq-line); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease; animation: ed-rise 440ms cubic-bezier(0.2,0.7,0.2,1) both; }
+  .ed-lib-card:hover { border-color: var(--launch-navy); transform: translateY(-2px); box-shadow: 0 10px 30px rgba(14,24,51,0.06); }
   .ed-lib-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .ed-lib-art { display: inline-block; width: 40px; height: 40px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); }
-  .ed-lib-yours { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ed-accent); background: var(--ed-accent-soft); border-radius: 999px; padding: 3px 9px; }
+  .ed-lib-yours { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--launch-navy); background: rgba(10,42,107,0.06); border-radius: 999px; padding: 3px 9px; }
   .ed-lib-name { font-family: var(--font-display); font-weight: 500; font-size: 18px; letter-spacing: -0.012em; color: var(--lq-ink); margin-bottom: 6px; }
   .ed-lib-blurb { font-size: 12.5px; color: var(--lq-ink-2); line-height: 1.55; margin-bottom: 12px; flex: 1; }
   .ed-lib-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
@@ -208,7 +210,7 @@ const libStyles = `
   .ed-lib-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-top: 12px; border-top: 1px solid var(--lq-line); }
   .ed-lib-actions { display: flex; gap: 6px; }
   .ed-lib-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--lq-line-2); background: #fff; font-size: 11.5px; font-weight: 600; color: var(--lq-ink-2); cursor: pointer; transition: border-color 140ms ease, color 140ms ease; }
-  .ed-lib-btn:hover { border-color: var(--lq-ink); color: var(--lq-ink); }
-  .ed-lib-btn-primary { background: var(--lq-ink); border-color: var(--lq-ink); color: #fff; }
-  .ed-lib-btn-primary:hover { color: #fff; opacity: 0.92; }
+  .ed-lib-btn:hover { border-color: var(--launch-navy); color: var(--lq-ink); }
+  .ed-lib-btn-primary { background: var(--launch-navy); border-color: var(--launch-navy); color: var(--lq-cream); }
+  .ed-lib-btn-primary:hover { color: var(--lq-cream); opacity: 0.92; }
 `

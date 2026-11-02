@@ -69,11 +69,66 @@ export interface GrowthSnapshot {
   scores: CapabilityScores
 }
 
+/** SAM = the student access section's three entry modes: a pre-existing
+ *  journey, a guided start, or a create-your-own adventure. */
+export type SamOrigin = 'journey' | 'guided' | 'own'
+
+export const SAM_LABEL: Record<SamOrigin, string> = {
+  journey: 'Journey',
+  guided: 'Guided start',
+  own: 'Own adventure',
+}
+
+/** One decision inside a completed scenario — drives the decision-path view. */
+export interface DecisionStep {
+  prompt: string
+  options: { id: string; label: string; picked: boolean }[]
+  /** Capability this step tested. */
+  skill?: string
+}
+
+/** A scenario/journey a student has completed, with how they got in (SAM
+ *  origin) and the path they took through it. */
+export interface ScenarioRun {
+  id: string
+  title: string
+  emoji?: string
+  origin: SamOrigin
+  completedAt: string // ISO
+  score?: number
+  capabilities: string[]
+  decisions: DecisionStep[]
+}
+
+/** A small group inside a cohort — for targeted practice. */
+export interface StudentGroup {
+  id: string
+  name: string
+  studentIds: string[]
+  createdAt: string
+}
+
+export const YEAR_GROUPS = [12, 11, 10] as const
+
+/** University years of study — 4 = Honours. */
+export const UNI_YEARS = [1, 2, 3, 4] as const
+export const UNI_YEAR_LABEL: Record<number, string> = { 1: '1st year', 2: '2nd year', 3: '3rd year', 4: 'Honours' }
+
 export interface EdStudent {
   id: string
   name: string
   email: string
   initials: string
+  /** School: year group (10/11/12). University: year of study (1/2/3, 4 = Honours). */
+  yearGroup: number
+  /** University only — the degree, e.g. "B. Commerce (Property)". */
+  course?: string
+  /** University only — stated career interest, e.g. "Project Management". */
+  careerInterest?: string
+  /** Total time on Launch, in hours (one decimal). */
+  totalUseHours: number
+  parentName: string
+  parentEmail: string
   /** Current capability scores (0..100). */
   scores: CapabilityScores
   /** Time-ordered snapshots (oldest → newest); last === current. */
@@ -83,6 +138,12 @@ export interface EdStudent {
   /** Earned badge ids (see BADGES). */
   badges: string[]
   lastActive: string // ISO
+  /** Completed scenarios with SAM origin + decision path. NOT persisted —
+   *  regenerated deterministically on load (keeps localStorage small). */
+  scenarioHistory?: ScenarioRun[]
+  /** True for the real same-browser student who joined via class code —
+   *  their drill-in reads live localStorage data instead of seeded numbers. */
+  isLive?: boolean
 }
 
 export type AssignmentState = 'not-started' | 'in-progress' | 'completed' | 'reviewed'
@@ -102,6 +163,8 @@ export interface EdAssignment {
   capabilities: string[]
   /** 'cohort' = everyone; otherwise explicit studentIds. */
   assignedTo: 'cohort' | string[]
+  /** Display tag when the assignment was created via a group. */
+  groupName?: string
   dueAt?: string
   opensAt?: string // scheduled release
   createdAt: string
@@ -125,8 +188,16 @@ export interface Cohort {
   /** Optional school-uploaded cover (data URL). Falls back to generative. */
   coverUrl?: string
   studentIds: string[]
+  /** Small groups inside the class, for targeted practice. */
+  groups?: StudentGroup[]
+  /** Set when the advisor archives the class — hidden from active views,
+   *  restorable from the Classes page's archive. */
+  archivedAt?: string
   createdAt: string
 }
+
+/** Advisor-set target score — shared by the heatmap outline + radar ring. */
+export const ADVISOR_TARGET = 70
 
 export interface Badge {
   id: string
@@ -393,7 +464,7 @@ export function standouts(students: EdStudent[], n = 4): StandoutFlag[] {
    Deterministic seed (mulberry32 PRNG — stable across reloads + SSR)
    ──────────────────────────────────────────────────────────────────── */
 
-function mulberry32(seed: number) {
+export function mulberry32(seed: number) {
   let a = seed >>> 0
   return () => {
     a |= 0; a = (a + 0x6d2b79f5) | 0
@@ -403,13 +474,31 @@ function mulberry32(seed: number) {
   }
 }
 
-const FIRST = ['Ava', 'Noah', 'Mia', 'Leo', 'Zara', 'Kai', 'Ruby', 'Finn', 'Isla', 'Omar', 'Chloe', 'Ravi', 'Freya', 'Ethan', 'Amara', 'Jack', 'Priya', 'Luca', 'Sena', 'Hana', 'Marcus', 'Tara', 'Eli', 'Nadia', 'Cody', 'Bella', 'Arjun', 'Grace']
-const LAST = ['Nguyen', 'Okafor', 'Singh', 'Rossi', 'Haddad', 'Chen', 'Murphy', 'Kaur', 'Silva', 'Ahmed', 'Walsh', 'Patel', 'Kim', 'Novak', 'Diallo', 'Costa', 'Reyes', 'Fischer', 'Yılmaz', 'Brooks']
+const FIRST = ['Ava', 'Noah', 'Mia', 'Leo', 'Zara', 'Kai', 'Ruby', 'Finn', 'Isla', 'Omar', 'Chloe', 'Ravi', 'Freya', 'Ethan', 'Amara', 'Jack', 'Priya', 'Luca', 'Sena', 'Hana', 'Marcus', 'Tara', 'Eli', 'Nadia', 'Cody', 'Bella', 'Arjun', 'Grace', 'Theo', 'Willow', 'Hugo', 'Matilda', 'Oscar', 'Evie', 'Felix', 'Harper']
+const LAST = ['Nguyen', 'Okafor', 'Singh', 'Rossi', 'Haddad', 'Chen', 'Murphy', 'Kaur', 'Silva', 'Ahmed', 'Walsh', 'Patel', 'Kim', 'Novak', 'Diallo', 'Costa', 'Reyes', 'Fischer', 'Yılmaz', 'Brooks', 'Tran', 'Papadopoulos', 'Ricci', 'Dubois', 'Mensah', 'Olsen', 'Barnes', 'Khan']
+const PARENT_FIRST = ['Sam', 'Jess', 'Michael', 'Linh', 'Amira', 'David', 'Maria', 'Tom', 'Grace', 'Peter', 'Anita', 'Rob', 'Helen', 'Daniel', 'Yuki', 'Claire']
 
-function makeStudent(rand: () => number, seq: number): EdStudent {
+/** University degrees + the career interests students declare. */
+export const UNI_COURSES = [
+  'B. Commerce (Property)', 'B. Commerce (Finance)', 'B. Business (Management)',
+  'B. Engineering (Civil)', 'B. Construction Management', 'B. Laws',
+  'B. Communications (Marketing)', 'B. Computer Science', 'B. Economics', 'B. Nursing',
+]
+export const UNI_INTERESTS = [
+  'Property & Funds Management', 'Project Management', 'Consulting', 'Investment Banking',
+  'Marketing & Brand', 'Software Engineering', 'Construction', 'Public Policy',
+  'Health Management', 'Entrepreneurship',
+]
+
+function makeStudent(rand: () => number, seq: number, yearGroup: number, uni = false): EdStudent {
   const first = FIRST[Math.floor(rand() * FIRST.length)]
   const last = LAST[Math.floor(rand() * LAST.length)]
   const name = `${first} ${last}`
+  const parentFirst = PARENT_FIRST[Math.floor(rand() * PARENT_FIRST.length)]
+  // Course and interest correlate (same index band) — property students
+  // want property careers more often than not.
+  const courseIdx = Math.floor(rand() * UNI_COURSES.length)
+  const interestIdx = rand() < 0.6 ? courseIdx : Math.floor(rand() * UNI_INTERESTS.length)
   // Give each student a "shape": a couple of strong capabilities, a couple weak.
   const base = 46 + rand() * 22
   const scores: CapabilityScores = {}
@@ -443,17 +532,74 @@ function makeStudent(rand: () => number, seq: number): EdStudent {
   if (streak >= 3) badges.push('consistent')
 
   const daysAgo = Math.floor(rand() * rand() * 16) // weighted recent, some stale
+  // scenarioHistory is generated lazily when a profile opens (deterministic
+  // per id) — keeps a 2,500-student university roster instant to build.
+
+  const lastClean = last.toLowerCase().replace(/[^a-z]/g, '')
   return {
-    id: `ed${seq}`,
+    id: `${uni ? 'uni' : 'ed'}${seq}`,
     name,
-    email: `${first.toLowerCase()}.${last.toLowerCase().replace(/[^a-z]/g, '')}@student.edu`,
+    email: `${first.toLowerCase()}.${lastClean}${seq}@${uni ? 'uni.edu' : 'student.edu'}`,
     initials: (first[0] + last[0]).toUpperCase(),
+    yearGroup,
+    ...(uni ? { course: UNI_COURSES[courseIdx], careerInterest: UNI_INTERESTS[interestIdx] } : {}),
+    // Skewed towards a few hours; the keen ones rack up 30+.
+    totalUseHours: Math.round((2 + rand() * rand() * 38) * 10) / 10,
+    parentName: uni ? '' : `${parentFirst} ${last}`,
+    parentEmail: uni ? '' : `${parentFirst.toLowerCase()}.${lastClean}@familymail.com`,
     scores,
     history,
     streakWeeks: streak,
     badges,
     lastActive: new Date(Date.UTC(2026, 6, 10) - daysAgo * 864e5).toISOString(),
   }
+}
+
+/** 1–3 completed scenarios with a SAM origin and a decision path. Strong
+ *  students pick the strongest option (index 0) more often — plausible
+ *  paths. Shared by the seed and the old-save backfill (PRNG-driven so
+ *  both stay deterministic). */
+export function generateScenarioHistory(
+  rand: () => number,
+  scores: CapabilityScores,
+  seqKey: string,
+  bank: typeof DECISION_BANK = DECISION_BANK,
+  scenarios: typeof ASSIGNABLE_SCENARIOS = ASSIGNABLE_SCENARIOS,
+): ScenarioRun[] {
+  const scenIds = Object.keys(bank)
+  const nRuns = 1 + Math.floor(rand() * 3)
+  const out: ScenarioRun[] = []
+  const used = new Set<number>()
+  for (let r = 0; r < nRuns; r++) {
+    let si = Math.floor(rand() * scenIds.length)
+    if (used.has(si)) si = (si + 1 + Math.floor(rand() * (scenIds.length - 1))) % scenIds.length
+    used.add(si)
+    const scen = scenarios.find((s) => s.id === scenIds[si])!
+    const o = rand()
+    const origin: SamOrigin = o < 0.5 ? 'journey' : o < 0.8 ? 'guided' : 'own'
+    const decisions: DecisionStep[] = bank[scen.id].map((step, di) => {
+      const skillScore = scores[step.skill] ?? 55
+      const pickedIdx = rand() * 100 < skillScore ? 0 : rand() < 0.6 ? 1 : 2
+      return {
+        prompt: step.prompt,
+        skill: step.skill,
+        options: step.options.map((label, oi) => ({ id: `${scen.id}-${di}-${oi}`, label, picked: oi === pickedIdx })),
+      }
+    })
+    const pickedStrong = decisions.filter((d) => d.options[0].picked).length
+    out.push({
+      id: `run-${seqKey}-${r}`,
+      title: scen.title,
+      emoji: scen.emoji,
+      origin,
+      completedAt: new Date(Date.UTC(2026, 4, 3) + Math.floor(rand() * 60) * 864e5).toISOString(),
+      score: Math.min(98, 40 + Math.round((pickedStrong / decisions.length) * 45 + rand() * 12)),
+      capabilities: scen.capabilities,
+      decisions,
+    })
+  }
+  out.sort((a, b) => Date.parse(a.completedAt) - Date.parse(b.completedAt))
+  return out
 }
 
 function growthOf(history: GrowthSnapshot[]): number {
@@ -482,6 +628,107 @@ export const ASSIGNABLE_SCENARIOS: { id: string; title: string; emoji: string; c
   { id: 'sc-policy', title: 'Policy Advisor', emoji: '🏛️', capabilities: ['Situational Awareness & Systems Thinking', 'Integrity & Ethics', 'Reasoning & Critical Thinking'], blurb: 'The popular option isn’t the right one. Advise the minister.', decisions: 6, mins: 13 },
 ]
 
+/** Decision steps per assignable scenario — powers each seeded student's
+ *  "decision path". Option [0] is the strongest call by convention; the
+ *  seed picks it more often for students who score high on that skill. */
+export const DECISION_BANK: Record<string, { prompt: string; options: [string, string, string]; skill: string }[]> = {
+  'sc-startup': [
+    { prompt: 'Runway is four months. The team wants to build; the board wants revenue.', options: ['Cut one bet, double the one with paying users', 'Split effort evenly and extend runway with a bridge', 'Build the big vision — revenue follows product'], skill: 'Judgement & Decision-Making' },
+    { prompt: 'Your best engineer threatens to quit over the pivot.', options: ['Hear them out, then give them the hardest problem in the new direction', 'Promise the old project returns next quarter', 'Accept the resignation — the pivot matters more'], skill: 'Leadership & Influence' },
+    { prompt: 'A competitor ships your exact roadmap, two months early.', options: ['Narrow to the niche they can’t serve and own it', 'Race them feature-for-feature', 'Pivot again before anyone notices'], skill: 'Adaptability & Cognitive Flexibility' },
+    { prompt: 'Demo day is Friday. The product has a known bug in one flow.', options: ['Demo the honest build and name the bug before they find it', 'Script the demo around the bug', 'Pull an all-nighter team-wide to patch it'], skill: 'Execution & Ownership' },
+  ],
+  'sc-newsroom': [
+    { prompt: 'The leak is explosive — and burning the source is a real risk.', options: ['Hold 24 hours to verify twice and protect the source', 'Publish now — first matters', 'Pass it to a bigger outlet and keep your hands clean'], skill: 'Integrity & Ethics' },
+    { prompt: 'A second source confirms, but only off the record.', options: ['Publish with documents, keep both sources unnamed', 'Push the second source to go on record', 'Wait for an on-record confirmation'], skill: 'Judgement & Decision-Making' },
+    { prompt: 'The subject’s lawyers call an hour before you go live.', options: ['Give them a fair right of reply and a hard deadline', 'Go live first, add their statement after', 'Delay the story for legal review'], skill: 'Situational Awareness & Systems Thinking' },
+  ],
+  'sc-er': [
+    { prompt: 'Two patients arrive together — chest pain and a pale, quiet teenager.', options: ['Triage the quiet one first — silence can be the louder symptom', 'Chest pain takes priority, always', 'Split yourself between both beds'], skill: 'Judgement & Decision-Making' },
+    { prompt: 'The chest-pain patient’s family is shouting for attention.', options: ['Send a nurse with a clear update and a named time you’ll return', 'Stop and manage the family yourself', 'Have security move them to the waiting room'], skill: 'Emotional Intelligence' },
+    { prompt: 'Test results are delayed and the ward is stacking up.', options: ['Treat on clinical signs and document your reasoning', 'Wait — results are results', 'Escalate to the consultant and keep moving'], skill: 'Execution & Ownership' },
+  ],
+  'sc-retail': [
+    { prompt: 'A no-show leaves you two staff short on the busiest morning.', options: ['Re-plan the floor around the queue, drop everything non-urgent', 'Call the area manager for cover', 'Run it as rostered and absorb the wait times'], skill: 'Problem Solving' },
+    { prompt: 'An angry regular wants a refund outside policy, loudly.', options: ['Take it off the floor, listen, and find the inside-policy fix', 'Refund it — the queue matters more than the policy', 'Hold the policy line at the counter'], skill: 'Leadership & Influence' },
+    { prompt: 'Your newest hire freezes mid-rush.', options: ['Pair them with your calmest senior and shrink their job to one task', 'Send them to the stockroom till it quietens', 'Talk them through it between customers'], skill: 'Collaboration' },
+  ],
+  'sc-coach': [
+    { prompt: 'Down two with ninety seconds left. Your star wants the ball; she’s rattled.', options: ['Run the play through her as a decoy — touch without pressure', 'Give her the ball — stars are stars', 'Bench her for the closer head'], skill: 'Judgement & Decision-Making' },
+    { prompt: 'The bench is flat and the huddle can feel it.', options: ['Name the next play and one job each — certainty beats speeches', 'Fire them up with everything you’ve got', 'Let the captain run the huddle'], skill: 'Leadership & Influence' },
+    { prompt: 'The ref misses a clear call against you.', options: ['Play on — the next possession is the only one you control', 'Burn a timeout to contest it', 'Let the crowd and bench voice it'], skill: 'Emotional Intelligence' },
+  ],
+  'sc-policy': [
+    { prompt: 'The popular option polls at 70% — and the modelling says it fails in two years.', options: ['Brief the minister on both, lead with the evidence', 'Recommend the popular option with mitigations', 'Soften the modelling’s language to keep options open'], skill: 'Integrity & Ethics' },
+    { prompt: 'A lobby group offers "supporting research" that matches their interests.', options: ['Accept it, disclose the source, and weight it accordingly', 'Decline it to stay clean', 'Use it — evidence is evidence'], skill: 'Reasoning & Critical Thinking' },
+    { prompt: 'The minister asks what the headline will be either way.', options: ['Map both second-order effects honestly, including the ugly one', 'Focus the brief on the preferred option’s upside', 'Recommend delaying the decision past the news cycle'], skill: 'Situational Awareness & Systems Thinking' },
+  ],
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   University mode — internship/graduate scenarios at real employers,
+   their decision banks, packs and course templates.
+   ──────────────────────────────────────────────────────────────────── */
+
+export const UNI_ASSIGNABLE_SCENARIOS: typeof ASSIGNABLE_SCENARIOS = [
+  { id: 'sc-charterhall', title: 'Property Internship — Charter Hall', emoji: '🏢', capabilities: ['Judgement & Decision-Making', 'Situational Awareness & Systems Thinking', 'Execution & Ownership'], blurb: 'Six weeks on a funds-management team. The asset review lands on your desk first.', decisions: 6, mins: 13 },
+  { id: 'sc-lendlease', title: 'Assistant Project Manager — Lendlease', emoji: '🏗️', capabilities: ['Execution & Ownership', 'Collaboration', 'Problem Solving'], blurb: 'A tower build, a slipping program, and a subcontractor meeting in an hour.', decisions: 6, mins: 12 },
+  { id: 'sc-deloitte', title: 'Graduate Consultant — Deloitte', emoji: '📊', capabilities: ['Reasoning & Critical Thinking', 'Problem Solving', 'Leadership & Influence'], blurb: 'The client wants an answer by Friday. The data says something nobody wants to hear.', decisions: 6, mins: 12 },
+  { id: 'sc-macquarie', title: 'Analyst Intern — Macquarie', emoji: '📈', capabilities: ['Judgement & Decision-Making', 'Reasoning & Critical Thinking', 'Integrity & Ethics'], blurb: 'Your model disagrees with the director’s instinct. The meeting is at nine.', decisions: 5, mins: 11 },
+  { id: 'sc-canva', title: 'Marketing Intern — Canva', emoji: '✨', capabilities: ['Adaptability & Cognitive Flexibility', 'Emotional Intelligence', 'Collaboration'], blurb: 'A campaign flops at launch. You’re closest to the data — and to the fix.', decisions: 5, mins: 10 },
+  { id: 'sc-johnholland', title: 'Site Engineer Intern — John Holland', emoji: '⚙️', capabilities: ['Situational Awareness & Systems Thinking', 'Execution & Ownership', 'Integrity & Ethics'], blurb: 'A pour is booked, the inspection isn’t signed, and the forecast says rain.', decisions: 6, mins: 13 },
+]
+
+export const UNI_DECISION_BANK: typeof DECISION_BANK = {
+  'sc-charterhall': [
+    { prompt: 'Week one: the quarterly asset review needs a first pass, and the analyst who owns it is out.', options: ['Build the pass from last quarter’s template and flag every assumption you inherited', 'Wait for the analyst — it’s their model', 'Ask the fund manager to walk you through it live'], skill: 'Execution & Ownership' },
+    { prompt: 'A tenant covenant looks weaker than the file suggests.', options: ['Pull the tenant’s latest filings and put the gap in writing before the meeting', 'Mention it verbally if it comes up', 'Assume the original underwriting caught it'], skill: 'Judgement & Decision-Making' },
+    { prompt: 'The portfolio lead asks what you’d watch over the next two quarters.', options: ['Name the two assets where small signals compound — and what would change your mind', 'Recite the portfolio summary', 'Defer — you’re six weeks in'], skill: 'Situational Awareness & Systems Thinking' },
+  ],
+  'sc-lendlease': [
+    { prompt: 'The program has slipped nine days and the subcontractor meeting starts in an hour.', options: ['Re-sequence the critical path first, then negotiate from a plan', 'Open the meeting by asking the sub to explain the slip', 'Escalate to the PM before doing anything'], skill: 'Problem Solving' },
+    { prompt: 'Two trades both claim the same zone next week.', options: ['Walk the zone with both foremen and lock a shared sequence on the spot', 'Give it to the trade that’s behind', 'Let the site manager sort it'], skill: 'Collaboration' },
+    { prompt: 'Your daily report could gloss the slip — the PM is already having a bad week.', options: ['Report it straight, with the recovery plan attached', 'Soften it to "minor sequencing adjustments"', 'Hold it a day to see if the gap closes'], skill: 'Execution & Ownership' },
+  ],
+  'sc-deloitte': [
+    { prompt: 'The analysis says the client’s flagship product is the problem. Your manager hints at softening it.', options: ['Keep the finding, reframe the delivery around what the client can do next', 'Soften it — relationships fund the next engagement', 'Push it to the appendix'], skill: 'Reasoning & Critical Thinking' },
+    { prompt: 'Half the data the client sent contradicts itself.', options: ['Reconcile the two sources and document which you trusted and why', 'Use the friendlier dataset', 'Ask the client which one they prefer'], skill: 'Problem Solving' },
+    { prompt: 'The partner asks you — the grad — to open the readout.', options: ['Take it: one slide, one message, rehearsed twice in the corridor', 'Defer to the manager', 'Read the executive summary verbatim'], skill: 'Leadership & Influence' },
+  ],
+  'sc-macquarie': [
+    { prompt: 'Your model says the deal underperforms. The director’s instinct says otherwise, loudly.', options: ['Present the model AND the three assumptions that would have to break for the director to be right', 'Adjust the assumptions until the output agrees', 'Send the model by email and skip the meeting'], skill: 'Integrity & Ethics' },
+    { prompt: 'You find an error in your own work from last week — already circulated.', options: ['Correct it the same day, with a one-line note on what changed', 'Fix it quietly in the next version', 'It’s immaterial — leave it'], skill: 'Judgement & Decision-Making' },
+    { prompt: 'Two hours before the meeting, new market data lands.', options: ['Re-run the sensitive cases only and annotate what moved', 'Rebuild everything and risk being late', 'Present the stale version — it was approved'], skill: 'Reasoning & Critical Thinking' },
+  ],
+  'sc-canva': [
+    { prompt: 'The launch campaign is underperforming by 60% at day two.', options: ['Pull the cohort data, find where the funnel dies, and propose one change by lunch', 'Give it a week — campaigns need time', 'Recommend pausing all spend'], skill: 'Adaptability & Cognitive Flexibility' },
+    { prompt: 'The designer whose hero asset underperformed is visibly deflated in the retro.', options: ['Separate the asset from the author — show the data killed the placement, not the design', 'Move past it quickly to spare them', 'Suggest a different designer next time'], skill: 'Emotional Intelligence' },
+    { prompt: 'Your fix needs engineering time nobody budgeted.', options: ['Trade scope with the sprint lead: your change in, one low-impact ticket out', 'Ask your manager to escalate', 'Ship a manual workaround and log the debt'], skill: 'Collaboration' },
+  ],
+  'sc-johnholland': [
+    { prompt: 'The concrete pour is booked for 6am; the inspection sign-off hasn’t landed.', options: ['Chase the certifier tonight and prep a hold-point plan if it slips', 'Pour anyway — the inspector "always signs"', 'Cancel the pour now and wear the cost'], skill: 'Integrity & Ethics' },
+    { prompt: 'The forecast turns: 20mm possible from 10am.', options: ['Re-sequence to pour the critical section first, covers staged on standby', 'Trust the radar and run the full pour', 'Postpone everything 48 hours'], skill: 'Situational Awareness & Systems Thinking' },
+    { prompt: 'The foreman says your staging plan "isn’t how we do it".', options: ['Walk it with him — adopt what he improves, keep what the plan protects', 'Defer entirely to experience', 'Pull rank via the site engineer'], skill: 'Execution & Ownership' },
+  ],
+}
+
+export const UNI_GENERAL_PACKS: typeof GENERAL_PACKS = [
+  { id: 'pack-intern', name: 'Internship Ready', emoji: '💼', blurb: 'Three placements — property, construction and brand — before the real applications open.', scenarioIds: ['sc-charterhall', 'sc-lendlease', 'sc-canva'] },
+  { id: 'pack-grad', name: 'Graduate Programs', emoji: '🎓', blurb: 'The big-firm gauntlet: consulting, banking and tier-one construction.', scenarioIds: ['sc-deloitte', 'sc-macquarie', 'sc-johnholland'] },
+  { id: 'pack-property', name: 'Property Track', emoji: '🏢', blurb: 'Funds management to the site gate — the full property pathway.', scenarioIds: ['sc-charterhall', 'sc-lendlease', 'sc-johnholland'] },
+]
+
+export const UNI_SUBJECT_TEMPLATES: SubjectProfile[] = [
+  { id: 'usub-property', name: 'Property & Development', emoji: '🏢', attributes: ['Judgement & Decision-Making', 'Situational Awareness & Systems Thinking', 'Execution & Ownership'], isTemplate: true },
+  { id: 'usub-finance', name: 'Finance & Investment', emoji: '📈', attributes: ['Reasoning & Critical Thinking', 'Judgement & Decision-Making', 'Integrity & Ethics'], isTemplate: true },
+  { id: 'usub-consulting', name: 'Consulting & Strategy', emoji: '📊', attributes: ['Problem Solving', 'Reasoning & Critical Thinking', 'Leadership & Influence'], isTemplate: true },
+  { id: 'usub-construction', name: 'Construction & PM', emoji: '🏗️', attributes: ['Execution & Ownership', 'Situational Awareness & Systems Thinking', 'Collaboration'], isTemplate: true },
+  { id: 'usub-marketing', name: 'Marketing & Brand', emoji: '✨', attributes: ['Adaptability & Cognitive Flexibility', 'Emotional Intelligence', 'Collaboration'], isTemplate: true },
+  { id: 'usub-law', name: 'Law & Compliance', emoji: '⚖️', attributes: ['Reasoning & Critical Thinking', 'Integrity & Ethics', 'Situational Awareness & Systems Thinking'], isTemplate: true },
+  { id: 'usub-tech', name: 'Data & Software', emoji: '💻', attributes: ['Problem Solving', 'Reasoning & Critical Thinking', 'Execution & Ownership'], isTemplate: true },
+  { id: 'usub-people', name: 'People & Organisations', emoji: '🧭', attributes: ['Emotional Intelligence', 'Leadership & Influence', 'Collaboration'], isTemplate: true },
+]
+
 /** Curated scenario packs for the "General practice" purpose — assigned as
  *  one bundle (one assignment per scenario), scores roll up per cohort. */
 export const GENERAL_PACKS: { id: string; name: string; emoji: string; blurb: string; scenarioIds: string[] }[] = [
@@ -503,6 +750,10 @@ export function makePlaceholderStudent(name: string, email: string, idSeq: numbe
     name: name.trim(),
     email: email.trim() || `${(parts[0] || 'student').toLowerCase()}@student.edu`,
     initials: initials || 'ST',
+    yearGroup: 12,
+    totalUseHours: 0,
+    parentName: '',
+    parentEmail: '',
     scores,
     history: [{ date: new Date().toISOString(), scores: { ...scores } }],
     streakWeeks: 0,
@@ -518,10 +769,17 @@ export interface EducatorSeed {
   subjects: SubjectProfile[]
 }
 
+/** Whole-school roster sizes — ~300 students across the senior years. */
+const YEAR_SIZES: { year: number; size: number }[] = [
+  { year: 12, size: 104 },
+  { year: 11, size: 102 },
+  { year: 10, size: 96 },
+]
+
 const COHORT_DEFS = [
-  { id: 'co-2026grads', name: '2026 Graduates', term: 'Semester 2 · 2026', code: 'GRAD26', size: 24 },
-  { id: 'co-yr12biz', name: 'Year 12 Business', term: 'Term 3', code: 'BIZ12A', size: 22 },
-  { id: 'co-employability', name: 'Employability Program', term: 'Rolling intake', code: 'EMPLOY', size: 18 },
+  { id: 'co-2026grads', name: '2026 Graduates', term: 'Semester 2 · 2026', code: 'GRAD26', year: 12, size: 24 },
+  { id: 'co-yr12biz', name: 'Year 12 Business', term: 'Term 3', code: 'BIZ12A', year: 12, size: 22 },
+  { id: 'co-employability', name: 'Employability Program', term: 'Rolling intake', code: 'EMPLOY', year: 11, size: 18 },
 ]
 
 const SCEN_LIB = [
@@ -538,19 +796,35 @@ export function buildEducatorSeed(): EducatorSeed {
   const assignments: EdAssignment[] = []
   let seq = 1
 
+  // The whole-school roster first — every Year 10–12 student, enrolled on
+  // Launch whether or not an advisor has put them in a class yet.
+  for (const { year, size } of YEAR_SIZES) {
+    for (let i = 0; i < size; i++) students.push(makeStudent(rand, seq++, year))
+  }
+  // Classes draw their rosters from the school roster, per year group.
+  const cursorByYear: Record<number, number> = {}
+
   COHORT_DEFS.forEach((def, ci) => {
-    const ids: string[] = []
-    for (let i = 0; i < def.size; i++) {
-      const s = makeStudent(rand, seq++)
-      students.push(s)
-      ids.push(s.id)
-    }
+    const pool = students.filter((s) => s.yearGroup === def.year)
+    const start = cursorByYear[def.year] ?? 0
+    const ids = pool.slice(start, start + def.size).map((s) => s.id)
+    cursorByYear[def.year] = start + def.size
+    // The flagship cohort ships with two sample groups so the Groups tab
+    // demos itself on first open.
+    const groups: StudentGroup[] =
+      def.id === 'co-2026grads'
+        ? [
+            { id: 'grp-stretch', name: 'Stretch squad', studentIds: ids.slice(0, 5), createdAt: new Date(Date.UTC(2026, 5, 2)).toISOString() },
+            { id: 'grp-confidence', name: 'Confidence builders', studentIds: ids.slice(5, 11), createdAt: new Date(Date.UTC(2026, 5, 9)).toISOString() },
+          ]
+        : []
     cohorts.push({
       id: def.id,
       name: def.name,
       code: `CLASS-${def.code}`,
       term: def.term,
       studentIds: ids,
+      groups,
       createdAt: new Date(Date.UTC(2026, 4, 5 + ci)).toISOString(),
     })
 
@@ -589,6 +863,96 @@ export function buildEducatorSeed(): EducatorSeed {
 
   // Subjects start from the templates (deep-copied, no longer flagged template).
   const subjects: SubjectProfile[] = SUBJECT_TEMPLATES.slice(0, 4).map((t) => ({ ...t, isTemplate: false }))
+
+  return { students, cohorts, assignments, subjects }
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   University seed — ~2,500 students across 1st–3rd year + Honours, with
+   degrees and career interests; units (classes) drawn per year; seeded
+   assignments use the internship scenario library.
+   ──────────────────────────────────────────────────────────────────── */
+
+const UNI_YEAR_SIZES: { year: number; size: number }[] = [
+  { year: 1, size: 940 },
+  { year: 2, size: 860 },
+  { year: 3, size: 590 },
+  { year: 4, size: 130 }, // Honours
+]
+
+const UNI_COHORT_DEFS = [
+  { id: 'uco-prop301', name: 'PROP301 Property Development', term: 'Spring session · 2026', code: 'PROP3A', year: 3, size: 34 },
+  { id: 'uco-mgmt201', name: 'MGMT201 Managing People', term: 'Spring session · 2026', code: 'MGMT2B', year: 2, size: 38 },
+  { id: 'uco-careers', name: 'Careers Accelerator — Internship Ready', term: 'Rolling intake', code: 'ACCEL1', year: 3, size: 26 },
+]
+
+export function buildUniversitySeed(): EducatorSeed {
+  const rand = mulberry32(20261103)
+  const students: EdStudent[] = []
+  const cohorts: Cohort[] = []
+  const assignments: EdAssignment[] = []
+  let seq = 1
+
+  for (const { year, size } of UNI_YEAR_SIZES) {
+    for (let i = 0; i < size; i++) students.push(makeStudent(rand, seq++, year, true))
+  }
+  const cursorByYear: Record<number, number> = {}
+
+  UNI_COHORT_DEFS.forEach((def, ci) => {
+    const pool = students.filter((s) => s.yearGroup === def.year)
+    const start = cursorByYear[def.year] ?? 0
+    const ids = pool.slice(start, start + def.size).map((s) => s.id)
+    cursorByYear[def.year] = start + def.size
+    const groups: StudentGroup[] =
+      def.id === 'uco-prop301'
+        ? [
+            { id: 'ugrp-ch', name: 'Charter Hall applicants', studentIds: ids.slice(0, 6), createdAt: new Date(Date.UTC(2026, 5, 2)).toISOString() },
+            { id: 'ugrp-site', name: 'Site visit crew', studentIds: ids.slice(6, 13), createdAt: new Date(Date.UTC(2026, 5, 9)).toISOString() },
+          ]
+        : []
+    cohorts.push({
+      id: def.id,
+      name: def.name,
+      code: `CLASS-${def.code}`,
+      term: def.term,
+      studentIds: ids,
+      groups,
+      createdAt: new Date(Date.UTC(2026, 4, 5 + ci)).toISOString(),
+    })
+
+    const nAssign = 2 + (ci % 2)
+    for (let a = 0; a < nAssign; a++) {
+      const scen = UNI_ASSIGNABLE_SCENARIOS[(ci + a) % UNI_ASSIGNABLE_SCENARIOS.length]
+      const dueOffset = a === 0 ? -3 : 6 + a * 4 // first is overdue
+      const progress: AssignmentProgress[] = ids.map((id) => {
+        const r = rand()
+        let state: AssignmentState = 'not-started'
+        if (r > 0.82) state = 'reviewed'
+        else if (r > 0.5) state = 'completed'
+        else if (r > 0.3) state = 'in-progress'
+        const done = state === 'completed' || state === 'reviewed'
+        return {
+          studentId: id,
+          state,
+          score: done ? 52 + Math.floor(rand() * 44) : undefined,
+          completedAt: done ? new Date(Date.UTC(2026, 6, 1 + Math.floor(rand() * 8))).toISOString() : undefined,
+        }
+      })
+      assignments.push({
+        id: `as-${def.id}-${a}`,
+        cohortId: def.id,
+        title: scen.title,
+        capabilities: scen.capabilities,
+        assignedTo: 'cohort',
+        dueAt: new Date(Date.UTC(2026, 6, 10) + dueOffset * 864e5).toISOString(),
+        opensAt: new Date(Date.UTC(2026, 5, 20 + a)).toISOString(),
+        createdAt: new Date(Date.UTC(2026, 5, 18 + a)).toISOString(),
+        progress,
+      })
+    }
+  })
+
+  const subjects: SubjectProfile[] = UNI_SUBJECT_TEMPLATES.slice(0, 4).map((t) => ({ ...t, isTemplate: false }))
 
   return { students, cohorts, assignments, subjects }
 }
@@ -635,18 +999,18 @@ export function downloadText(filename: string, text: string, mime = 'text/csv;ch
   URL.revokeObjectURL(url)
 }
 
-/** Score → warm heat colour (teal ramp). Used by the heatmap + bars. */
+/** Score → heat colour (cream→navy ramp, corporate register). */
 export function heatColor(score: number): string {
-  // 28..98 mapped onto a cream→teal ramp.
+  // 28..98 mapped onto a cream→navy ramp.
   const t = Math.max(0, Math.min(1, (score - 30) / 60))
-  // interpolate between soft cream and deep teal
   const from = [244, 240, 230] // #f4f0e6
-  const to = [18, 107, 96]     // #126b60
+  const to = [10, 42, 107]     // #0a2a6b — var(--launch-navy)
   const c = from.map((f, i) => Math.round(f + (to[i] - f) * t))
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`
 }
 
-/** Whether heat cell text should be light (dark bg) or dark. */
+/** Whether heat cell text should be light (dark bg) or dark. Navy darkens
+ *  faster than the old teal ramp, so the threshold sits lower. */
 export function heatTextLight(score: number): boolean {
-  return score >= 62
+  return score >= 58
 }

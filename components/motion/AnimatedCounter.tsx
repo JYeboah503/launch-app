@@ -18,6 +18,8 @@ interface AnimatedCounterProps {
   prefix?: string
   /** decimal places */
   decimals?: number
+  /** thousands separators, e.g. 2,520 */
+  group?: boolean
   /** optional className passthrough on the wrapping <span> */
   className?: string
 }
@@ -29,6 +31,7 @@ export function AnimatedCounter({
   suffix = '',
   prefix = '',
   decimals = 0,
+  group = false,
   className,
 }: AnimatedCounterProps) {
   const ref = useRef<HTMLSpanElement | null>(null)
@@ -70,7 +73,9 @@ export function AnimatedCounter({
     return () => observer.disconnect()
   }, [value, from, duration])
 
-  const text = displayed.toFixed(decimals)
+  const text = group
+    ? displayed.toLocaleString('en-AU', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    : displayed.toFixed(decimals)
   return (
     <span ref={ref} className={className}>
       {prefix}

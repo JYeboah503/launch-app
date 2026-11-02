@@ -37,9 +37,9 @@ export function InsightsTab({ students, onOpenStudent }: { students: EdStudent[]
             <h3 className="ed-h3">Cohort momentum</h3>
             <span className="ed-dim">Average overall score, week by week</span>
           </div>
-          <span className="ed-momentum">{momentum >= 0 ? '▲' : '▼'} {Math.abs(momentum)} pts this term</span>
+          <span className="ed-momentum" style={{ color: momentum >= 0 ? 'var(--launch-teal)' : 'var(--launch-danger)' }}>{momentum >= 0 ? '▲' : '▼'} {Math.abs(momentum)} pts this term</span>
         </div>
-        <LineChart series={[{ values: overallTrend, color: 'var(--ed-accent)', label: 'Cohort average' }]} xLabels={xLabels} />
+        <LineChart series={[{ values: overallTrend, color: 'var(--launch-navy)', label: 'Cohort average' }]} xLabels={xLabels} />
       </div>
 
       {/* Per-capability trend grid */}
@@ -77,14 +77,14 @@ export function InsightsTab({ students, onOpenStudent }: { students: EdStudent[]
             <div className="ed-scard-head"><h3 className="ed-h3"><TrendingUp className="w-4 h-4" style={{ display: 'inline', verticalAlign: -2 }} /> Biggest movers</h3></div>
             {movers.map((m) => (
               <button key={m.student.id} className="ed-mover" onClick={() => onOpenStudent(m.student.id)}>
-                <span className="ed-attn-ini" style={{ background: 'var(--ed-accent-soft)', color: 'var(--ed-accent)' }}>{m.student.initials}</span>
+                <span className="ed-attn-ini" style={{ background: 'rgba(10,42,107,0.08)', color: 'var(--launch-navy)' }}>{m.student.initials}</span>
                 <span className="ed-mover-name">{m.student.name}</span>
                 <span className="ed-mover-growth">▲ {m.growth}</span>
               </button>
             ))}
           </div>
           <div className="ed-scard ed-scard-accent">
-            <div className="ed-scard-head"><h3 className="ed-h3"><Target className="w-4 h-4" style={{ display: 'inline', verticalAlign: -2, color: 'var(--ed-accent)' }} /> Where to point next</h3></div>
+            <div className="ed-scard-head"><h3 className="ed-h3"><Target className="w-4 h-4" style={{ display: 'inline', verticalAlign: -2, color: 'var(--launch-navy)' }} /> Where to point next</h3></div>
             <p className="ed-guide-note">The cohort&rsquo;s softest capabilities — assign scenarios that stretch these.</p>
             {weakest.map((w) => (
               <div key={w.name} className="ed-weak"><span>{CAPABILITY_SHORT[w.name]}</span><span className="ed-weak-score">{w.score}</span></div>
@@ -95,13 +95,13 @@ export function InsightsTab({ students, onOpenStudent }: { students: EdStudent[]
 
       <style>{`
         .ed-insights { display: flex; flex-direction: column; }
-        .ed-momentum { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ed-accent); }
+        .ed-momentum { font-family: var(--font-mono); font-size: 11px; font-weight: 700; }
         .ed-mini-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
         .ed-mini { background: #fff; border: 1px solid var(--lq-line); border-radius: 14px; padding: 12px 14px; }
         .ed-mini-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
         .ed-mini-lbl { font-size: 12px; font-weight: 600; color: var(--lq-ink); }
         .ed-mini-delta { font-family: var(--font-mono); font-size: 10px; }
-        .ed-mini-delta.up { color: var(--ed-accent); }
+        .ed-mini-delta.up { color: var(--launch-teal); }
         .ed-mini-delta.down { color: var(--launch-danger); }
         .ed-mini-now { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--lq-ink-2); text-align: right; margin-top: 2px; }
         .ed-ins-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 26px; }
@@ -109,9 +109,9 @@ export function InsightsTab({ students, onOpenStudent }: { students: EdStudent[]
         .ed-ins-col { display: flex; flex-direction: column; gap: 16px; }
         .ed-select { border: 1px solid var(--lq-line-2); border-radius: 999px; padding: 5px 12px; font-family: var(--font-mono); font-size: 11px; color: var(--lq-ink-2); background: #fff; cursor: pointer; }
         .ed-mover { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; background: none; border: none; cursor: pointer; text-align: left; }
-        .ed-mover:hover { background: rgba(27,158,143,0.05); }
+        .ed-mover:hover { background: rgba(10,42,107,0.04); }
         .ed-mover-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--lq-ink); }
-        .ed-mover-growth { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--ed-accent); }
+        .ed-mover-growth { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--launch-teal); }
         .ed-weak { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--lq-line); font-size: 13px; color: var(--lq-ink); }
         .ed-weak-score { font-family: var(--font-mono); font-weight: 700; color: var(--launch-danger); }
       `}</style>

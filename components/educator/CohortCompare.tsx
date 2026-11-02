@@ -13,8 +13,9 @@ import { GroupedBars } from '@/components/educator/charts'
 import { ModalShell } from '@/components/educator/ui'
 
 export function CohortCompare({ ws, onClose }: { ws: EdWorkspace; onClose: () => void }) {
-  const [aId, setAId] = useState(ws.cohorts[0]?.id || '')
-  const [bId, setBId] = useState(ws.cohorts[1]?.id || ws.cohorts[0]?.id || '')
+  const active = ws.cohorts.filter((c) => !c.archivedAt)
+  const [aId, setAId] = useState(active[0]?.id || '')
+  const [bId, setBId] = useState(active[1]?.id || active[0]?.id || '')
 
   const summarise = (cohort: Cohort | undefined) => {
     if (!cohort) return null
@@ -29,17 +30,18 @@ export function CohortCompare({ ws, onClose }: { ws: EdWorkspace; onClose: () =>
   const A = useMemo(() => summarise(ws.cohorts.find((c) => c.id === aId)), [aId, ws])
   const B = useMemo(() => summarise(ws.cohorts.find((c) => c.id === bId)), [bId, ws])
 
-  const COL_A = '#1B9E8F', COL_B = 'var(--launch-navy)'
+  // Navy vs neutral ink — no teal as data ink in the corporate register.
+  const COL_A = 'var(--launch-navy)', COL_B = 'rgba(14,24,51,0.45)'
 
   return (
     <ModalShell title="Compare cohorts" onClose={onClose} wide>
       <div className="ed-cmp-pick">
         <select className="ed-select" value={aId} onChange={(e) => setAId(e.target.value)}>
-          {ws.cohorts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {active.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <span className="ed-cmp-vs">vs</span>
         <select className="ed-select" value={bId} onChange={(e) => setBId(e.target.value)}>
-          {ws.cohorts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {active.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
 
@@ -47,7 +49,7 @@ export function CohortCompare({ ws, onClose }: { ws: EdWorkspace; onClose: () =>
         <>
           <div className="ed-cmp-summary">
             {[A, B].map((s, i) => (
-              <div key={i} className="ed-cmp-card" style={{ borderColor: i === 0 ? COL_A : 'rgba(10,42,107,0.4)' }}>
+              <div key={i} className="ed-cmp-card" style={{ borderColor: i === 0 ? 'var(--launch-navy)' : 'rgba(14,24,51,0.35)' }}>
                 <div className="ed-cmp-name">{s.cohort.name}</div>
                 <div className="ed-cmp-stats">
                   <span><strong>{s.students}</strong> students</span>

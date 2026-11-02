@@ -194,7 +194,12 @@ export interface JourneyRevealData {
   /** Fired once when the report is reached — the host persists the stamp. */
   onReached?: () => void
   /** Live run analytics handed up before the report (sim runs only). */
-  onAnalytics?: (data: { skillCounts: Record<string, number>; score: number }) => void
+  onAnalytics?: (data: {
+    skillCounts: Record<string, number>
+    score: number
+    /** The run's choices in order — powers the educator decision path. */
+    picks?: import('@/lib/play/journeyProfile').RunPick[]
+  }) => void
   onWorkScenarios: () => void
   onAnotherJourney: () => void
 }

@@ -27,6 +27,8 @@ import type { ScenarioSection } from '@/lib/roles'
 import {
   type JourneyProfile,
   type ScenarioProposal,
+  type RunPick,
+  type RunRecord,
   PAY_CHIPS,
   STRENGTH_CHIPS,
   appendRun,
@@ -38,6 +40,8 @@ import {
   styleLinesFromCounts,
 } from '@/lib/play/journeyProfile'
 import type { Scenario } from '@/lib/play/types'
+
+type SamOrigin = NonNullable<RunRecord['origin']>
 import {
   JOURNEYS,
   JOURNEY_REVEALS,
@@ -135,7 +139,9 @@ export function JourneyFlow({ onExit, onWorkScenarios, onScenarioModeChange, onO
   const [inPay, setInPay] = useState<{ label: string; journeyId: string } | null>(null)
   const [proposal, setProposal] = useState<ScenarioProposal | null>(null)
   const [redirectText, setRedirectText] = useState('')
-  const runAnalytics = useRef<{ skillCounts: Record<string, number>; score: number } | null>(null)
+  const runAnalytics = useRef<{ skillCounts: Record<string, number>; score: number; picks?: RunPick[] } | null>(null)
+  // Which SAM door this run came through — journey / guided / own.
+  const runOrigin = useRef<SamOrigin>('journey')
 
   useEffect(() => {
     setStamps(loadStamps())
@@ -188,9 +194,10 @@ export function JourneyFlow({ onExit, onWorkScenarios, onScenarioModeChange, onO
   // previous run's day/streams/ledger state leaks into the new one.
   const runSeq = useRef(0)
 
-  const startJourney = (scenario: Scenario, passionLabel: string) => {
+  const startJourney = (scenario: Scenario, passionLabel: string, origin: SamOrigin = 'journey') => {
     stampedThisRun.current = false
     runAnalytics.current = null
+    runOrigin.current = origin
     runSeq.current += 1
     setIntakeStage(null)
     setShowDaily(false)
@@ -201,7 +208,8 @@ export function JourneyFlow({ onExit, onWorkScenarios, onScenarioModeChange, onO
   const handleCreate = () => {
     if (!interest.trim()) return
     const g = generateJourney(interest)
-    startJourney(g.scenario, g.passionLabel)
+    // Free-text creation — the "own adventure" SAM door.
+    startJourney(g.scenario, g.passionLabel, 'own')
   }
 
   // Quick play = pre-selection, updated daily. The rotation is
@@ -238,6 +246,8 @@ export function JourneyFlow({ onExit, onWorkScenarios, onScenarioModeChange, onO
       skillCounts,
       score: runAnalytics.current?.score ?? 70,
       completedAt: new Date().toISOString(),
+      picks: runAnalytics.current?.picks,
+      origin: runOrigin.current,
     })
     setProfile(loadProfile())
     // Feed the shared cross-mode capability layer — same data, one event
@@ -298,7 +308,7 @@ export function JourneyFlow({ onExit, onWorkScenarios, onScenarioModeChange, onO
         setStamps(loadStamps())
         startJourney(next, title)
       },
-      onAnalytics: (d: { skillCounts: Record<string, number>; score: number }) => {
+      onAnalytics: (d: { skillCounts: Record<string, number>; score: number; picks?: RunPick[] }) => {
         runAnalytics.current = d
       },
       onReached: stampCurrent,
@@ -357,7 +367,8 @@ export function JourneyFlow({ onExit, onWorkScenarios, onScenarioModeChange, onO
     const label = inPassion.trim()
       ? inPassion.trim().charAt(0).toUpperCase() + inPassion.trim().slice(1, 40)
       : target.role
-    startJourney(target, label)
+    // Intake-led entry — the "guided start" SAM door.
+    startJourney(target, label, 'guided')
   }
 
   const redirectProposal = () => {
@@ -742,7 +753,7 @@ export function JourneyFlow({ onExit, onWorkScenarios, onScenarioModeChange, onO
                 rgba(246, 242, 234, 0.86) 0%,
                 rgba(246, 242, 234, 0.78) 45%,
                 rgba(246, 242, 234, 0.88) 100%),
-              url('/images/capabilities-mosaic.png');
+              url('./images/capabilities-mosaic.png');
             background-size: cover, cover;
             background-position: center, center;
             background-repeat: no-repeat, no-repeat;
