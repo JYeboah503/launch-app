@@ -56,7 +56,7 @@ export function SchoolChooser({ onSelectStudent, onSelectAdvisor, onBack }: Scho
         {stage === 'role' ? (
           <div className="jin-card" key="role">
             <div className="jin-eyebrow">Education</div>
-            <h1 className="jin-q">Are you a student, or a careers advisor/leader?</h1>
+            <h1 className="jin-q">Are you a student, or a careers leader?</h1>
             <p className="jin-sub">Pick the door that&rsquo;s yours.</p>
             <div className="chooser-options">
               <button type="button" className="chooser-option" onClick={chooseStudent}>
@@ -66,8 +66,8 @@ export function SchoolChooser({ onSelectStudent, onSelectAdvisor, onBack }: Scho
                 <span className="chooser-option-arrow">Step in →</span>
               </button>
               <button type="button" className="chooser-option" onClick={onSelectAdvisor}>
-                <span className="chooser-option-eyebrow">Careers advisor / leader</span>
-                <span className="chooser-option-title">I&rsquo;m a careers advisor</span>
+                <span className="chooser-option-eyebrow">Careers leader</span>
+                <span className="chooser-option-title">I&rsquo;m a careers leader</span>
                 <span className="chooser-option-blurb">Cohorts, heatmap, subject-fit, per-student guidance.</span>
                 <span className="chooser-option-arrow">Step in →</span>
               </button>

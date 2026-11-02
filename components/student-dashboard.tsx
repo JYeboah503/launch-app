@@ -656,7 +656,7 @@ export function StudentDashboard({ studentName, onLogout, onScenarioModeChange, 
             )}
             {joinedClass && (
               <p className="code-join-success" role="status">
-                <span className="code-join-check">✓</span> You&rsquo;re in. You&rsquo;ve joined <strong>{joinedClass.name}</strong> — your advisor can now see your progress.
+                <span className="code-join-check">✓</span> You&rsquo;re in. You&rsquo;ve joined <strong>{joinedClass.name}</strong> — your careers leader can now see your progress.
               </p>
             )}
 
