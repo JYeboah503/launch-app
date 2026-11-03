@@ -42,13 +42,13 @@ export default function RootLayout({
       <head>
         <style>{`
           :root {
-            --font-serif: '${newsreader.style.fontFamily}', 'Newsreader', Georgia, serif;
-            --font-sans: '${geist.style.fontFamily}', 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
-            --font-mono: '${geistMono.style.fontFamily}', 'Geist Mono', ui-monospace, monospace;
-            --font-display: '${newsreader.style.fontFamily}', 'Newsreader', Georgia, serif;
-            --font-body: '${geist.style.fontFamily}', 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
-            --legacy-font-poppins: '${poppins.style.fontFamily}';
-            --legacy-font-crimson: '${crimsonText.style.fontFamily}';
+            --font-serif: ${newsreader.style.fontFamily}, Georgia, serif;
+            --font-sans: ${geist.style.fontFamily}, -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: ${geistMono.style.fontFamily}, ui-monospace, monospace;
+            --font-display: ${newsreader.style.fontFamily}, Georgia, serif;
+            --font-body: ${geist.style.fontFamily}, -apple-system, BlinkMacSystemFont, sans-serif;
+            --legacy-font-poppins: ${poppins.style.fontFamily};
+            --legacy-font-crimson: ${crimsonText.style.fontFamily};
           }
         `}</style>
       </head>
